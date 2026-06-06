@@ -639,8 +639,8 @@ html {
   transition: all 0.3s ease;
 }
 
-/* Grayscale effect on desktops only */
-@media (hover: hover) {
+/* Grayscale effect on desktops only (fine pointers with hover support) */
+@media (hover: hover) and (pointer: fine) {
   .partner-logo {
     filter: grayscale(100%);
     opacity: 0.6;
