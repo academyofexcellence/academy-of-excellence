@@ -250,8 +250,8 @@ const Home = () => {
                 <div className="icon-container">
                   <Briefcase size={24} />
                 </div>
-                <h4 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem' }}>Bilingual Internships</h4>
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>2-Month intensive corporate internship doing real translation and admin tasks.</p>
+                <h4 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem' }}>Bilingual Training</h4>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>Practical hands-on bilingual training doing real translation and administrative tasks.</p>
               </div>
 
               <div className="glass-card why-card">
@@ -292,7 +292,7 @@ const Home = () => {
           <div className="grid grid-3" style={{ marginTop: '3rem' }}>
             {/* Program 1 */}
             <div className="glass-card program-card text-center" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
-              <span className="duration-tag">1 Year</span>
+              <span className="duration-tag">4 Months</span>
               <div>
                 <div style={{ display: 'inline-block', background: 'rgba(201,156,51,0.1)', color: 'var(--primary-dark)', padding: '1.2rem', borderRadius: '20px', marginBottom: '1.5rem' }}>
                   <BookOpen size={32} />
@@ -304,7 +304,6 @@ const Home = () => {
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 2rem 0', display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'center', fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 500 }}>
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Bilingual Typing Mastery</li>
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Corporate Translation Methods</li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> 2-Month Corporate Internship</li>
                 </ul>
               </div>
               <button onClick={() => scrollToSection('enquiry')} className="btn btn-outline" style={{ width: '100%', justifyContent: 'center' }}>
@@ -325,7 +324,7 @@ const Home = () => {
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 2rem 0', display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'center', fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 500 }}>
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Spoken Dialect Nuances</li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Direct Native Native Practice</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Live Spoken Practice Sessions</li>
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Professional Interview Prep</li>
                 </ul>
               </div>
@@ -351,7 +350,7 @@ const Home = () => {
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> 100% Free Virtual Access</li>
                 </ul>
               </div>
-              <a href="https://rayan-academy.vercel.app" target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}>
+              <a href="https://rayan-academy-zeta.vercel.app/" target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}>
                 Visit Rayan
               </a>
             </div>
@@ -541,7 +540,7 @@ const Home = () => {
                     className="form-input"
                     style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
                   >
-                    <option value="Translation & Office Admin" style={{ color: 'black' }}>Translation & Office Admin (1 Year)</option>
+                    <option value="Translation & Office Admin" style={{ color: 'black' }}>Translation & Office Admin (4 Months)</option>
                     <option value="Gulf Spoken Arabic" style={{ color: 'black' }}>Gulf Spoken Arabic (3 Months)</option>
                     <option value="Rayan Platform" style={{ color: 'black' }}>Rayan Quran Learning Platform</option>
                   </select>
