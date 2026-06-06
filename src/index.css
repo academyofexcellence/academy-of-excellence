@@ -629,11 +629,26 @@ html {
   }
 }
 
-/* Partner Logo hover effects */
-.partner-logo:hover {
-  filter: grayscale(0%) !important;
-  opacity: 1 !important;
-  transform: scale(1.08);
+/* Partner Logo styling */
+.partner-logo {
+  height: 50px;
+  object-fit: contain;
+  filter: grayscale(0%);
+  opacity: 0.95;
+  transition: all 0.3s ease;
+}
+
+/* Grayscale effect on desktops only */
+@media (hover: hover) {
+  .partner-logo {
+    filter: grayscale(100%);
+    opacity: 0.6;
+  }
+  .partner-logo:hover {
+    filter: grayscale(0%) !important;
+    opacity: 1 !important;
+    transform: scale(1.08);
+  }
 }
 
 /* Visitor card hover effects */

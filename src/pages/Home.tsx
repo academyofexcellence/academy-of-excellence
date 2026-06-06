@@ -279,7 +279,7 @@ const Home = () => {
                     alt={partner.name} 
                     title={partner.name}
                     loading="lazy"
-                    style={{ height: '38px', objectFit: 'contain', filter: 'grayscale(100%)', opacity: 0.6, transition: 'all 0.3s ease' }}
+                    style={{ height: '50px' }}
                     className="partner-logo"
                   />
                 </div>
