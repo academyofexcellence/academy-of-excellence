@@ -9,6 +9,19 @@ import { Menu, X } from 'lucide-react';
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const handleNavScroll = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
+    e.preventDefault();
+    setMenuOpen(false);
+    if (window.location.pathname === '/') {
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    } else {
+      window.location.href = `/#${sectionId}`;
+    }
+  };
+
   return (
     <Router>
       <nav className="navbar">
@@ -40,9 +53,9 @@ function App() {
 
           <div className={`nav-links ${menuOpen ? 'active' : ''}`}>
             <Link to="/" onClick={() => setMenuOpen(false)}>Home</Link>
-            <Link to="/programs" onClick={() => setMenuOpen(false)}>Programs</Link>
+            <a href="#programs" onClick={(e) => handleNavScroll(e, 'programs')}>Programs</a>
             <Link to="/gallery" onClick={() => setMenuOpen(false)}>Gallery</Link>
-            <Link to="/alumni" onClick={() => setMenuOpen(false)}>Alumni</Link>
+            <a href="#alumni" onClick={(e) => handleNavScroll(e, 'alumni')}>Alumni</a>
             <Link to="/admin" onClick={() => setMenuOpen(false)} className="btn btn-outline" style={{ padding: '0.5rem 1.5rem' }}>Admin Login</Link>
           </div>
         </div>

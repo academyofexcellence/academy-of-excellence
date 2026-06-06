@@ -150,6 +150,18 @@ const Home = () => {
     fetchTestimonials();
     fetchPartners();
     fetchVisitors();
+
+    // Scroll to section from hash if present on mount
+    const hash = window.location.hash;
+    if (hash) {
+      const id = hash.replace('#', '');
+      setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 500);
+    }
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -434,7 +446,7 @@ const Home = () => {
       </section>
 
       {/* Testimonials Section */}
-      <section className="section-padding" style={{ overflow: 'hidden' }}>
+      <section id="alumni" className="section-padding" style={{ overflow: 'hidden' }}>
         <div className="container">
           <div className="text-center mb-4">
             <span className="badge">Student Success</span>
