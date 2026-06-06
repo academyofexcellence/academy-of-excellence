@@ -566,7 +566,9 @@ const Home = () => {
                   </div>
                   <div>
                     <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.6 }}>Phone Support</p>
-                    <p style={{ margin: 0, fontWeight: 600 }}>+91 98765 43210</p>
+                    <p style={{ margin: 0, fontWeight: 600 }}>
+                      <a href="tel:+918714700445" style={{ color: 'white', textDecoration: 'none', transition: 'color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.color = 'var(--primary-light)'} onMouseOut={(e) => e.currentTarget.style.color = 'white'}>+91 87147 00445</a>
+                    </p>
                   </div>
                 </div>
 
@@ -576,7 +578,9 @@ const Home = () => {
                   </div>
                   <div>
                     <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.6 }}>Email Address</p>
-                    <p style={{ margin: 0, fontWeight: 600 }}>admissions@academyofexcellence.com</p>
+                    <p style={{ margin: 0, fontWeight: 600 }}>
+                      <a href="mailto:info@aoeonline.net" style={{ color: 'white', textDecoration: 'none', transition: 'color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.color = 'var(--primary-light)'} onMouseOut={(e) => e.currentTarget.style.color = 'white'}>info@aoeonline.net</a>
+                    </p>
                   </div>
                 </div>
 
