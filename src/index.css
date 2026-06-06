@@ -629,4 +629,19 @@ html {
   }
 }
 
+/* Partner Logo hover effects */
+.partner-logo:hover {
+  filter: grayscale(0%) !important;
+  opacity: 1 !important;
+  transform: scale(1.08);
+}
+
+/* Visitor card hover effects */
+.visitor-card:hover {
+  transform: translateY(-8px);
+  border-color: rgba(201, 156, 51, 0.4) !important;
+  box-shadow: 0 20px 40px rgba(201, 156, 51, 0.1) !important;
+}
+
+
 

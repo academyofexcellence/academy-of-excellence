@@ -29,6 +29,10 @@ interface Testimonial {
 const Home = () => {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [loadingTestimonials, setLoadingTestimonials] = useState(true);
+  const [partners, setPartners] = useState<any[]>([]);
+  const [loadingPartners, setLoadingPartners] = useState(true);
+  const [visitors, setVisitors] = useState<any[]>([]);
+  const [loadingVisitors, setLoadingVisitors] = useState(true);
   
   // Form states
   const [enquiry, setEnquiry] = useState({
@@ -102,7 +106,50 @@ const Home = () => {
       }
     };
 
+    const fetchPartners = async () => {
+      const mockPartners = [
+        { id: '1', name: 'Gulf Dev Co', logo_url: 'https://images.unsplash.com/photo-1599305445671-ac291c95aba9?auto=format&fit=crop&h=60&q=80' },
+        { id: '2', name: 'Cygnus Solutions', logo_url: 'https://images.unsplash.com/photo-1599305445671-ac291c95aba9?auto=format&fit=crop&h=60&q=80' },
+        { id: '3', name: 'Al Thewakkal Group', logo_url: 'https://images.unsplash.com/photo-1599305445671-ac291c95aba9?auto=format&fit=crop&h=60&q=80' },
+        { id: '4', name: 'Amazon Arabic Support', logo_url: 'https://images.unsplash.com/photo-1599305445671-ac291c95aba9?auto=format&fit=crop&h=60&q=80' }
+      ];
+      try {
+        const { data } = await supabase.from('partners').select('*');
+        if (data && data.length > 0) {
+          setPartners(data);
+        } else {
+          setPartners(mockPartners);
+        }
+      } catch (err) {
+        setPartners(mockPartners);
+      } finally {
+        setLoadingPartners(false);
+      }
+    };
+
+    const fetchVisitors = async () => {
+      const mockVisitors = [
+        { id: '1', name: 'Dr. Faisal Basheer', designation: 'Native Arab Professor', organization: 'University of Riyadh', image_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80' },
+        { id: '2', name: 'Sheikh Hamdan', designation: 'Operations Director', organization: 'Al Thewakkal Group, Dubai', image_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&h=150&q=80' },
+        { id: '3', name: 'Ahmed Al Mansoor', designation: 'Chief Quality Analyst', organization: 'Amazon Middle East', image_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150&q=80' }
+      ];
+      try {
+        const { data } = await supabase.from('visitors').select('*');
+        if (data && data.length > 0) {
+          setVisitors(data);
+        } else {
+          setVisitors(mockVisitors);
+        }
+      } catch (err) {
+        setVisitors(mockVisitors);
+      } finally {
+        setLoadingVisitors(false);
+      }
+    };
+
     fetchTestimonials();
+    fetchPartners();
+    fetchVisitors();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -215,6 +262,33 @@ const Home = () => {
         </div>
       </div>
 
+      {/* Industrial Partners Section */}
+      <section className="partners-section" style={{ padding: '3.5rem 0', background: 'rgba(255, 255, 255, 0.5)', borderBottom: '1px solid rgba(201, 156, 51, 0.08)', borderTop: '1px solid rgba(201, 156, 51, 0.08)' }}>
+        <div className="container">
+          <p className="text-center" style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '2rem' }}>
+            Our Graduates Work At & Partners
+          </p>
+          {loadingPartners ? (
+            <div className="text-center" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Loading partners...</div>
+          ) : (
+            <div className="partners-grid" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '3.5rem 5rem', flexWrap: 'wrap' }}>
+              {partners.map(partner => (
+                <div key={partner.id} className="partner-logo-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img 
+                    src={partner.logo_url} 
+                    alt={partner.name} 
+                    title={partner.name}
+                    loading="lazy"
+                    style={{ height: '38px', objectFit: 'contain', filter: 'grayscale(100%)', opacity: 0.6, transition: 'all 0.3s ease' }}
+                    className="partner-logo"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* About & Why Choose Us Section */}
       <section className="section-padding">
         <div className="container">
@@ -304,6 +378,7 @@ const Home = () => {
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 2rem 0', display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'center', fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 500 }}>
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Bilingual Typing Mastery</li>
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Corporate Translation Methods</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> 2-Month Corporate Internship</li>
                 </ul>
               </div>
               <button onClick={() => scrollToSection('enquiry')} className="btn btn-outline" style={{ width: '100%', justifyContent: 'center' }}>
@@ -424,6 +499,39 @@ const Home = () => {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Guests, Leaders & Mentors Section */}
+      <section className="section-padding" style={{ backgroundColor: 'rgba(255, 255, 255, 0.4)' }}>
+        <div className="container">
+          <div className="text-center mb-4">
+            <span className="badge">Esteemed Guests</span>
+            <h2 className="heading-lg">Guests, Leaders & <span className="text-gradient">Mentors</span></h2>
+            <p className="subtitle">Inspiring personalities and industry leaders who visited our academy to guide students</p>
+          </div>
+
+          {loadingVisitors ? (
+            <div className="text-center py-4" style={{ color: 'var(--text-muted)' }}>Loading visitors...</div>
+          ) : (
+            <div className="grid grid-3" style={{ marginTop: '3rem', gap: '2rem' }}>
+              {visitors.map(visitor => (
+                <div key={visitor.id} className="glass-card text-center visitor-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s ease' }}>
+                  <img 
+                    src={visitor.image_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80'} 
+                    alt={visitor.name} 
+                    loading="lazy"
+                    style={{ width: '110px', height: '110px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--primary-light)', marginBottom: '1.2rem', boxShadow: '0 8px 16px rgba(201,156,51,0.15)' }}
+                  />
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>{visitor.name}</h3>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--primary-dark)', fontWeight: 600, margin: 0 }}>{visitor.designation}</p>
+                  {visitor.organization && (
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.2rem 0 0 0' }}>{visitor.organization}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Enquiry Form Section */}
