@@ -631,7 +631,8 @@ html {
 
 /* Partner Logo styling */
 .partner-logo {
-  height: 50px;
+  height: 90px;
+  max-width: 180px;
   object-fit: contain;
   filter: grayscale(0%);
   opacity: 0.95;
