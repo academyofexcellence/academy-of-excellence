@@ -713,7 +713,7 @@ const Home = () => {
                 <li><a onClick={() => scrollToSection('programs')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Programs & Certifications</a></li>
                 <li><a onClick={() => scrollToSection('enquiry')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Admissions Helpline</a></li>
                 <li><a href="/gallery" style={{ color: 'white', opacity: 0.7, textDecoration: 'none', transition: '0.3s' }}>Life at Academy (Gallery)</a></li>
-                <li><a href="/admin" style={{ color: 'white', opacity: 0.7, textDecoration: 'none', transition: '0.3s' }}>Admin Login Portal</a></li>
+                <li><a href="/admin" style={{ color: 'white', opacity: 0.7, textDecoration: 'none', transition: '0.3s' }}>Login</a></li>
               </ul>
             </div>
             <div>

@@ -56,7 +56,7 @@ function App() {
             <a href="#programs" onClick={(e) => handleNavScroll(e, 'programs')}>Programs</a>
             <Link to="/gallery" onClick={() => setMenuOpen(false)}>Gallery</Link>
             <a href="#alumni" onClick={(e) => handleNavScroll(e, 'alumni')}>Alumni</a>
-            <Link to="/admin" onClick={() => setMenuOpen(false)} className="btn btn-outline" style={{ padding: '0.5rem 1.5rem' }}>Admin Login</Link>
+            <Link to="/admin" onClick={() => setMenuOpen(false)} className="btn btn-outline" style={{ padding: '0.5rem 1.5rem' }}>Login</Link>
           </div>
         </div>
       </nav>
