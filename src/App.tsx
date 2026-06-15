@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import Gallery from './pages/Gallery';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import StudentDashboard from './pages/StudentDashboard';
 import { Menu, X } from 'lucide-react';
 
 function App() {
@@ -66,6 +67,7 @@ function App() {
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/admin" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/student/dashboard" element={<StudentDashboard />} />
       </Routes>
     </Router>
   );
