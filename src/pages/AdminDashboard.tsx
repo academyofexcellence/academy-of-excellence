@@ -105,6 +105,7 @@ const AdminDashboard = () => {
 
   // Form States - Exam/Custom Grading
   const [gradingMode, setGradingMode] = useState<'vocab_sentences' | 'exam' | 'custom'>('vocab_sentences');
+  const [selectedGradingDate, setSelectedGradingDate] = useState(new Date().toISOString().split('T')[0]);
   const [examName, setExamName] = useState('');
   const [examMaxPoints, setExamMaxPoints] = useState('100');
   const [examScores, setExamScores] = useState<{ [studentId: string]: number }>({});
@@ -324,28 +325,34 @@ const AdminDashboard = () => {
     }
   }, [filterCourse, filterBatch, intervalsList]);
 
+  // Fetch classroom scores when interval or selected date changes
+  useEffect(() => {
+    if (activeInterval) {
+      fetchClassroomScores(activeInterval.id, selectedGradingDate);
+    }
+  }, [activeInterval, selectedGradingDate]);
+
   const loadClassroomActiveInterval = () => {
     const active = intervalsList.find(
       i => i.course_id === filterCourse && i.batch_number === parseInt(filterBatch) && i.is_active
     );
     if (active) {
       setActiveInterval(active);
-      fetchClassroomScores(active.id);
     } else {
       setActiveInterval(null);
       setScoresList([]);
     }
   };
 
-  const fetchClassroomScores = async (intervalId: string) => {
+  const fetchClassroomScores = async (intervalId: string, dateStr?: string) => {
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
-      // Fetch scores logged for this interval today
+      const targetDate = dateStr || selectedGradingDate;
+      // Fetch scores logged for this interval on this date
       const { data } = await supabase
         .from('scores')
         .select('*')
         .eq('interval_id', intervalId)
-        .eq('logged_date', todayStr);
+        .eq('logged_date', targetDate);
       if (data) setScoresList(data);
     } catch (err) {
       console.error('Error fetching scores:', err);
@@ -358,7 +365,7 @@ const AdminDashboard = () => {
   // Toggle student check-in (Daily Vocab / Sentences / Weekly Vlog)
   const handleToggleStudentScore = async (studentId: string, scoreType: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog', isChecked: boolean) => {
     if (!activeInterval || !currentUser) return;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const targetDate = selectedGradingDate;
     
     // Define point values
     const pointsMap = { daily_vocab: 5, daily_sentences: 5, weekly_vlog: 15 };
@@ -375,13 +382,13 @@ const AdminDashboard = () => {
             max_points: pointsMap[scoreType],
             activity_name: activityNameMap[scoreType],
             logged_by: currentUser.id,
-            logged_date: todayStr
+            logged_date: targetDate
           }
         ]);
         if (error) throw error;
 
         const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
-        await logActivity('student_score_logged', `Logged +${pointsMap[scoreType]} points for ${studName} (${activityNameMap[scoreType]})`);
+        await logActivity('student_score_logged', `Logged +${pointsMap[scoreType]} points for ${studName} (${activityNameMap[scoreType]}) on ${targetDate}`);
       } else {
         const { error } = await supabase
           .from('scores')
@@ -389,15 +396,15 @@ const AdminDashboard = () => {
           .eq('student_id', studentId)
           .eq('interval_id', activeInterval.id)
           .eq('score_type', scoreType)
-          .eq('logged_date', todayStr);
+          .eq('logged_date', targetDate);
         if (error) throw error;
 
         const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
-        await logActivity('student_score_deleted', `Removed ${activityNameMap[scoreType]} points for ${studName}`);
+        await logActivity('student_score_deleted', `Removed ${activityNameMap[scoreType]} points for ${studName} on ${targetDate}`);
       }
       
       // Refresh classroom logs
-      fetchClassroomScores(activeInterval.id);
+      fetchClassroomScores(activeInterval.id, targetDate);
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ Failed toggling mark: ${err.message}`);
@@ -408,7 +415,7 @@ const AdminDashboard = () => {
   // Malayalam Penalty Trigger (-10 XP)
   const handleMalayalamPenalty = async (studentId: string) => {
     if (!activeInterval || !currentUser) return;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const targetDate = selectedGradingDate;
 
     try {
       const { error } = await supabase.from('scores').insert([
@@ -420,16 +427,16 @@ const AdminDashboard = () => {
           max_points: 0,
           activity_name: 'Malayalam Speaking Policy Violation',
           logged_by: currentUser.id,
-          logged_date: todayStr
+          logged_date: targetDate
         }
       ]);
       if (error) throw error;
 
       const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
-      await logActivity('malayalam_penalty', `Deducted -10 points from ${studName} for speaking Malayalam`);
+      await logActivity('malayalam_penalty', `Deducted -10 points from ${studName} for speaking Malayalam on ${targetDate}`);
       
       setMessage(`⚠️ Penalty logged: -10 points applied to ${studName}.`);
-      fetchClassroomScores(activeInterval.id);
+      fetchClassroomScores(activeInterval.id, targetDate);
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ Failed to log penalty: ${err.message}`);
@@ -453,7 +460,7 @@ const AdminDashboard = () => {
         max_points: maxPts,
         activity_name: `Exam: ${examName}`,
         logged_by: currentUser.id,
-        logged_date: new Date().toISOString().split('T')[0]
+        logged_date: selectedGradingDate
       }));
 
       if (insertRecords.length === 0) {
@@ -463,11 +470,11 @@ const AdminDashboard = () => {
       const { error } = await supabase.from('scores').insert(insertRecords);
       if (error) throw error;
 
-      await logActivity('exam_graded', `Logged grades for exam "${examName}" across batch`);
+      await logActivity('exam_graded', `Logged grades for exam "${examName}" across batch for date ${selectedGradingDate}`);
       setMessage('✅ Exam grades logged successfully!');
       setExamName('');
       setExamScores({});
-      fetchClassroomScores(activeInterval.id);
+      fetchClassroomScores(activeInterval.id, selectedGradingDate);
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ Failed to save grades: ${err.message}`);
@@ -491,7 +498,7 @@ const AdminDashboard = () => {
         max_points: maxPts,
         activity_name: customActivityName,
         logged_by: currentUser.id,
-        logged_date: new Date().toISOString().split('T')[0]
+        logged_date: selectedGradingDate
       }));
 
       if (insertRecords.length === 0) {
@@ -501,11 +508,11 @@ const AdminDashboard = () => {
       const { error } = await supabase.from('scores').insert(insertRecords);
       if (error) throw error;
 
-      await logActivity('custom_graded', `Logged grades for activity "${customActivityName}" across batch`);
+      await logActivity('custom_graded', `Logged grades for activity "${customActivityName}" across batch for date ${selectedGradingDate}`);
       setMessage('✅ Activity grades logged successfully!');
       setCustomActivityName('');
       setCustomScores({});
-      fetchClassroomScores(activeInterval.id);
+      fetchClassroomScores(activeInterval.id, selectedGradingDate);
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ Failed to save grades: ${err.message}`);
@@ -1340,6 +1347,16 @@ const AdminDashboard = () => {
                 />
               </div>
 
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ fontWeight: 750, fontSize: '0.9rem' }}>Activity Date:</label>
+                <input 
+                  type="date" 
+                  value={selectedGradingDate} 
+                  onChange={(e) => setSelectedGradingDate(e.target.value)} 
+                  style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontWeight: 600, cursor: 'pointer' }}
+                />
+              </div>
+
               {activeInterval ? (
                 <span style={{ fontSize: '0.85rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.4rem 1rem', borderRadius: '50px', fontWeight: 700 }}>
                   Active Scoreboard: {activeInterval.name}
@@ -1427,78 +1444,183 @@ const AdminDashboard = () => {
                 {/* Sub Mode A: Daily Checkins & Red Penalty Button */}
                 {gradingMode === 'vocab_sentences' && (
                   <div>
-                    <h3 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Daily Score Sheet (Today's Marks)</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                      <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>
+                        Score Sheet: <span className="text-gradient" style={{ fontWeight: 800 }}>{new Date(selectedGradingDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </h3>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                        Tap cards/cells to toggle completion status.
+                      </span>
+                    </div>
                     
                     {filteredActiveStudents.length === 0 ? (
                       <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active students registered for this batch/course.</p>
                     ) : (
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
-                          <thead>
-                            <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)' }}>
-                              <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700 }}>Student Name</th>
-                              <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Vocab (+5 XP)</th>
-                              <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Daily Sentences (+5 XP)</th>
-                              <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Weekly Vlog (+15 XP)</th>
-                              <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Language Policy</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredActiveStudents.map(student => {
-                              const hasVocabToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_vocab');
-                              const hasSentencesToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_sentences');
-                              const hasVlogToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'weekly_vlog');
+                      <>
+                        <style>{`
+                          @media (max-width: 768px) {
+                            .desktop-score-table { display: none !important; }
+                            .mobile-score-cards { display: flex !important; }
+                          }
+                          @media (min-width: 769px) {
+                            .desktop-score-table { display: block !important; }
+                            .mobile-score-cards { display: none !important; }
+                          }
+                        `}</style>
 
-                              return (
-                                <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                                  <td style={{ padding: '1rem 0.5rem', fontWeight: 650 }}>{student.name}</td>
-                                  
-                                  {/* Vocab check */}
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
-                                    <input 
-                                      type="checkbox" 
-                                      checked={hasVocabToday}
-                                      onChange={(e) => handleToggleStudentScore(student.id, 'daily_vocab', e.target.checked)}
-                                      style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
-                                    />
-                                  </td>
+                        {/* DESKTOP TABLE VIEW */}
+                        <div className="desktop-score-table" style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)' }}>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700 }}>Student Name</th>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Vocab (+5 XP)</th>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Daily Sentences (+5 XP)</th>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Weekly Vlog (+15 XP)</th>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Language Policy</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredActiveStudents.map(student => {
+                                const hasVocabToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_vocab');
+                                const hasSentencesToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_sentences');
+                                const hasVlogToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'weekly_vlog');
 
-                                  {/* Sentences check */}
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
-                                    <input 
-                                      type="checkbox" 
-                                      checked={hasSentencesToday}
-                                      onChange={(e) => handleToggleStudentScore(student.id, 'daily_sentences', e.target.checked)}
-                                      style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
-                                    />
-                                  </td>
+                                return (
+                                  <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                    <td style={{ padding: '1rem 0.5rem', fontWeight: 650 }}>{student.name}</td>
+                                    
+                                    {/* Vocab check */}
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={hasVocabToday}
+                                        onChange={(e) => handleToggleStudentScore(student.id, 'daily_vocab', e.target.checked)}
+                                        style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                      />
+                                    </td>
 
-                                  {/* Vlog check */}
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
-                                    <input 
-                                      type="checkbox" 
-                                      checked={hasVlogToday}
-                                      onChange={(e) => handleToggleStudentScore(student.id, 'weekly_vlog', e.target.checked)}
-                                      style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
-                                    />
-                                  </td>
+                                    {/* Sentences check */}
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={hasSentencesToday}
+                                        onChange={(e) => handleToggleStudentScore(student.id, 'daily_sentences', e.target.checked)}
+                                        style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                      />
+                                    </td>
 
-                                  {/* Red Malayalam speaking deduction */}
-                                  <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
-                                    <button 
-                                      onClick={() => handleMalayalamPenalty(student.id)} 
-                                      className="btn btn-outline" 
-                                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.03)' }}
-                                    >
-                                      <XCircle size={12} /> Malayalam Penalty (-10)
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                                    {/* Vlog check */}
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={hasVlogToday}
+                                        onChange={(e) => handleToggleStudentScore(student.id, 'weekly_vlog', e.target.checked)}
+                                        style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                      />
+                                    </td>
+
+                                    {/* Red Malayalam speaking deduction */}
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
+                                      <button 
+                                        onClick={() => handleMalayalamPenalty(student.id)} 
+                                        className="btn btn-outline" 
+                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.03)' }}
+                                      >
+                                        <XCircle size={12} /> Malayalam Penalty (-10)
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* MOBILE CARDS VIEW */}
+                        <div className="mobile-score-cards" style={{ display: 'none', flexDirection: 'column', gap: '1.2rem' }}>
+                          {filteredActiveStudents.map(student => {
+                            const hasVocabToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_vocab');
+                            const hasSentencesToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_sentences');
+                            const hasVlogToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'weekly_vlog');
+
+                            return (
+                              <div key={student.id} className="glass-card" style={{ padding: '1.2rem', border: '1px solid rgba(201,156,51,0.15)', background: 'white', borderRadius: '14px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                  <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-main)' }}>{student.name}</span>
+                                  <span style={{ fontSize: '0.75rem', background: 'rgba(201,156,51,0.1)', color: 'var(--primary-dark)', padding: '0.25rem 0.6rem', borderRadius: '50px', fontWeight: 700 }}>Active</span>
+                                </div>
+
+                                {/* Toggle Pills */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem', marginBottom: '1rem' }}>
+                                  {/* Vocab */}
+                                  <button
+                                    onClick={() => handleToggleStudentScore(student.id, 'daily_vocab', !hasVocabToday)}
+                                    style={{
+                                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                      padding: '0.6rem 0.4rem', borderRadius: '10px', border: '1px solid transparent',
+                                      background: hasVocabToday ? 'rgba(34,197,94,0.12)' : 'rgba(0,0,0,0.03)',
+                                      color: hasVocabToday ? '#16a34a' : 'var(--text-muted)',
+                                      fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
+                                      outline: 'none', borderColor: hasVocabToday ? '#22c55e' : 'transparent'
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>📚</span>
+                                    <span>Vocab</span>
+                                    <span style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.1rem' }}>{hasVocabToday ? '✓ Done' : '+5 XP'}</span>
+                                  </button>
+
+                                  {/* Sentences */}
+                                  <button
+                                    onClick={() => handleToggleStudentScore(student.id, 'daily_sentences', !hasSentencesToday)}
+                                    style={{
+                                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                      padding: '0.6rem 0.4rem', borderRadius: '10px', border: '1px solid transparent',
+                                      background: hasSentencesToday ? 'rgba(34,197,94,0.12)' : 'rgba(0,0,0,0.03)',
+                                      color: hasSentencesToday ? '#16a34a' : 'var(--text-muted)',
+                                      fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
+                                      outline: 'none', borderColor: hasSentencesToday ? '#22c55e' : 'transparent'
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>✍️</span>
+                                    <span>Sentences</span>
+                                    <span style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.1rem' }}>{hasSentencesToday ? '✓ Done' : '+5 XP'}</span>
+                                  </button>
+
+                                  {/* Vlog */}
+                                  <button
+                                    onClick={() => handleToggleStudentScore(student.id, 'weekly_vlog', !hasVlogToday)}
+                                    style={{
+                                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                      padding: '0.6rem 0.4rem', borderRadius: '10px', border: '1px solid transparent',
+                                      background: hasVlogToday ? 'rgba(34,197,94,0.12)' : 'rgba(0,0,0,0.03)',
+                                      color: hasVlogToday ? '#16a34a' : 'var(--text-muted)',
+                                      fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
+                                      outline: 'none', borderColor: hasVlogToday ? '#22c55e' : 'transparent'
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>🎥</span>
+                                    <span>Vlog</span>
+                                    <span style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.1rem' }}>{hasVlogToday ? '✓ Approved' : '+15 XP'}</span>
+                                  </button>
+                                </div>
+
+                                {/* Penalty */}
+                                <button
+                                  onClick={() => handleMalayalamPenalty(student.id)}
+                                  className="btn btn-outline"
+                                  style={{
+                                    padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5',
+                                    background: 'rgba(239,68,68,0.03)', width: '100%', justifyContent: 'center'
+                                  }}
+                                >
+                                  <XCircle size={12} /> Malayalam Speaking Penalty (-10 XP)
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

@@ -43,13 +43,13 @@ ON public.student_profiles FOR SELECT
 TO authenticated 
 USING (true);
 
-CREATE POLICY "Enable all for leadership" 
+CREATE POLICY "Enable all for staff and leadership" 
 ON public.student_profiles FOR ALL 
 TO authenticated 
 USING (
     EXISTS (
         SELECT 1 FROM public.staff_profiles 
-        WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
+        WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
     )
 );
 
@@ -107,23 +107,23 @@ ON public.scores FOR SELECT
 TO authenticated 
 USING (true);
 
-CREATE POLICY "Enable insert for leadership" 
+CREATE POLICY "Enable insert for staff and leadership" 
 ON public.scores FOR INSERT 
 TO authenticated 
 WITH CHECK (
     EXISTS (
         SELECT 1 FROM public.staff_profiles 
-        WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
+        WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
     )
 );
 
-CREATE POLICY "Enable delete for leadership" 
+CREATE POLICY "Enable delete for staff and leadership" 
 ON public.scores FOR DELETE 
 TO authenticated 
 USING (
     EXISTS (
         SELECT 1 FROM public.staff_profiles 
-        WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
+        WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
     )
 );
 
