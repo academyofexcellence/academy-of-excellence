@@ -196,6 +196,6 @@ ON CONFLICT (name) DO NOTHING;
 -- Seed default active intervals for Course 1 (PDTOA Batch 25) and Course 2 (Spoken Arabic Batch 9)
 INSERT INTO public.scoring_intervals (id, name, course_id, batch_number, is_active)
 VALUES 
-    ('i1111111-1111-1111-1111-111111111111', 'Phase 1 - Initial Term', 'c1111111-1111-1111-1111-111111111111', 25, true),
-    ('i2222222-2222-2222-2222-222222222222', 'Phase 1 - Initial Term', 'c2222222-2222-2222-2222-222222222222', 9, true)
+    ('a1111111-1111-1111-1111-111111111111', 'Phase 1 - Initial Term', 'c1111111-1111-1111-1111-111111111111', 25, true),
+    ('a2222222-2222-2222-2222-222222222222', 'Phase 1 - Initial Term', 'c2222222-2222-2222-2222-222222222222', 9, true)
 ON CONFLICT DO NOTHING;
