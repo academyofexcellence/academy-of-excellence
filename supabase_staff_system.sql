@@ -85,13 +85,28 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 -- 6. Row Level Security Policies
 
 -- STAFF_PROFILES Policies
-CREATE POLICY "Enable read access for authenticated users" 
+CREATE POLICY "Enable select for authenticated users" 
 ON public.staff_profiles FOR SELECT 
 TO authenticated 
 USING (true);
 
-CREATE POLICY "Enable all actions for leadership roles" 
-ON public.staff_profiles FOR ALL 
+CREATE POLICY "Enable insert for authenticated users" 
+ON public.staff_profiles FOR INSERT 
+TO authenticated 
+WITH CHECK (true);
+
+CREATE POLICY "Enable update for leadership roles" 
+ON public.staff_profiles FOR UPDATE 
+TO authenticated 
+USING (
+    EXISTS (
+        SELECT 1 FROM public.staff_profiles 
+        WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
+    )
+);
+
+CREATE POLICY "Enable delete for leadership roles" 
+ON public.staff_profiles FOR DELETE 
 TO authenticated 
 USING (
     EXISTS (
