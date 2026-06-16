@@ -17,7 +17,8 @@ import {
   ListChecks,
   GraduationCap,
   XCircle,
-  Settings
+  Settings,
+  TrendingUp
 } from 'lucide-react';
 
 interface StaffProfile {
@@ -73,6 +74,14 @@ interface ScoringInterval {
   is_active: boolean;
 }
 
+interface LeaderboardEntry {
+  student_id: string;
+  name: string;
+  total_score: number;
+  level: number;
+  rank: number;
+}
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [authLoading, setAuthLoading] = useState(true);
@@ -97,14 +106,18 @@ const AdminDashboard = () => {
   const [studentList, setStudentList] = useState<StudentProfile[]>([]);
   const [intervalsList, setIntervalsList] = useState<ScoringInterval[]>([]);
   const [scoresList, setScoresList] = useState<any[]>([]);
+  const [updatingScores, setUpdatingScores] = useState<string[]>([]);
+  const [overviewLeaderboard, setOverviewLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [overviewSelectedInterval, setOverviewSelectedInterval] = useState<string>('');
   
   // Classroom Selector States
   const [filterCourse, setFilterCourse] = useState('');
   const [filterBatch, setFilterBatch] = useState('');
   const [activeInterval, setActiveInterval] = useState<ScoringInterval | null>(null);
+  const [showArchivedFilter, setShowArchivedFilter] = useState(false);
 
   // Form States - Exam/Custom Grading
-  const [gradingMode, setGradingMode] = useState<'vocab_sentences' | 'exam' | 'custom'>('vocab_sentences');
+  const [gradingMode, setGradingMode] = useState<'vocab_sentences' | 'exam' | 'custom' | 'leaderboard'>('vocab_sentences');
   const [selectedGradingDate, setSelectedGradingDate] = useState(new Date().toISOString().split('T')[0]);
   const [examName, setExamName] = useState('');
   const [examMaxPoints, setExamMaxPoints] = useState('100');
@@ -318,6 +331,43 @@ const AdminDashboard = () => {
     if (visitorsData) setVisitorsList(visitorsData);
   };
 
+  // Helper to display shortened course acronyms/names in quick buttons
+  const getShortCourseName = (courseId: string) => {
+    const fullName = courses.find(c => c.id === courseId)?.name || 'Course';
+    const lower = fullName.toLowerCase();
+    if (lower.includes('translation') || lower.includes('diploma')) {
+      return 'PDTOA';
+    }
+    if (lower.includes('arabic')) {
+      return 'Gulf Arabic';
+    }
+    return fullName.length > 25 ? fullName.substring(0, 22) + '...' : fullName;
+  };
+
+  // Automatically select the first live (active) batch on load
+  useEffect(() => {
+    if (intervalsList.length > 0) {
+      const active = intervalsList.find(i => i.is_active);
+      if (active) {
+        if (!filterCourse || !filterBatch) {
+          setFilterCourse(active.course_id);
+          setFilterBatch(active.batch_number.toString());
+        }
+        if (!overviewSelectedInterval) {
+          setOverviewSelectedInterval(active.id);
+        }
+      } else {
+        if (!filterCourse || !filterBatch) {
+          setFilterCourse(intervalsList[0].course_id);
+          setFilterBatch(intervalsList[0].batch_number.toString());
+        }
+        if (!overviewSelectedInterval) {
+          setOverviewSelectedInterval(intervalsList[0].id);
+        }
+      }
+    }
+  }, [intervalsList, filterCourse, filterBatch, overviewSelectedInterval]);
+
   // Triggered when Course and Batch selection changes in Classroom View
   useEffect(() => {
     if (filterCourse && filterBatch) {
@@ -325,12 +375,23 @@ const AdminDashboard = () => {
     }
   }, [filterCourse, filterBatch, intervalsList]);
 
-  // Fetch classroom scores when interval or selected date changes
+  // Fetch classroom scores and leaderboard when interval or selected date changes
   useEffect(() => {
     if (activeInterval) {
       fetchClassroomScores(activeInterval.id, selectedGradingDate);
+      fetchClassroomLeaderboard(activeInterval.id);
     }
   }, [activeInterval, selectedGradingDate]);
+
+  // Fetch overview leaderboard when selected overview interval changes
+  useEffect(() => {
+    if (overviewSelectedInterval && intervalsList.length > 0) {
+      const int = intervalsList.find(i => i.id === overviewSelectedInterval);
+      if (int) {
+        fetchOverviewLeaderboard(int.id, int.course_id, int.batch_number);
+      }
+    }
+  }, [overviewSelectedInterval, intervalsList]);
 
   const loadClassroomActiveInterval = () => {
     const active = intervalsList.find(
@@ -344,19 +405,92 @@ const AdminDashboard = () => {
     }
   };
 
-  const fetchClassroomScores = async (intervalId: string, dateStr?: string) => {
+  const fetchClassroomScores = async (_intervalId: string, dateStr?: string) => {
     try {
       const targetDate = dateStr || selectedGradingDate;
-      // Fetch scores logged for this interval on this date
+      // Fetch scores logged for this date (regardless of interval to align with UNIQUE constraint)
       const { data } = await supabase
         .from('scores')
         .select('*')
-        .eq('interval_id', intervalId)
         .eq('logged_date', targetDate);
       if (data) setScoresList(data);
     } catch (err) {
       console.error('Error fetching scores:', err);
     }
+  };
+
+  const fetchLeaderboardData = async (intervalId: string, courseId: string, batchNumber: number): Promise<LeaderboardEntry[]> => {
+    try {
+      // Fetch all active students in batch
+      const { data: students } = await supabase
+        .from('student_profiles')
+        .select('id, name')
+        .eq('course_id', courseId)
+        .eq('batch_number', batchNumber)
+        .eq('status', 'active');
+
+      if (!students) return [];
+
+      // Fetch all scores for this interval
+      const { data: scores } = await supabase
+        .from('scores')
+        .select('student_id, points')
+        .eq('interval_id', intervalId);
+
+      const scoreMap: { [key: string]: number } = {};
+      students.forEach(s => { scoreMap[s.id] = 0; });
+
+      if (scores) {
+        scores.forEach(s => {
+          if (scoreMap[s.student_id] !== undefined) {
+            scoreMap[s.student_id] += s.points;
+          }
+        });
+      }
+
+      // Format & Rank entries
+      const entries: LeaderboardEntry[] = students.map(s => {
+        const total = scoreMap[s.id];
+        const computedLevel = Math.max(1, Math.floor(total / 100) + 1);
+        return {
+          student_id: s.id,
+          name: s.name,
+          total_score: total,
+          level: computedLevel,
+          rank: 0
+        };
+      });
+
+      // Sort by score desc
+      entries.sort((a, b) => b.total_score - a.total_score);
+
+      // Assign ranks (handle ties)
+      let currentRank = 1;
+      for (let i = 0; i < entries.length; i++) {
+        if (i > 0 && entries[i].total_score < entries[i - 1].total_score) {
+          currentRank = i + 1;
+        }
+        entries[i].rank = currentRank;
+      }
+
+      return entries;
+    } catch (err) {
+      console.error('Error fetching leaderboard data:', err);
+      return [];
+    }
+  };
+
+  const fetchClassroomLeaderboard = async (intervalId: string) => {
+    if (!filterCourse || !filterBatch) return;
+    const entries = await fetchLeaderboardData(intervalId, filterCourse, parseInt(filterBatch));
+    if (overviewSelectedInterval === intervalId) {
+      setOverviewLeaderboard(entries);
+    }
+  };
+
+  const fetchOverviewLeaderboard = async (intervalId: string, courseId: string, batchNumber: number) => {
+    const entries = await fetchLeaderboardData(intervalId, courseId, batchNumber);
+    setOverviewLeaderboard(entries);
   };
 
 
@@ -365,6 +499,10 @@ const AdminDashboard = () => {
   // Toggle student check-in (Daily Vocab / Sentences / Weekly Vlog)
   const handleToggleStudentScore = async (studentId: string, scoreType: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog', isChecked: boolean) => {
     if (!activeInterval || !currentUser) return;
+    const lockKey = `${studentId}-${scoreType}`;
+    if (updatingScores.includes(lockKey)) return;
+
+    setUpdatingScores(prev => [...prev, lockKey]);
     const targetDate = selectedGradingDate;
     
     // Define point values
@@ -394,7 +532,6 @@ const AdminDashboard = () => {
           .from('scores')
           .delete()
           .eq('student_id', studentId)
-          .eq('interval_id', activeInterval.id)
           .eq('score_type', scoreType)
           .eq('logged_date', targetDate);
         if (error) throw error;
@@ -403,12 +540,19 @@ const AdminDashboard = () => {
         await logActivity('student_score_deleted', `Removed ${activityNameMap[scoreType]} points for ${studName} on ${targetDate}`);
       }
       
-      // Refresh classroom logs
-      fetchClassroomScores(activeInterval.id, targetDate);
+      // Refresh classroom logs & leaderboard
+      await fetchClassroomScores(activeInterval.id, targetDate);
+      await fetchClassroomLeaderboard(activeInterval.id);
     } catch (err: any) {
       console.error(err);
-      setMessage(`❌ Failed toggling mark: ${err.message}`);
+      if (err.code === '23505') {
+        setMessage(`❌ Activity already logged for this student today.`);
+      } else {
+        setMessage(`❌ Failed toggling mark: ${err.message}`);
+      }
       setTimeout(() => setMessage(''), 4000);
+    } finally {
+      setUpdatingScores(prev => prev.filter(k => k !== lockKey));
     }
   };
 
@@ -416,7 +560,10 @@ const AdminDashboard = () => {
   const handleMalayalamPenalty = async (studentId: string) => {
     if (!activeInterval || !currentUser) return;
     const targetDate = selectedGradingDate;
+    const lockKey = `${studentId}-penalty`;
+    if (updatingScores.includes(lockKey)) return;
 
+    setUpdatingScores(prev => [...prev, lockKey]);
     try {
       const { error } = await supabase.from('scores').insert([
         {
@@ -436,10 +583,17 @@ const AdminDashboard = () => {
       await logActivity('malayalam_penalty', `Deducted -10 points from ${studName} for speaking Malayalam on ${targetDate}`);
       
       setMessage(`⚠️ Penalty logged: -10 points applied to ${studName}.`);
-      fetchClassroomScores(activeInterval.id, targetDate);
+      await fetchClassroomScores(activeInterval.id, targetDate);
+      await fetchClassroomLeaderboard(activeInterval.id);
     } catch (err: any) {
       console.error(err);
-      setMessage(`❌ Failed to log penalty: ${err.message}`);
+      if (err.code === '23505') {
+        setMessage(`❌ Malayalam Penalty already logged for this student today.`);
+      } else {
+        setMessage(`❌ Failed to log penalty: ${err.message}`);
+      }
+    } finally {
+      setUpdatingScores(prev => prev.filter(k => k !== lockKey));
     }
     setTimeout(() => setMessage(''), 4000);
   };
@@ -474,7 +628,8 @@ const AdminDashboard = () => {
       setMessage('✅ Exam grades logged successfully!');
       setExamName('');
       setExamScores({});
-      fetchClassroomScores(activeInterval.id, selectedGradingDate);
+      await fetchClassroomScores(activeInterval.id, selectedGradingDate);
+      await fetchClassroomLeaderboard(activeInterval.id);
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ Failed to save grades: ${err.message}`);
@@ -512,7 +667,8 @@ const AdminDashboard = () => {
       setMessage('✅ Activity grades logged successfully!');
       setCustomActivityName('');
       setCustomScores({});
-      fetchClassroomScores(activeInterval.id, selectedGradingDate);
+      await fetchClassroomScores(activeInterval.id, selectedGradingDate);
+      await fetchClassroomLeaderboard(activeInterval.id);
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ Failed to save grades: ${err.message}`);
@@ -1232,6 +1388,152 @@ const AdminDashboard = () => {
                 )}
               </div>
             </div>
+
+            {/* Live Leaderboard / Scoreboard Section */}
+            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(201,156,51,0.12)', paddingBottom: '1rem', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: '1.25rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+                  <TrendingUp size={20} className="text-primary" /> Live Leaderboard Standings
+                </h3>
+
+                {/* Active Batches Selection Pills */}
+                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Select Live Batch:</span>
+                  {intervalsList.filter(i => i.is_active).length === 0 ? (
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No active batches</span>
+                  ) : (
+                    intervalsList.filter(i => i.is_active).map(interval => {
+                      const isSelected = overviewSelectedInterval === interval.id;
+                      return (
+                        <button
+                          key={interval.id}
+                          onClick={() => setOverviewSelectedInterval(interval.id)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            padding: '0.4rem 0.8rem',
+                            borderRadius: '20px',
+                            border: '1.5px solid',
+                            borderColor: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.06)',
+                            background: isSelected ? 'linear-gradient(135deg, rgba(201,156,51,0.12), rgba(201,156,51,0.03))' : 'white',
+                            color: isSelected ? 'var(--primary-dark)' : 'var(--text-main)',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            outline: 'none'
+                          }}
+                        >
+                          <span style={{
+                            display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
+                            background: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.2)'
+                          }}></span>
+                          <span>{getShortCourseName(interval.course_id)} • Batch {interval.batch_number}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Leaderboard list container */}
+              <div className="leaderboard-list">
+                {overviewLeaderboard.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    No student rankings logged for this period.
+                  </div>
+                ) : (
+                  overviewLeaderboard.map(entry => {
+                    const initials = entry.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?';
+                    const topScore = overviewLeaderboard[0]?.total_score || 100;
+                    const relativePercent = topScore > 0 ? Math.min(100, Math.max(0, (entry.total_score / topScore) * 100)) : 0;
+
+                    // Rank badge logic
+                    const getRankBadge = (rank: number) => {
+                      if (rank === 1) return { bg: 'linear-gradient(135deg, #fbbf24, #d97706)', text: '👑 1st', color: 'white' };
+                      if (rank === 2) return { bg: 'linear-gradient(135deg, #e2e8f0, #94a3b8)', text: '🥈 2nd', color: '#1e293b' };
+                      if (rank === 3) return { bg: 'linear-gradient(135deg, #ffedd5, #b45309)', text: '🥉 3rd', color: '#78350f' };
+                      return { bg: '#f1f5f9', text: `#${rank}`, color: '#64748b' };
+                    };
+                    const rankBadge = getRankBadge(entry.rank);
+
+                    // Dynamic Avatar color gradient
+                    const getAvatarGradient = (id: string) => {
+                      const colors = [
+                        'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
+                        'linear-gradient(135deg, #10b981, #047857)', // Green
+                        'linear-gradient(135deg, #8b5cf6, #5b21b6)', // Purple
+                        'linear-gradient(135deg, #ec4899, #be185d)', // Pink
+                        'linear-gradient(135deg, #f97316, #c2410c)'  // Orange
+                      ];
+                      const charCodeSum = id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+                      return colors[charCodeSum % colors.length];
+                    };
+
+                    return (
+                      <div key={entry.student_id} className="rank-card">
+                        {/* Rank Pill */}
+                        <div 
+                          className="rank-badge"
+                          style={{
+                            background: rankBadge.bg,
+                            color: rankBadge.color,
+                          }}
+                        >
+                          {rankBadge.text}
+                        </div>
+
+                        {/* Avatar Bubble */}
+                        <div 
+                          className="avatar-bubble"
+                          style={{
+                            background: getAvatarGradient(entry.student_id)
+                          }}
+                        >
+                          {initials}
+                        </div>
+
+                        {/* Name & Gamified Level progress bar */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 750, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                              {entry.name}
+                            </span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <span style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.06)', color: 'var(--text-muted)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                              Lvl {entry.level}
+                            </span>
+                            <div style={{ height: '6px', flex: 1, background: 'rgba(0,0,0,0.05)', borderRadius: '10px', overflow: 'hidden', maxWidth: '200px' }}>
+                              <div 
+                                style={{ 
+                                  height: '100%', 
+                                  width: `${relativePercent}%`, 
+                                  background: 'linear-gradient(90deg, #64748b 0%, #94a3b8 100%)', 
+                                  borderRadius: '10px' 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Total points XP */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '45px' }}>
+                          <span className="xp-badge" style={{ color: 'var(--text-main)' }}>
+                            {entry.total_score}
+                          </span>
+                          <span className="xp-label">
+                            XP
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1322,49 +1624,125 @@ const AdminDashboard = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             
             {/* Batch Filtering Panel */}
-            <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ fontWeight: 750, fontSize: '0.9rem' }}>Select Course:</label>
-                <select 
-                  value={filterCourse} 
-                  onChange={(e) => setFilterCourse(e.target.value)} 
-                  style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontWeight: 600 }}
-                >
-                  {courses.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+            <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(0,0,0,0.04)', paddingBottom: '0.8rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1.1rem' }}>⚡</span>
+                  <span style={{ fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.02em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Live Batches</span>
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <label style={{ fontWeight: 750, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Activity Date:</label>
+                    <input 
+                      type="date" 
+                      value={selectedGradingDate} 
+                      onChange={(e) => setSelectedGradingDate(e.target.value)} 
+                      style={{ padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+                    />
+                  </div>
+                  
+                  <button 
+                    onClick={() => setShowArchivedFilter(!showArchivedFilter)} 
+                    style={{
+                      background: 'none', border: 'none', color: 'var(--primary-dark)', fontWeight: 700, fontSize: '0.85rem',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', textDecoration: 'underline', outline: 'none'
+                    }}
+                  >
+                    🔍 {showArchivedFilter ? 'Hide Search' : 'Search Other Batches'}
+                  </button>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ fontWeight: 750, fontSize: '0.9rem' }}>Batch Number:</label>
-                <input 
-                  type="number" 
-                  value={filterBatch} 
-                  onChange={(e) => setFilterBatch(e.target.value)} 
-                  placeholder="e.g. 25"
-                  style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', width: '80px', outline: 'none', background: 'white', fontWeight: 600 }}
-                />
+              {/* Quick-Access Row of Active Batches */}
+              <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                {intervalsList.filter(i => i.is_active).length === 0 ? (
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>
+                    No live scoring periods currently running. Create one in Settings.
+                  </span>
+                ) : (
+                  intervalsList.filter(i => i.is_active).map(interval => {
+                    const isSelected = filterCourse === interval.course_id && parseInt(filterBatch) === interval.batch_number;
+                    return (
+                      <button
+                        key={interval.id}
+                        onClick={() => {
+                          setFilterCourse(interval.course_id);
+                          setFilterBatch(interval.batch_number.toString());
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.6rem',
+                          padding: '0.6rem 1.2rem',
+                          borderRadius: '50px',
+                          border: '2px solid',
+                          borderColor: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.06)',
+                          background: isSelected ? 'linear-gradient(135deg, rgba(201,156,51,0.12), rgba(201,156,51,0.03))' : 'white',
+                          boxShadow: isSelected ? '0 0 15px rgba(201,156,51,0.15)' : 'none',
+                          color: isSelected ? 'var(--primary-dark)' : 'var(--text-main)',
+                          fontWeight: 700,
+                          fontSize: '0.85rem',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          outline: 'none'
+                        }}
+                      >
+                        <span style={{
+                          display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%',
+                          background: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.2)',
+                          boxShadow: isSelected ? '0 0 8px var(--primary)' : 'none'
+                        }}></span>
+                        <span>{getShortCourseName(interval.course_id)} • Batch {interval.batch_number}</span>
+                        <span style={{ fontSize: '0.75rem', opacity: 0.7, fontWeight: 500 }}>({interval.name})</span>
+                      </button>
+                    );
+                  })
+                )}
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ fontWeight: 750, fontSize: '0.9rem' }}>Activity Date:</label>
-                <input 
-                  type="date" 
-                  value={selectedGradingDate} 
-                  onChange={(e) => setSelectedGradingDate(e.target.value)} 
-                  style={{ padding: '0.5rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontWeight: 600, cursor: 'pointer' }}
-                />
-              </div>
+              {/* Collapsible Manual Selection / Archive Query */}
+              {showArchivedFilter && (
+                <div style={{ 
+                  display: 'flex', gap: '1.2rem', alignItems: 'center', flexWrap: 'wrap', 
+                  background: 'rgba(0,0,0,0.02)', padding: '1rem', borderRadius: '10px', 
+                  border: '1px dashed rgba(201,156,51,0.2)', animation: 'slideDown 0.2s ease'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <label style={{ fontWeight: 750, fontSize: '0.85rem' }}>Select Course:</label>
+                    <select 
+                      value={filterCourse} 
+                      onChange={(e) => setFilterCourse(e.target.value)} 
+                      style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(201,156,51,0.25)', outline: 'none', background: 'white', fontWeight: 600, fontSize: '0.85rem' }}
+                    >
+                      {courses.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-              {activeInterval ? (
-                <span style={{ fontSize: '0.85rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.4rem 1rem', borderRadius: '50px', fontWeight: 700 }}>
-                  Active Scoreboard: {activeInterval.name}
-                </span>
-              ) : (
-                <span style={{ fontSize: '0.85rem', background: 'rgba(239,68,68,0.1)', color: '#dc2626', padding: '0.4rem 1rem', borderRadius: '50px', fontWeight: 700 }}>
-                  ⚠️ No Active Scoring Period Set (Go to settings to start one)
-                </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <label style={{ fontWeight: 750, fontSize: '0.85rem' }}>Batch Number:</label>
+                    <input 
+                      type="number" 
+                      value={filterBatch} 
+                      onChange={(e) => setFilterBatch(e.target.value)} 
+                      placeholder="e.g. 25"
+                      style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(201,156,51,0.25)', width: '70px', outline: 'none', background: 'white', fontWeight: 600, fontSize: '0.85rem' }}
+                    />
+                  </div>
+
+                  {activeInterval ? (
+                    <span style={{ fontSize: '0.8rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.3rem 0.8rem', borderRadius: '50px', fontWeight: 700 }}>
+                      Scoreboard: {activeInterval.name}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.8rem', background: 'rgba(239,68,68,0.1)', color: '#dc2626', padding: '0.3rem 0.8rem', borderRadius: '50px', fontWeight: 700 }}>
+                      ⚠️ Inactive Scoring Period
+                    </span>
+                  )}
+                </div>
               )}
             </div>
 

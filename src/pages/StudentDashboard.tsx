@@ -6,8 +6,6 @@ import {
   Calendar, 
   TrendingUp, 
   Clock, 
-  CheckCircle, 
-  AlertTriangle, 
   BookOpen,
   MessageSquare,
   Video
@@ -66,9 +64,6 @@ const StudentDashboard = () => {
     sentences: { [key: string]: boolean };
     vlog: boolean;
   }>({ vocab: {}, sentences: {}, vlog: false });
-
-  // Navigation state inside dashboard
-  const [activeSubTab, setActiveSubTab] = useState<'scoreboard' | 'logs'>('scoreboard');
 
   useEffect(() => {
     checkSession();
@@ -204,16 +199,16 @@ const StudentDashboard = () => {
 
   const fetchLogsAndWeeklyCheckins = async (studentId: string, intervalId: string) => {
     try {
-      // Fetch recent score adjustments for this student
+      // Fetch recent score adjustments for this student (all intervals, to align with UNIQUE constraint and weekly checklist)
       const { data: logs } = await supabase
         .from('scores')
         .select('*')
         .eq('student_id', studentId)
-        .eq('interval_id', intervalId)
         .order('created_at', { ascending: false });
 
       if (logs) {
-        setRecentLogs(logs);
+        // Show only the selected interval's audit logs in history
+        setRecentLogs(logs.filter(log => log.interval_id === intervalId));
 
         // Calculate weekly status (Mon-Fri checkins + weekly vlog)
         // Get start of current week (Monday)
@@ -277,7 +272,7 @@ const StudentDashboard = () => {
   };
 
   if (loading || !currentStudent) {
-    return <div style={{ paddingTop: '150px', textAlign: 'center' }}>Loading Student Scoreboard...</div>;
+    return <div style={{ paddingTop: '150px', textAlign: 'center', fontFamily: 'inherit', color: 'var(--text-muted)', fontWeight: 600 }}>Loading Student Scoreboard...</div>;
   }
 
   // Get current student ranking statistics
@@ -302,10 +297,109 @@ const StudentDashboard = () => {
 
   return (
     <div style={{ paddingTop: '120px', paddingBottom: '60px', minHeight: '100vh', background: 'var(--bg-light)' }} className="bg-grid-pattern">
-      <div className="container" style={{ maxWidth: '1050px' }}>
+      <div className="container" style={{ maxWidth: '1080px' }}>
         
+        {/* Style block for gaming and layout classes */}
+        <style>{`
+          .student-dash-grid {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 1.5rem;
+            align-items: start;
+            margin-top: 1.5rem;
+          }
+          .leaderboard-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+          .rank-card {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.2rem;
+            background: white;
+            border-radius: 16px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.01);
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
+          }
+          .rank-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(201, 156, 51, 0.08);
+            border-color: rgba(201, 156, 51, 0.25);
+          }
+          .rank-card-self {
+            border: 2px solid var(--primary) !important;
+            background: rgba(201, 156, 51, 0.04) !important;
+            box-shadow: 0 8px 20px rgba(201, 156, 51, 0.15) !important;
+          }
+          .rank-badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 50px;
+            font-weight: 800;
+            font-size: 0.75rem;
+            min-width: 52px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+          }
+          .avatar-bubble {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.05);
+          }
+          .xp-badge {
+            font-weight: 850;
+            font-size: 1.15rem;
+            line-height: 1;
+          }
+          .xp-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 0.15rem;
+          }
+          .logs-scroll-container {
+            max-height: 380px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding-right: 0.25rem;
+          }
+          @media (max-width: 991px) {
+            .student-dash-grid {
+              grid-template-columns: 1fr;
+            }
+          }
+          @media (max-width: 480px) {
+            .rank-card {
+              padding: 0.8rem 1rem;
+              gap: 0.75rem;
+            }
+            .avatar-bubble {
+              width: 36px;
+              height: 36px;
+              font-size: 0.8rem;
+            }
+            .xp-badge {
+              font-size: 1rem;
+            }
+          }
+        `}</style>
+
         {/* Welcome & Gamified Badge Banner */}
-        <div className="glass-card" style={{ padding: '2.5rem', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 15px 35px rgba(201, 156, 51, 0.1)', marginBottom: '2.5rem', position: 'relative', overflow: 'hidden' }}>
+        <div className="glass-card" style={{ padding: '2.5rem', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 15px 35px rgba(201, 156, 51, 0.1)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
           <div className="hero-blob" style={{ width: '300px', height: '300px', top: '-50px', right: '-50px', background: 'radial-gradient(circle, rgba(201,156,51,0.15) 0%, rgba(253,251,247,0) 70%)' }}></div>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '2rem', position: 'relative', zIndex: 10 }}>
@@ -355,207 +449,263 @@ const StudentDashboard = () => {
           </div>
         </div>
 
-        {/* --- WEEKLY PROGRESS CHECKLIST --- */}
-        <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginBottom: '2.5rem' }}>
-          <h3 style={{ fontSize: '1.3rem', marginBottom: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Calendar size={18} className="text-primary" /> Weekly Performance Checklist</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>Track if staff members have marked your WhatsApp submissions and weekly vlog for this week (Mon-Fri).</p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
-            
-            {/* Daily Vocabulary Checklists */}
-            <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.05)' }}>
-              <h4 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-dark)', marginBottom: '0.8rem' }}>
-                <BookOpen size={14} /> WhatsApp Vocab
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.8rem' }}>
-                {Object.keys(weeklyStatus.vocab).map(dateStr => {
-                  const dateObj = new Date(dateStr);
-                  const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-                  const done = weeklyStatus.vocab[dateStr];
-                  return (
-                    <div key={dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>{dayName}</span>
-                      <span style={{ color: done ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>{done ? '✓ Logged' : 'Pending'}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Daily Sentences Checklists */}
-            <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.05)' }}>
-              <h4 style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-dark)', marginBottom: '0.8rem' }}>
-                <MessageSquare size={14} /> Daily Sentences
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.8rem' }}>
-                {Object.keys(weeklyStatus.sentences).map(dateStr => {
-                  const dateObj = new Date(dateStr);
-                  const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-                  const done = weeklyStatus.sentences[dateStr];
-                  return (
-                    <div key={dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>{dayName}</span>
-                      <span style={{ color: done ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>{done ? '✓ Logged' : 'Pending'}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Weekly Vlog Checklist */}
-            <div style={{ background: 'white', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
-              <Video size={28} style={{ color: weeklyStatus.vlog ? '#16a34a' : 'var(--text-muted)', marginBottom: '0.5rem' }} />
-              <h4 style={{ fontSize: '0.9rem', margin: 0, fontWeight: 700 }}>Weekly Vlog</h4>
-              <span style={{ fontSize: '0.75rem', color: weeklyStatus.vlog ? '#16a34a' : '#ea580c', fontWeight: 700, marginTop: '0.4rem', display: 'inline-block', padding: '0.2rem 0.6rem', background: weeklyStatus.vlog ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', borderRadius: '50px' }}>
-                {weeklyStatus.vlog ? 'Vlog Approved' : 'Not Uploaded Yet'}
-              </span>
-            </div>
-
-          </div>
-        </div>
-
-        {/* --- MAIN PORTAL BODY --- */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(201,156,51,0.2)', marginBottom: '2rem', gap: '0.5rem' }}>
-          <button 
-            onClick={() => setActiveSubTab('scoreboard')}
-            style={{
-              padding: '0.8rem 1.5rem', background: 'none', border: 'none',
-              borderBottom: activeSubTab === 'scoreboard' ? '3px solid var(--primary)' : '3px solid transparent',
-              color: activeSubTab === 'scoreboard' ? 'var(--primary-dark)' : 'var(--text-muted)',
-              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem'
-            }}
-          >
-            <TrendingUp size={16} /> Batch Scoreboard
-          </button>
+        {/* --- TWO-COLUMN GAMIFIED LAYOUT (SCOREBOARD IS MAIN FOCUS) --- */}
+        <div className="student-dash-grid">
           
-          <button 
-            onClick={() => setActiveSubTab('logs')}
-            style={{
-              padding: '0.8rem 1.5rem', background: 'none', border: 'none',
-              borderBottom: activeSubTab === 'logs' ? '3px solid var(--primary)' : '3px solid transparent',
-              color: activeSubTab === 'logs' ? 'var(--primary-dark)' : 'var(--text-muted)',
-              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem'
-            }}
-          >
-            <Clock size={16} /> Recent Score Audits
-          </button>
-
-          {/* Interval Select Dropdown */}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Period:</label>
-            <select
-              value={selectedInterval}
-              onChange={(e) => handleIntervalChange(e.target.value)}
-              style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontSize: '0.85rem', fontWeight: 600 }}
-            >
-              {intervals.map(int => (
-                <option key={int.id} value={int.id}>
-                  {int.name} {int.is_active ? '(Active Now)' : '(Archived)'}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* TAB 1: Scoreboard Leaderboard */}
-        {activeSubTab === 'scoreboard' && (
-          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)' }}>
-                    <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700 }}>Rank</th>
-                    <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700 }}>Student Name</th>
-                    <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700 }}>Scholar Level</th>
-                    <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Total XP / Points</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.map(entry => {
-                    const isSelf = entry.student_id === currentStudent.id;
-                    const ringColor = entry.rank === 1 ? '#fbbf24' : entry.rank >= 2 && entry.rank <= 3 ? '#94a3b8' : entry.rank >= 4 && entry.rank <= 10 ? '#b45309' : 'transparent';
-                    
-                    return (
-                      <tr 
-                        key={entry.student_id} 
-                        style={{ 
-                          borderBottom: '1px solid rgba(0,0,0,0.04)',
-                          background: isSelf ? 'rgba(201,156,51,0.08)' : 'transparent',
-                          fontWeight: isSelf ? 700 : 400
-                        }}
-                      >
-                        <td style={{ padding: '1rem 0.5rem' }}>
-                          <span style={{ 
-                            display: 'inline-flex', width: '28px', height: '28px', 
-                            background: ringColor !== 'transparent' ? ringColor : 'rgba(0,0,0,0.04)',
-                            color: ringColor !== 'transparent' ? 'white' : 'var(--text-main)',
-                            borderRadius: '50%', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem'
-                          }}>
-                            {entry.rank}
-                          </span>
-                        </td>
-                        <td style={{ padding: '1rem 0.5rem' }}>
-                          {entry.name} {isSelf && <span style={{ color: 'var(--primary-dark)', fontSize: '0.75rem', fontWeight: 800 }}>(You)</span>}
-                        </td>
-                        <td style={{ padding: '1rem 0.5rem', color: 'var(--primary-dark)', fontWeight: 600 }}>Level {entry.level}</td>
-                        <td style={{ padding: '1rem 0.5rem', textAlign: 'right', fontWeight: 800 }}>{entry.total_score} pts</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {/* COLUMN 1: Live Leaderboard (Left Side - Large Focus Card) */}
+          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem', width: '100%' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(201,156,51,0.12)', paddingBottom: '1rem', marginBottom: '1.2rem', gap: '1rem', flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: '1.35rem', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <TrendingUp size={20} className="text-primary" /> Batch Leaderboard
+              </h2>
+              
+              {/* Period Select Dropdown */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Period:</label>
+                <select
+                  value={selectedInterval}
+                  onChange={(e) => handleIntervalChange(e.target.value)}
+                  style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {intervals.map(int => (
+                    <option key={int.id} value={int.id}>
+                      {int.name} {int.is_active ? '(Active)' : '(Archived)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* TAB 2: Recent Activity Logs */}
-        {activeSubTab === 'logs' && (
-          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Your Point Logs (Current Period)</h3>
+            <div className="leaderboard-list">
+              {leaderboard.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  No student rankings logged for this period.
+                </div>
+              ) : (
+                leaderboard.map(entry => {
+                  const isSelf = entry.student_id === currentStudent.id;
+                  // Calculate relative percent to top score
+                  const topScore = leaderboard[0]?.total_score || 100;
+                  const relativePercent = topScore > 0 ? Math.min(100, Math.max(0, (entry.total_score / topScore) * 100)) : 0;
+                  
+                  // Get Rank styling
+                  const getRankBadge = (rank: number) => {
+                    if (rank === 1) return { bg: 'linear-gradient(135deg, #fbbf24, #d97706)', text: '👑 1st', color: 'white' };
+                    if (rank === 2) return { bg: 'linear-gradient(135deg, #e2e8f0, #94a3b8)', text: '🥈 2nd', color: '#1e293b' };
+                    if (rank === 3) return { bg: 'linear-gradient(135deg, #ffedd5, #b45309)', text: '🥉 3rd', color: '#78350f' };
+                    return { bg: '#f1f5f9', text: `#${rank}`, color: '#64748b' };
+                  };
+                  
+                  const rankBadge = getRankBadge(entry.rank);
+                  const initials = entry.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?';
 
-            {recentLogs.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '2rem' }}>No point logs recorded for this period.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                {recentLogs.map(log => {
-                  const isPenalty = log.points < 0;
+                  // Dynamic Avatar Gradient
+                  const getAvatarGradient = (id: string, isMe: boolean) => {
+                    if (isMe) return 'linear-gradient(135deg, var(--primary), var(--primary-dark))';
+                    const colors = [
+                      'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
+                      'linear-gradient(135deg, #10b981, #047857)', // Green
+                      'linear-gradient(135deg, #8b5cf6, #5b21b6)', // Purple
+                      'linear-gradient(135deg, #ec4899, #be185d)', // Pink
+                      'linear-gradient(135deg, #f97316, #c2410c)'  // Orange
+                    ];
+                    // Simple hash based on student_id to choose consistent color
+                    const charCodeSum = id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+                    return colors[charCodeSum % colors.length];
+                  };
+
                   return (
                     <div 
-                      key={log.id} 
-                      style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center', 
-                        padding: '1rem', 
-                        background: isPenalty ? 'rgba(239,68,68,0.04)' : 'rgba(34,197,94,0.04)', 
-                        borderLeft: isPenalty ? '4px solid #dc2626' : '4px solid #16a34a',
-                        borderRadius: '0 8px 8px 0' 
-                      }}
+                      key={entry.student_id}
+                      className={`rank-card ${isSelf ? 'rank-card-self' : ''}`}
                     >
-                      <div>
-                        <strong style={{ fontSize: '0.95rem' }}>{log.activity_name}</strong>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                          Logged on {new Date(log.logged_date).toLocaleDateString()}
+                      {/* Rank Pill */}
+                      <div 
+                        className="rank-badge"
+                        style={{
+                          background: rankBadge.bg,
+                          color: rankBadge.color,
+                        }}
+                      >
+                        {rankBadge.text}
+                      </div>
+
+                      {/* Avatar Bubble */}
+                      <div 
+                        className="avatar-bubble"
+                        style={{
+                          background: getAvatarGradient(entry.student_id, isSelf)
+                        }}
+                      >
+                        {initials}
+                      </div>
+
+                      {/* Name & Gamified Level progress bar */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 750, fontSize: '0.95rem', color: isSelf ? 'var(--primary-dark)' : 'var(--text-main)' }}>
+                            {entry.name}
+                          </span>
+                          {isSelf && (
+                            <span style={{ background: 'var(--primary-dark)', color: 'white', fontSize: '0.6rem', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 800, textTransform: 'uppercase' }}>
+                              You
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <span style={{ fontSize: '0.7rem', background: isSelf ? 'rgba(201,156,51,0.2)' : 'rgba(0,0,0,0.06)', color: isSelf ? 'var(--primary-dark)' : 'var(--text-muted)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                            Lvl {entry.level}
+                          </span>
+                          <div style={{ height: '6px', flex: 1, background: 'rgba(0,0,0,0.05)', borderRadius: '10px', overflow: 'hidden', maxWidth: '200px' }}>
+                            <div 
+                              style={{ 
+                                height: '100%', 
+                                width: `${relativePercent}%`, 
+                                background: isSelf ? 'linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%)' : 'linear-gradient(90deg, #64748b 0%, #94a3b8 100%)', 
+                                borderRadius: '10px' 
+                              }}
+                            ></div>
+                          </div>
                         </div>
                       </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        {isPenalty ? <AlertTriangle size={16} style={{ color: '#dc2626' }} /> : <CheckCircle size={16} style={{ color: '#16a34a' }} />}
-                        <span style={{ 
-                          fontSize: '1.1rem', 
-                          fontWeight: 800, 
-                          color: isPenalty ? '#dc2626' : '#16a34a' 
-                        }}>
-                          {isPenalty ? '' : '+'}{log.points} XP
+
+                      {/* Total points XP */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '45px' }}>
+                        <span className="xp-badge" style={{ color: isSelf ? 'var(--primary-dark)' : 'var(--text-main)' }}>
+                          {entry.total_score}
+                        </span>
+                        <span className="xp-label">
+                          XP
                         </span>
                       </div>
                     </div>
                   );
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
           </div>
-        )}
+
+          {/* COLUMN 2: Sidebar (Checklists & Logs - Right Side) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
+            
+            {/* 1. Weekly checklist */}
+            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem' }}>
+              <h3 style={{ fontSize: '1.15rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 750 }}>
+                <Calendar size={18} className="text-primary" /> Weekly Checklist
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.2rem' }}>Mon-Fri WhatsApp & Weekly Vlog tasks checkoffs.</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                
+                {/* Vocab row */}
+                <div style={{ background: 'white', padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                  <h4 style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-dark)', marginBottom: '0.6rem', fontWeight: 750 }}>
+                    <BookOpen size={14} /> WhatsApp Vocab
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.75rem' }}>
+                    {Object.keys(weeklyStatus.vocab).map(dateStr => {
+                      const dateObj = new Date(dateStr);
+                      const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                      const done = weeklyStatus.vocab[dateStr];
+                      return (
+                        <div key={dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{dayName} ({dateStr.substring(8, 10)})</span>
+                          <span style={{ color: done ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>{done ? '✓ Logged' : 'Pending'}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Sentences row */}
+                <div style={{ background: 'white', padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                  <h4 style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-dark)', marginBottom: '0.6rem', fontWeight: 750 }}>
+                    <MessageSquare size={14} /> WhatsApp Sentences
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.75rem' }}>
+                    {Object.keys(weeklyStatus.sentences).map(dateStr => {
+                      const dateObj = new Date(dateStr);
+                      const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+                      const done = weeklyStatus.sentences[dateStr];
+                      return (
+                        <div key={dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{dayName} ({dateStr.substring(8, 10)})</span>
+                          <span style={{ color: done ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>{done ? '✓ Logged' : 'Pending'}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Vlog item */}
+                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <Video size={20} style={{ color: weeklyStatus.vlog ? '#16a34a' : 'var(--text-muted)' }} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Weekly Vlog Upload</span>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: weeklyStatus.vlog ? '#16a34a' : '#ea580c', fontWeight: 700, padding: '0.2rem 0.5rem', background: weeklyStatus.vlog ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', borderRadius: '50px' }}>
+                    {weeklyStatus.vlog ? 'Approved' : 'Pending'}
+                  </span>
+                </div>
+
+              </div>
+            </div>
+
+            {/* 2. Recent Logs Card */}
+            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem' }}>
+              <h3 style={{ fontSize: '1.15rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 750 }}>
+                <Clock size={18} className="text-primary" /> Score Audits
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.2rem' }}>Audit trail of your point credits/debits.</p>
+
+              <div className="logs-scroll-container">
+                {recentLogs.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>No point logs recorded.</p>
+                ) : (
+                  recentLogs.slice(0, 15).map(log => {
+                    const isPenalty = log.points < 0;
+                    return (
+                      <div 
+                        key={log.id} 
+                        style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center', 
+                          padding: '0.75rem', 
+                          background: isPenalty ? 'rgba(239,68,68,0.04)' : 'rgba(34,197,94,0.04)', 
+                          borderLeft: isPenalty ? '3px solid #dc2626' : '3px solid #16a34a',
+                          borderRadius: '0 8px 8px 0',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        <div style={{ flex: 1, paddingRight: '0.5rem' }}>
+                          <strong style={{ display: 'block', color: 'var(--text-main)' }}>{log.activity_name}</strong>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            {new Date(log.logged_date).toLocaleDateString()}
+                          </span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                          <span style={{ 
+                            fontWeight: 800, 
+                            color: isPenalty ? '#dc2626' : '#16a34a',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {isPenalty ? '' : '+'}{log.points} XP
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
 
       </div>
     </div>
