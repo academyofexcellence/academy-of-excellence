@@ -8,9 +8,10 @@ CREATE TABLE IF NOT EXISTS public.courses (
 -- Enable RLS for courses
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Enable select for authenticated users" 
+DROP POLICY IF EXISTS "Enable select for authenticated users" ON public.courses;
+
+CREATE POLICY "Enable select for all users" 
 ON public.courses FOR SELECT 
-TO authenticated 
 USING (true);
 
 CREATE POLICY "Enable all for leadership" 
