@@ -8,7 +8,11 @@ import {
   Clock, 
   BookOpen,
   MessageSquare,
-  Video
+  Video,
+  Award,
+  FileText,
+  Volume2,
+  AlertTriangle
 } from 'lucide-react';
 
 interface StudentProfile {
@@ -294,6 +298,29 @@ const StudentDashboard = () => {
   };
 
   const myBadge = getBadgeStyle(myRank);
+
+  // Performance Report Calculations
+  const attendanceLogs = recentLogs.filter(log => log.score_type === 'attendance');
+  const totalAttendance = attendanceLogs.length;
+  const onTimeCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('on time')).length;
+  const lateCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('late')).length;
+  const absentCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('absent')).length;
+  const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
+
+  const vocabCount = recentLogs.filter(log => log.score_type === 'daily_vocab').length;
+  const sentencesCount = recentLogs.filter(log => log.score_type === 'daily_sentences').length;
+  const vlogCount = recentLogs.filter(log => log.score_type === 'weekly_vlog').length;
+
+  const talkLogs = recentLogs.filter(log => log.score_type === 'custom' && log.activity_name === 'One Minute Talk');
+  const talkAvg = talkLogs.length > 0 ? (talkLogs.reduce((sum, log) => sum + log.points, 0) / talkLogs.length).toFixed(1) : 'N/A';
+
+  const examLogs = recentLogs.filter(log => log.score_type === 'exam');
+  const examAvg = examLogs.length > 0 
+    ? Math.round(examLogs.reduce((sum, log) => sum + (log.points / log.max_points) * 100, 0) / examLogs.length)
+    : null;
+
+  const penaltyLogs = recentLogs.filter(log => log.score_type === 'penalty');
+  const totalPenaltiesCount = penaltyLogs.reduce((sum, log) => sum + Math.round(Math.abs(log.points) / 2), 0);
 
   return (
     <div style={{ paddingTop: '120px', paddingBottom: '60px', minHeight: '100vh', background: 'var(--bg-light)' }} className="bg-grid-pattern">
@@ -651,6 +678,105 @@ const StudentDashboard = () => {
                 </div>
 
               </div>
+            </div>
+
+            {/* Academic Performance Report Card */}
+            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem' }}>
+              <h3 style={{ fontSize: '1.15rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 750 }}>
+                <Award size={18} className="text-primary" /> Performance Report
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.2rem' }}>A complete academic summary for this period.</p>
+
+              {/* Grid of Metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+                {/* Attendance Rate */}
+                <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Attendance Rate</span>
+                  <div style={{ margin: '0.4rem 0' }}>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--primary-dark)' }}>{attendanceRate}%</span>
+                  </div>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                    On Time: {onTimeCount}/{totalAttendance} Days (Late: {lateCount}, Absent: {absentCount})
+                  </span>
+                </div>
+
+                {/* Malayalam Penalties */}
+                <div style={{ background: totalPenaltiesCount > 0 ? 'rgba(239,68,68,0.02)' : 'white', padding: '0.8rem', borderRadius: '12px', border: totalPenaltiesCount > 0 ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.7rem', color: totalPenaltiesCount > 0 ? '#b91c1c' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                    {totalPenaltiesCount > 0 && <AlertTriangle size={12} style={{ color: '#dc2626' }} />} Malayalam Penalties
+                  </span>
+                  <div style={{ margin: '0.4rem 0' }}>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: totalPenaltiesCount > 0 ? '#dc2626' : 'var(--text-main)' }}>{totalPenaltiesCount}</span>
+                  </div>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                    Total Term Count
+                  </span>
+                </div>
+
+                {/* Exam Average */}
+                <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Exam Average</span>
+                  <div style={{ margin: '0.4rem 0' }}>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--text-main)' }}>{examAvg !== null ? `${examAvg}%` : 'N/A'}</span>
+                  </div>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                    Across {examLogs.length} Exams
+                  </span>
+                </div>
+
+                {/* One Minute Talk Average */}
+                <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                    <Volume2 size={12} className="text-primary" /> One Minute Talk
+                  </span>
+                  <div style={{ margin: '0.4rem 0' }}>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--text-main)' }}>{talkAvg}</span>
+                    {talkAvg !== 'N/A' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>/10</span>}
+                  </div>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                    Average Oral Score
+                  </span>
+                </div>
+              </div>
+
+              {/* Checklist Tasks Breakdown */}
+              <div style={{ background: 'rgba(201,156,51,0.03)', padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid rgba(201,156,51,0.1)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', marginBottom: '1.2rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vocabulary</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vocabCount}</span>
+                </div>
+                <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Sentences</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{sentencesCount}</span>
+                </div>
+                <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vlogs</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount}</span>
+                </div>
+              </div>
+
+              {/* Exams details */}
+              {examLogs.length > 0 && (
+                <div style={{ marginTop: '1rem' }}>
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <FileText size={14} className="text-primary" /> Exam Breakdown
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.2rem' }}>
+                    {examLogs.map(exam => {
+                      const examNameFormatted = exam.activity_name.replace(/^exam:\s*/i, '');
+                      const percent = Math.round((exam.points / exam.max_points) * 100);
+                      return (
+                        <div key={exam.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.03)', fontSize: '0.75rem' }}>
+                          <span style={{ fontWeight: 650, color: 'var(--text-main)', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1, marginRight: '0.5rem' }}>{examNameFormatted}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>{exam.points}/{exam.max_points} ({percent}%)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 2. Recent Logs Card */}

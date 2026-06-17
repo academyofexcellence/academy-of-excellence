@@ -16,9 +16,12 @@ import {
   UserCheck,
   ListChecks,
   GraduationCap,
-  XCircle,
   Settings,
-  TrendingUp
+  TrendingUp,
+  X,
+  Volume2,
+  AlertTriangle,
+  Award
 } from 'lucide-react';
 
 interface StaffProfile {
@@ -109,6 +112,10 @@ const AdminDashboard = () => {
   const [updatingScores, setUpdatingScores] = useState<string[]>([]);
   const [overviewLeaderboard, setOverviewLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [overviewSelectedInterval, setOverviewSelectedInterval] = useState<string>('');
+  
+  // Student Report States
+  const [selectedReportStudent, setSelectedReportStudent] = useState<StudentProfile | null>(null);
+  const [studentReportData, setStudentReportData] = useState<{ scores: any[]; loading: boolean }>({ scores: [], loading: false });
   
   // Classroom Selector States
   const [filterCourse, setFilterCourse] = useState('');
@@ -557,7 +564,7 @@ const AdminDashboard = () => {
   };
 
   // Malayalam Penalty Trigger (-2 XP, multi-clickable)
-  const handleMalayalamPenalty = async (studentId: string) => {
+  const handleMalayalamPenalty = async (studentId: string, action: 'increment' | 'decrement') => {
     if (!activeInterval || !currentUser) return;
     const targetDate = selectedGradingDate;
     const lockKey = `${studentId}-penalty`;
@@ -566,41 +573,64 @@ const AdminDashboard = () => {
     setUpdatingScores(prev => [...prev, lockKey]);
     try {
       const existingPenalty = scoresList.find(s => s.student_id === studentId && s.score_type === 'penalty');
+      const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
 
-      if (existingPenalty) {
-        // Decrement points by 2
-        const { error: updateError } = await supabase
-          .from('scores')
-          .update({ points: existingPenalty.points - 2 })
-          .eq('id', existingPenalty.id);
-        if (updateError) throw updateError;
-      } else {
-        // Insert new penalty row
-        const { error: insertError } = await supabase.from('scores').insert([
-          {
-            student_id: studentId,
-            interval_id: activeInterval.id,
-            score_type: 'penalty',
-            points: -2,
-            max_points: 0,
-            activity_name: 'Malayalam Speaking Policy Violation',
-            logged_by: currentUser.id,
-            logged_date: targetDate
+      if (action === 'increment') {
+        if (existingPenalty) {
+          const newPoints = existingPenalty.points - 2;
+          const { error: updateError } = await supabase
+            .from('scores')
+            .update({ points: newPoints })
+            .eq('id', existingPenalty.id);
+          if (updateError) throw updateError;
+          await logActivity('malayalam_penalty_inc', `Increased Malayalam penalty count for ${studName} (Total: ${newPoints} XP) on ${targetDate}`);
+          setMessage(`⚠️ Malayalam penalty count increased (Total: ${newPoints} XP) for ${studName}.`);
+        } else {
+          const { error: insertError } = await supabase.from('scores').insert([
+            {
+              student_id: studentId,
+              interval_id: activeInterval.id,
+              score_type: 'penalty',
+              points: -2,
+              max_points: 0,
+              activity_name: 'Malayalam Speaking Policy Violation',
+              logged_by: currentUser.id,
+              logged_date: targetDate
+            }
+          ]);
+          if (insertError) throw insertError;
+          await logActivity('malayalam_penalty_create', `Deducted -2 points from ${studName} for speaking Malayalam on ${targetDate}`);
+          setMessage(`⚠️ Malayalam penalty logged: -2 XP applied to ${studName}.`);
+        }
+      } else if (action === 'decrement') {
+        if (existingPenalty) {
+          if (existingPenalty.points === -2) {
+            // Delete row if it gets reduced to 0
+            const { error: deleteError } = await supabase
+              .from('scores')
+              .delete()
+              .eq('id', existingPenalty.id);
+            if (deleteError) throw deleteError;
+            await logActivity('malayalam_penalty_remove', `Removed all Malayalam penalties for ${studName} on ${targetDate}`);
+            setMessage(`✅ Malayalam penalty completely removed for ${studName}.`);
+          } else {
+            const newPoints = existingPenalty.points + 2;
+            const { error: updateError } = await supabase
+              .from('scores')
+              .update({ points: newPoints })
+              .eq('id', existingPenalty.id);
+            if (updateError) throw updateError;
+            await logActivity('malayalam_penalty_dec', `Reduced Malayalam penalty count for ${studName} (Total: ${newPoints} XP) on ${targetDate}`);
+            setMessage(`⚠️ Malayalam penalty reduced to ${newPoints} XP for ${studName}.`);
           }
-        ]);
-        if (insertError) throw insertError;
+        }
       }
 
-      const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
-      const pointsAccrued = existingPenalty ? existingPenalty.points - 2 : -2;
-      await logActivity('malayalam_penalty', `Deducted -2 points from ${studName} for speaking Malayalam (Total: ${pointsAccrued} XP) on ${targetDate}`);
-      
-      setMessage(`⚠️ Penalty logged: ${pointsAccrued} XP applied to ${studName}.`);
       await fetchClassroomScores(activeInterval.id, targetDate);
       await fetchClassroomLeaderboard(activeInterval.id);
     } catch (err: any) {
       console.error(err);
-      setMessage(`❌ Failed to log penalty: ${err.message}`);
+      setMessage(`❌ Failed to update penalty: ${err.message}`);
     } finally {
       setUpdatingScores(prev => prev.filter(k => k !== lockKey));
     }
@@ -672,7 +702,7 @@ const AdminDashboard = () => {
       }
       
       // Refresh scores and leaderboard
-      await fetchClassroomScores(targetDate);
+      await fetchClassroomScores(activeInterval.id, targetDate);
       await fetchClassroomLeaderboard(activeInterval.id);
     } catch (err: any) {
       console.error(err);
@@ -829,6 +859,25 @@ const AdminDashboard = () => {
       setMessage(`❌ Failed to save grades: ${err.message}`);
     }
     setTimeout(() => setMessage(''), 4000);
+  };
+
+  // Load and open student performance report modal
+  const handleOpenReport = async (student: StudentProfile) => {
+    setSelectedReportStudent(student);
+    setStudentReportData({ scores: [], loading: true });
+    try {
+      const { data, error } = await supabase
+        .from('scores')
+        .select('*')
+        .eq('student_id', student.id)
+        .order('logged_date', { ascending: false });
+      
+      if (error) throw error;
+      setStudentReportData({ scores: data || [], loading: false });
+    } catch (err: any) {
+      console.error(err);
+      setStudentReportData({ scores: [], loading: false });
+    }
   };
 
   // Approve Pending Student
@@ -1668,7 +1717,15 @@ const AdminDashboard = () => {
                     };
 
                     return (
-                      <div key={entry.student_id} className="rank-card">
+                      <div 
+                        key={entry.student_id} 
+                        className="rank-card"
+                        onClick={() => {
+                          const studentObj = studentList.find(s => s.id === entry.student_id);
+                          if (studentObj) handleOpenReport(studentObj);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
                         {/* Rank Pill */}
                         <div 
                           className="rank-badge"
@@ -2013,6 +2070,17 @@ const AdminDashboard = () => {
                   >
                     Custom Activities
                   </button>
+                  <button 
+                    onClick={() => setGradingMode('leaderboard')}
+                    style={{
+                      padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
+                      borderBottom: gradingMode === 'leaderboard' ? '3px solid var(--primary)' : '3px solid transparent',
+                      color: gradingMode === 'leaderboard' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem'
+                    }}
+                  >
+                    🏆 Live Scoreboard
+                  </button>
                   {isLeadership && (
                     <button 
                       onClick={() => setGradingMode('manage')}
@@ -2174,25 +2242,54 @@ const AdminDashboard = () => {
                                       })()}
                                     </td>
 
-                                    {/* Red Malayalam speaking deduction */}
+                                    {/* Malayalam Speaking Penalty (trackable, editable) */}
                                     <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
                                       {(() => {
                                         const penalty = scoresList.find(s => s.student_id === student.id && s.score_type === 'penalty');
                                         const points = penalty ? penalty.points : 0;
+                                        const count = Math.abs(points) / 2;
+                                        
                                         return (
-                                          <button 
-                                            onClick={() => handleMalayalamPenalty(student.id)} 
-                                            className="btn btn-outline" 
-                                            style={{ 
-                                              padding: '0.4rem 0.8rem', fontSize: '0.75rem', 
-                                              color: points < 0 ? '#b91c1c' : '#dc2626', 
-                                              borderColor: points < 0 ? '#ef4444' : '#fca5a5', 
-                                              background: points < 0 ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.03)',
-                                              fontWeight: points < 0 ? 800 : 500
-                                            }}
-                                          >
-                                            <XCircle size={12} /> {points < 0 ? `Malayalam Penalty (${points})` : 'Malayalam Penalty (-2)'}
-                                          </button>
+                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.4rem' }}>
+                                            {count > 0 && (
+                                              <button
+                                                onClick={() => handleMalayalamPenalty(student.id, 'decrement')}
+                                                style={{
+                                                  padding: '0.2rem 0.4rem', fontSize: '0.75rem',
+                                                  color: '#16a34a', borderColor: '#86efac',
+                                                  background: 'rgba(34,197,94,0.03)', cursor: 'pointer',
+                                                  borderRadius: '4px', border: '1px solid',
+                                                  outline: 'none'
+                                                }}
+                                                title="Reduce Penalty Count"
+                                              >
+                                                -1
+                                              </button>
+                                            )}
+                                            <span style={{ 
+                                              fontSize: '0.8rem', fontWeight: count > 0 ? 805 : 500,
+                                              color: count > 0 ? '#dc2626' : 'var(--text-muted)',
+                                              background: count > 0 ? 'rgba(239,68,68,0.06)' : 'rgba(0,0,0,0.02)',
+                                              padding: '0.25rem 0.6rem', borderRadius: '6px',
+                                              border: count > 0 ? '1px solid rgba(239,68,68,0.15)' : '1px solid transparent',
+                                              display: 'inline-flex', alignItems: 'center', gap: '0.2rem'
+                                            }}>
+                                              💬 {count} {count === 1 ? 'Penalty' : 'Penalties'} ({points} XP)
+                                            </span>
+                                            <button
+                                              onClick={() => handleMalayalamPenalty(student.id, 'increment')}
+                                              style={{
+                                                padding: '0.2rem 0.4rem', fontSize: '0.75rem',
+                                                color: '#dc2626', borderColor: '#fca5a5',
+                                                background: 'rgba(239,68,68,0.03)', cursor: 'pointer',
+                                                borderRadius: '4px', border: '1px solid',
+                                                outline: 'none'
+                                              }}
+                                              title="Add Penalty Count"
+                                            >
+                                              +1
+                                            </button>
+                                          </div>
                                         );
                                       })()}
                                     </td>
@@ -2340,21 +2437,42 @@ const AdminDashboard = () => {
                                 {(() => {
                                   const penalty = scoresList.find(s => s.student_id === student.id && s.score_type === 'penalty');
                                   const points = penalty ? penalty.points : 0;
+                                  const count = Math.abs(points) / 2;
                                   return (
-                                    <button
-                                      onClick={() => handleMalayalamPenalty(student.id)}
-                                      className="btn btn-outline"
-                                      style={{
-                                        padding: '0.4rem 0.8rem', fontSize: '0.75rem', 
-                                        color: points < 0 ? '#b91c1c' : '#dc2626', 
-                                        borderColor: points < 0 ? '#ef4444' : '#fca5a5',
-                                        background: points < 0 ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.03)', 
-                                        width: '100%', justifyContent: 'center',
-                                        fontWeight: points < 0 ? 800 : 500
-                                      }}
-                                    >
-                                      <XCircle size={12} /> {points < 0 ? `Malayalam Speaking Penalty (${points} XP)` : 'Malayalam Speaking Penalty (-2 XP)'}
-                                    </button>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 0.8rem', background: 'rgba(239,68,68,0.01)', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.08)' }}>
+                                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>💬 Malayalam Penalties:</span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        {count > 0 && (
+                                          <button
+                                            onClick={() => handleMalayalamPenalty(student.id, 'decrement')}
+                                            style={{
+                                              padding: '0.25rem 0.5rem', fontSize: '0.75rem',
+                                              color: '#16a34a', borderColor: '#86efac',
+                                              background: 'white', cursor: 'pointer',
+                                              borderRadius: '6px', border: '1px solid',
+                                              outline: 'none'
+                                            }}
+                                          >
+                                            -1
+                                          </button>
+                                        )}
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: count > 0 ? '#dc2626' : 'var(--text-muted)', padding: '0 0.2rem' }}>
+                                          {count} ({points} XP)
+                                        </span>
+                                        <button
+                                          onClick={() => handleMalayalamPenalty(student.id, 'increment')}
+                                          style={{
+                                            padding: '0.25rem 0.5rem', fontSize: '0.75rem',
+                                            color: '#dc2626', borderColor: '#fca5a5',
+                                            background: 'white', cursor: 'pointer',
+                                            borderRadius: '6px', border: '1px solid',
+                                            outline: 'none'
+                                          }}
+                                        >
+                                          +1
+                                        </button>
+                                      </div>
+                                    </div>
                                   );
                                 })()}
                               </div>
@@ -2362,6 +2480,150 @@ const AdminDashboard = () => {
                           })}
                         </div>
                       </>
+                    )}
+                  </div>
+                )}
+
+                {/* Sub Mode: Classroom Leaderboard */}
+                {gradingMode === 'leaderboard' && (
+                  <div>
+                    <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Class Standing Scoreboard</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '2rem' }}>Standings computed in-memory based on all points accrued in the current term. Click any card to view detailed reports.</p>
+                    
+                    {filteredActiveStudents.length === 0 ? (
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active students in this batch.</p>
+                    ) : (
+                      <div className="leaderboard-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                        {(() => {
+                          // Calculate leaderboard scores in-memory
+                          const scoreMap: { [studentId: string]: number } = {};
+                          filteredActiveStudents.forEach(s => { scoreMap[s.id] = 0; });
+                          
+                          scoresList.forEach(s => {
+                            if (scoreMap[s.student_id] !== undefined) {
+                              scoreMap[s.student_id] += s.points;
+                            }
+                          });
+
+                          const entries: LeaderboardEntry[] = filteredActiveStudents.map(s => {
+                            const total = scoreMap[s.id];
+                            const level = Math.min(100, Math.max(1, Math.floor(total / 100) + 1));
+                            return {
+                              student_id: s.id,
+                              name: s.name,
+                              total_score: total,
+                              level: level,
+                              rank: 1
+                            };
+                          });
+
+                          // Sort descending
+                          entries.sort((a, b) => b.total_score - a.total_score);
+
+                          // Assign ranks
+                          let currentRank = 1;
+                          for (let i = 0; i < entries.length; i++) {
+                            if (i > 0 && entries[i].total_score < entries[i - 1].total_score) {
+                              currentRank = i + 1;
+                            }
+                            entries[i].rank = currentRank;
+                          }
+
+                          const topScore = entries[0]?.total_score || 100;
+
+                          // Rank badge helper
+                          const getRankBadge = (rank: number) => {
+                            if (rank === 1) return { bg: 'linear-gradient(135deg, #fbbf24, #d97706)', text: '👑 1st', color: 'white' };
+                            if (rank === 2) return { bg: 'linear-gradient(135deg, #e2e8f0, #94a3b8)', text: '🥈 2nd', color: '#1e293b' };
+                            if (rank === 3) return { bg: 'linear-gradient(135deg, #ffedd5, #b45309)', text: '🥉 3rd', color: '#78350f' };
+                            return { bg: '#f1f5f9', text: `#${rank}`, color: '#64748b' };
+                          };
+
+                          // Dynamic Avatar color gradient
+                          const getAvatarGradient = (id: string) => {
+                            const colors = [
+                              'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
+                              'linear-gradient(135deg, #10b981, #047857)', // Green
+                              'linear-gradient(135deg, #8b5cf6, #5b21b6)', // Purple
+                              'linear-gradient(135deg, #ec4899, #be185d)', // Pink
+                              'linear-gradient(135deg, #f97316, #c2410c)'  // Orange
+                            ];
+                            const charCodeSum = id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+                            return colors[charCodeSum % colors.length];
+                          };
+
+                          return entries.map(entry => {
+                            const initials = entry.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || '?';
+                            const relativePercent = topScore > 0 ? Math.min(100, Math.max(0, (entry.total_score / topScore) * 100)) : 0;
+                            const rankBadge = getRankBadge(entry.rank);
+
+                            return (
+                              <div 
+                                key={entry.student_id} 
+                                className="rank-card"
+                                onClick={() => handleOpenReport(filteredActiveStudents.find(s => s.id === entry.student_id)!)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                {/* Rank Pill */}
+                                <div 
+                                  className="rank-badge"
+                                  style={{
+                                    background: rankBadge.bg,
+                                    color: rankBadge.color,
+                                  }}
+                                >
+                                  {rankBadge.text}
+                                </div>
+
+                                {/* Avatar Bubble */}
+                                <div 
+                                  className="avatar-bubble"
+                                  style={{
+                                    background: getAvatarGradient(entry.student_id)
+                                  }}
+                                >
+                                  {initials}
+                                </div>
+
+                                {/* Name & Gamified Level progress bar */}
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                    <span style={{ fontWeight: 750, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                                      {entry.name}
+                                    </span>
+                                  </div>
+                                  
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                    <span style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.06)', color: 'var(--text-muted)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                      Lvl {entry.level}
+                                    </span>
+                                    <div style={{ height: '6px', flex: 1, background: 'rgba(0,0,0,0.05)', borderRadius: '10px', overflow: 'hidden', maxWidth: '200px' }}>
+                                      <div 
+                                        style={{ 
+                                          height: '100%', 
+                                          width: `${relativePercent}%`, 
+                                          background: 'linear-gradient(90deg, #64748b 0%, #94a3b8 100%)', 
+                                          borderRadius: '10px' 
+                                        }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Total points XP */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '45px' }}>
+                                  <span className="xp-badge" style={{ color: 'var(--text-main)' }}>
+                                    {entry.total_score}
+                                  </span>
+                                  <span className="xp-label">
+                                    XP
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
                     )}
                   </div>
                 )}
@@ -2520,6 +2782,7 @@ const AdminDashboard = () => {
                                 student={student}
                                 onResetPassword={handleResetPassword}
                                 onDeleteAccount={handleDeleteAccount}
+                                onOpenReport={handleOpenReport}
                               />
                             ))}
                           </tbody>
@@ -2809,20 +3072,272 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
+
+        {/* Student Performance Report Modal */}
+        {selectedReportStudent && (
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(10, 10, 10, 0.45)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 1000,
+              padding: '1.5rem'
+            }}
+            onClick={() => setSelectedReportStudent(null)}
+          >
+            <div 
+              style={{
+                background: 'white',
+                borderRadius: '24px',
+                border: '1px solid rgba(201, 156, 51, 0.15)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                width: '100%',
+                maxWidth: '650px',
+                maxHeight: '85vh',
+                overflowY: 'auto',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '2.5rem'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button 
+                onClick={() => setSelectedReportStudent(null)}
+                style={{
+                  position: 'absolute',
+                  top: '1.5rem',
+                  right: '1.5rem',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  padding: '0.3rem',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.05)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+              >
+                <X size={20} />
+              </button>
+
+              {/* Header */}
+              <div style={{ marginBottom: '1.8rem' }}>
+                <span className="badge" style={{ background: 'rgba(201,156,51,0.15)', color: 'var(--primary-dark)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                  Batch {selectedReportStudent.batch_number} • Student Report
+                </span>
+                <h2 style={{ fontSize: '1.8rem', margin: '0.5rem 0 0.2rem 0', fontWeight: 800 }}>
+                  {selectedReportStudent.name}
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                  {selectedReportStudent.email}
+                </p>
+              </div>
+
+              {studentReportData.loading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 0', gap: '1rem' }}>
+                  <div style={{ width: '40px', height: '40px', border: '3px solid rgba(201,156,51,0.2)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  <style>{`
+                    @keyframes spin {
+                      0% { transform: rotate(0deg); }
+                      100% { transform: rotate(360deg); }
+                    }
+                  `}</style>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Loading academic report...</span>
+                </div>
+              ) : (
+                (() => {
+                  const scores = studentReportData.scores;
+
+                  // 1. Attendance Metrics
+                  const attendanceRecords = scores.filter(s => s.score_type === 'attendance');
+                  const totalAttendance = attendanceRecords.length;
+                  const onTimeCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('on time')).length;
+                  const lateCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('late')).length;
+                  const absentCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('absent')).length;
+                  const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
+
+                  // 2. Checklist Completions
+                  const vocabCount = scores.filter(s => s.score_type === 'daily_vocab').length;
+                  const sentencesCount = scores.filter(s => s.score_type === 'daily_sentences').length;
+                  const vlogCount = scores.filter(s => s.score_type === 'weekly_vlog').length;
+
+                  // 3. Oral Talk (One Minute Talk)
+                  const talkScores = scores.filter(s => s.score_type === 'custom' && s.activity_name === 'One Minute Talk');
+                  const talkAvg = talkScores.length > 0 ? (talkScores.reduce((sum, s) => sum + s.points, 0) / talkScores.length).toFixed(1) : 'N/A';
+
+                  // 4. Exams
+                  const examScoresList = scores.filter(s => s.score_type === 'exam');
+                  const examAvg = examScoresList.length > 0 
+                    ? Math.round(examScoresList.reduce((sum, s) => sum + (s.points / s.max_points) * 100, 0) / examScoresList.length) 
+                    : null;
+
+                  // 5. Malayalam Penalties
+                  const penaltyRecords = scores.filter(s => s.score_type === 'penalty');
+                  const totalPenaltiesCount = penaltyRecords.reduce((sum, r) => sum + Math.round(Math.abs(r.points) / 2), 0);
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      {/* Metrics grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+                        
+                        {/* Attendance Rate */}
+                        <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.2rem', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <Calendar size={14} className="text-primary" /> Attendance Rate
+                          </span>
+                          <div style={{ margin: '0.6rem 0' }}>
+                            <span style={{ fontSize: '2rem', fontWeight: 850, color: 'var(--primary-dark)' }}>{attendanceRate}%</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            <div>On Time: <strong style={{ color: 'var(--text-main)' }}>{onTimeCount}</strong></div>
+                            <div>Late: <strong style={{ color: 'var(--text-main)' }}>{lateCount}</strong> | Absent: <strong style={{ color: 'var(--text-main)' }}>{absentCount}</strong></div>
+                          </div>
+                        </div>
+
+                        {/* Malayalam Speaking Penalty */}
+                        <div style={{ background: totalPenaltiesCount > 0 ? 'rgba(239,68,68,0.02)' : 'rgba(0,0,0,0.02)', padding: '1.2rem', borderRadius: '16px', border: totalPenaltiesCount > 0 ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.75rem', color: totalPenaltiesCount > 0 ? '#b91c1c' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <AlertTriangle size={14} style={{ color: totalPenaltiesCount > 0 ? '#dc2626' : 'var(--primary)' }} /> Malayalam Penalties
+                          </span>
+                          <div style={{ margin: '0.6rem 0' }}>
+                            <span style={{ fontSize: '2rem', fontWeight: 850, color: totalPenaltiesCount > 0 ? '#dc2626' : 'var(--text-main)' }}>{totalPenaltiesCount}</span>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Total violations across term
+                          </span>
+                        </div>
+
+                        {/* Exam Average */}
+                        <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.2rem', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <Award size={14} className="text-primary" /> Exam Average
+                          </span>
+                          <div style={{ margin: '0.6rem 0' }}>
+                            <span style={{ fontSize: '2rem', fontWeight: 850, color: 'var(--text-main)' }}>{examAvg !== null ? `${examAvg}%` : 'N/A'}</span>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Across {examScoresList.length} graded exams
+                          </span>
+                        </div>
+
+                        {/* One Minute Talk */}
+                        <div style={{ background: 'rgba(0,0,0,0.02)', padding: '1.2rem', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <Volume2 size={14} className="text-primary" /> One Minute Talk
+                          </span>
+                          <div style={{ margin: '0.6rem 0' }}>
+                            <span style={{ fontSize: '2rem', fontWeight: 850, color: 'var(--text-main)' }}>{talkAvg}</span>
+                            {talkAvg !== 'N/A' && <span style={{ fontSize: '1rem', color: 'var(--text-muted)', fontWeight: 600 }}>/10</span>}
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Average daily oral score
+                          </span>
+                        </div>
+
+                      </div>
+
+                      {/* Task completions checklist */}
+                      <div style={{ background: 'rgba(201,156,51,0.04)', padding: '1.2rem', borderRadius: '16px', border: '1px solid rgba(201,156,51,0.1)' }}>
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: '0 0 0.8rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <ListChecks size={16} className="text-primary" /> Checklist Tasks Completed
+                        </h4>
+                        <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vocab Tasks</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vocabCount}</span>
+                          </div>
+                          <div style={{ width: '1px', height: '25px', background: 'rgba(201,156,51,0.2)' }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Sentences Tasks</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{sentencesCount}</span>
+                          </div>
+                          <div style={{ width: '1px', height: '25px', background: 'rgba(201,156,51,0.2)' }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Weekly Vlogs</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Detailed Exams list */}
+                      {examScoresList.length > 0 && (
+                        <div>
+                          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '0 0 0.6rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <ClipboardList size={16} className="text-primary" /> Detailed Exam Grades
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.3rem' }}>
+                            {examScoresList.map(exam => {
+                              const examNameFormatted = exam.activity_name.replace(/^exam:\s*/i, '');
+                              const percent = Math.round((exam.points / exam.max_points) * 100);
+                              return (
+                                <div key={exam.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.01)', padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.03)', fontSize: '0.8rem' }}>
+                                  <span style={{ fontWeight: 650, color: 'var(--text-main)' }}>{examNameFormatted}</span>
+                                  <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{exam.points} / {exam.max_points} ({percent}%)</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Malayalam Penalty details */}
+                      {penaltyRecords.length > 0 && (
+                        <div>
+                          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '1rem 0 0.6rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#dc2626' }}>
+                            <AlertTriangle size={16} /> Penalty History Logs
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.3rem' }}>
+                            {penaltyRecords.map(pen => {
+                              const penaltyCount = Math.round(Math.abs(pen.points) / 2);
+                              return (
+                                <div key={pen.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(239,68,68,0.02)', padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.1)', fontSize: '0.8rem' }}>
+                                  <span style={{ fontWeight: 600, color: '#dc2626' }}>
+                                    {penaltyCount} {penaltyCount === 1 ? 'penalty' : 'penalties'} ({pen.points} XP)
+                                  </span>
+                                  <span style={{ color: 'var(--text-muted)' }}>
+                                    {new Date(pen.logged_date).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// Student management table row
 const StudentManageRow = ({ 
   student, 
   onResetPassword, 
-  onDeleteAccount 
+  onDeleteAccount,
+  onOpenReport
 }: { 
   student: StudentProfile; 
   onResetPassword: (userId: string, newPw: string) => Promise<void>;
   onDeleteAccount: (userId: string, name: string) => Promise<void>;
+  onOpenReport: (student: StudentProfile) => void;
 }) => {
   const [newPassword, setNewPassword] = useState('');
   const [resetting, setResetting] = useState(false);
@@ -2866,14 +3381,23 @@ const StudentManageRow = ({
         </div>
       </td>
       <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
-        <button 
-          onClick={handleDelete} 
-          disabled={deleting} 
-          className="btn btn-outline" 
-          style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
-        >
-          {deleting ? '...' : 'Delete'}
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+          <button 
+            onClick={() => onOpenReport(student)}
+            className="btn btn-outline" 
+            style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'rgba(201,156,51,0.02)' }}
+          >
+            Report
+          </button>
+          <button 
+            onClick={handleDelete} 
+            disabled={deleting} 
+            className="btn btn-outline" 
+            style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
+          >
+            {deleting ? '...' : 'Delete'}
+          </button>
+        </div>
       </td>
     </tr>
   );
