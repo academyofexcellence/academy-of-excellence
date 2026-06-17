@@ -1771,7 +1771,7 @@ const AdminDashboard = () => {
                       <Briefcase size={18} className="text-primary" /> Active Batches & Intervals
                     </h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-                      Monitor registered batches and scoring terms. You can toggle their active status directly from here.
+                      Monitor registered batches and scoring terms.
                     </p>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
@@ -1793,27 +1793,9 @@ const AdminDashboard = () => {
                               </div>
                               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                 {int.is_active ? (
-                                  <>
-                                    <span style={{ fontSize: '0.75rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.3rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Active</span>
-                                    <button 
-                                      onClick={() => handleSetIntervalInactive(int.id)} 
-                                      className="btn btn-outline" 
-                                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
-                                    >
-                                      Deactivate
-                                    </button>
-                                  </>
+                                  <span style={{ fontSize: '0.75rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.3rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Active</span>
                                 ) : (
-                                  <>
-                                    <span style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Inactive</span>
-                                    <button 
-                                      onClick={() => handleToggleIntervalActiveStatus(int.id, int.course_id, int.batch_number)} 
-                                      className="btn btn-outline" 
-                                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
-                                    >
-                                      Activate
-                                    </button>
-                                  </>
+                                  <span style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Inactive</span>
                                 )}
                               </div>
                             </div>
@@ -1822,7 +1804,6 @@ const AdminDashboard = () => {
                       )}
                     </div>
                   </div>
-
                   {/* DAILY STUDENT GRADING PROGRESS */}
                   <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
                     <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
