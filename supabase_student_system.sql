@@ -200,3 +200,51 @@ VALUES
     ('a1111111-1111-1111-1111-111111111111', 'Phase 1 - Initial Term', 'c1111111-1111-1111-1111-111111111111', 25, true),
     ('a2222222-2222-2222-2222-222222222222', 'Phase 1 - Initial Term', 'c2222222-2222-2222-2222-222222222222', 9, true)
 ON CONFLICT DO NOTHING;
+
+-- 7. Reset user password and Delete user RPC functions (Leadership only)
+CREATE OR REPLACE FUNCTION public.reset_auth_user_password(user_id UUID, new_password TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Check if caller is active leadership (gm, md, director)
+  IF NOT EXISTS (
+    SELECT 1 FROM public.staff_profiles 
+    WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
+  ) THEN
+    RAISE EXCEPTION 'Unauthorized: Only active leadership can reset passwords.';
+  END IF;
+
+  -- Update user password in auth.users
+  UPDATE auth.users
+  SET encrypted_password = crypt(new_password, gen_salt('bf')),
+      updated_at = now()
+  WHERE id = user_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.delete_auth_user(user_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Check if caller is active leadership (gm, md, director)
+  IF NOT EXISTS (
+    SELECT 1 FROM public.staff_profiles 
+    WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
+  ) THEN
+    RAISE EXCEPTION 'Unauthorized: Only active leadership can delete accounts.';
+  END IF;
+
+  -- Prevent self-deletion
+  IF user_id = auth.uid() THEN
+    RAISE EXCEPTION 'Unauthorized: Cannot delete your own account.';
+  END IF;
+
+  -- Delete from auth.users (cascades to public profiles)
+  DELETE FROM auth.users WHERE id = user_id;
+END;
+$$;
+

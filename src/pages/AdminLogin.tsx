@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, GraduationCap, ShieldAlert, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { LogIn, UserPlus, GraduationCap, ShieldAlert, CheckCircle2, Eye, EyeOff, X, Key } from 'lucide-react';
 
 const AdminLogin = () => {
   const [activeTab, setActiveTab] = useState<'login' | 'register_staff' | 'register_student'>('login');
@@ -16,6 +16,7 @@ const AdminLogin = () => {
   const [batchNumber, setBatchNumber] = useState('');
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -350,11 +351,121 @@ const AdminLogin = () => {
             </div>
           </div>
 
+          {activeTab === 'login' && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--primary-dark)',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  padding: '0.2rem 0',
+                  transition: 'opacity 0.2s',
+                  outline: 'none'
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.opacity = '0.8')}
+                onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
+              >
+                Forgot Password?
+              </button>
+            </div>
+          )}
+
           <button type="submit" className="btn btn-primary mt-2" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
             {loading ? 'Processing...' : activeTab === 'login' ? 'Sign In' : 'Request Roster Access'}
           </button>
         </form>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          padding: '1rem'
+        }}>
+          <div className="glass-card" style={{
+            maxWidth: '420px',
+            width: '100%',
+            padding: '2rem',
+            border: '1px solid rgba(201, 156, 51, 0.3)',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            position: 'relative',
+            background: 'white',
+            textAlign: 'center',
+            borderRadius: '16px'
+          }}>
+            <button 
+              onClick={() => setShowForgotModal(false)}
+              style={{
+                position: 'absolute', top: '1.2rem', right: '1.2rem',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0.3rem', borderRadius: '50%', transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.05)')}
+              onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <X size={18} />
+            </button>
+            
+            <div style={{
+              width: '56px', height: '56px', borderRadius: '50%',
+              background: 'rgba(201, 156, 51, 0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 1.2rem', color: 'var(--primary-dark)'
+            }}>
+              <Key size={26} />
+            </div>
+
+            <h3 style={{ fontSize: '1.35rem', marginBottom: '0.6rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              Forgot Password?
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+              For security, account credentials can only be updated with administration authorization.
+            </p>
+
+            <div style={{
+              background: 'rgba(201, 156, 51, 0.04)',
+              border: '1px solid rgba(201, 156, 51, 0.12)',
+              borderRadius: '12px',
+              padding: '1rem',
+              fontSize: '0.85rem',
+              color: 'var(--text-main)',
+              textAlign: 'left',
+              marginBottom: '1.5rem',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
+            }}>
+              <div style={{ fontWeight: 700, color: 'var(--primary-dark)', marginBottom: '0.4rem', fontSize: '0.9rem' }}>
+                How to reset your password:
+              </div>
+              <ol style={{ paddingLeft: '1.2rem', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.3rem', color: 'var(--text-muted)' }}>
+                <li>Contact the Institute Management (GM, MD, or Director).</li>
+                <li>Provide your registered login email address.</li>
+                <li>The administrator will instantly reset or assign a new password for you via the Admin Panel.</li>
+              </ol>
+            </div>
+
+            <button 
+              onClick={() => setShowForgotModal(false)}
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600 }}
+            >
+              Okay, I Understand
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

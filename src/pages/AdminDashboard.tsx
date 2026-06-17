@@ -117,7 +117,7 @@ const AdminDashboard = () => {
   const [showArchivedFilter, setShowArchivedFilter] = useState(false);
 
   // Form States - Exam/Custom Grading
-  const [gradingMode, setGradingMode] = useState<'vocab_sentences' | 'exam' | 'custom' | 'leaderboard'>('vocab_sentences');
+  const [gradingMode, setGradingMode] = useState<'vocab_sentences' | 'exam' | 'custom' | 'leaderboard' | 'manage'>('vocab_sentences');
   const [selectedGradingDate, setSelectedGradingDate] = useState(new Date().toISOString().split('T')[0]);
   const [examName, setExamName] = useState('');
   const [examMaxPoints, setExamMaxPoints] = useState('100');
@@ -780,6 +780,47 @@ const AdminDashboard = () => {
     } catch (err: any) {
       console.error(err);
       setMessage(`❌ Profile approval update failed: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  // Reset password of student/staff via RPC (Leadership only)
+  const handleResetPassword = async (userId: string, newPw: string) => {
+    if (!newPw) {
+      setMessage('❌ Please enter a new password.');
+      setTimeout(() => setMessage(''), 4000);
+      return;
+    }
+    try {
+      const { error } = await supabase.rpc('reset_auth_user_password', {
+        user_id: userId,
+        new_password: newPw
+      });
+      if (error) throw error;
+      setMessage('✅ Password reset successfully.');
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to reset password: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  // Delete student/staff auth account (cascades to public profile)
+  const handleDeleteAccount = async (userId: string, name: string) => {
+    const confirmDelete = window.confirm(`⚠️ Are you sure you want to PERMANENTLY delete the account for ${name}?\n\nThis will delete all their profiles and cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      const { error } = await supabase.rpc('delete_auth_user', {
+        user_id: userId
+      });
+      if (error) throw error;
+      
+      setMessage(`✅ Account for ${name} deleted successfully.`);
+      fetchLeadershipDashboardData();
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to delete account: ${err.message}`);
     }
     setTimeout(() => setMessage(''), 4000);
   };
@@ -1896,6 +1937,19 @@ const AdminDashboard = () => {
                   >
                     Custom Activities
                   </button>
+                  {isLeadership && (
+                    <button 
+                      onClick={() => setGradingMode('manage')}
+                      style={{
+                        padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
+                        borderBottom: gradingMode === 'manage' ? '3px solid var(--primary)' : '3px solid transparent',
+                        color: gradingMode === 'manage' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                        fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem'
+                      }}
+                    >
+                      Manage Students
+                    </button>
+                  )}
                 </div>
 
                 {/* Sub Mode A: Daily Checkins & Red Penalty Button */}
@@ -2295,6 +2349,41 @@ const AdminDashboard = () => {
                   </div>
                 )}
 
+                {/* Sub Mode D: Manage Students (Reset Password, Delete Profile) */}
+                {isLeadership && gradingMode === 'manage' && (
+                  <div>
+                    <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Classroom Student Roster</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '2rem' }}>Reset student passwords directly or delete accounts permanently from the system.</p>
+                    
+                    {filteredActiveStudents.length === 0 ? (
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active students in this batch.</p>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '700px' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)', paddingBottom: '0.8rem' }}>
+                              <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Student Name</th>
+                              <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Email Address</th>
+                              <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Reset Password</th>
+                              <th style={{ padding: '1rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredActiveStudents.map(student => (
+                              <StudentManageRow 
+                                key={student.id} 
+                                student={student}
+                                onResetPassword={handleResetPassword}
+                                onDeleteAccount={handleDeleteAccount}
+                              />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
               </div>
             )}
 
@@ -2315,7 +2404,8 @@ const AdminDashboard = () => {
                     <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Designation (Job Title)</th>
                     <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Access Role</th>
                     <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Status</th>
-                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Save</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Reset Password</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2324,7 +2414,9 @@ const AdminDashboard = () => {
                       key={staff.id} 
                       staff={staff} 
                       onUpdate={handleUpdateStaff}
-                      isSelf={staff.id === currentUser.id}
+                      isSelf={staff.id === (currentUser?.id || '')}
+                      onResetPassword={handleResetPassword}
+                      onDeleteAccount={handleDeleteAccount}
                     />
                   ))}
                 </tbody>
@@ -2577,17 +2669,111 @@ const AdminDashboard = () => {
   );
 };
 
+// Student management table row
+const StudentManageRow = ({ 
+  student, 
+  onResetPassword, 
+  onDeleteAccount 
+}: { 
+  student: StudentProfile; 
+  onResetPassword: (userId: string, newPw: string) => Promise<void>;
+  onDeleteAccount: (userId: string, name: string) => Promise<void>;
+}) => {
+  const [newPassword, setNewPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleReset = async () => {
+    if (!newPassword) return;
+    setResetting(true);
+    await onResetPassword(student.id, newPassword);
+    setNewPassword('');
+    setResetting(false);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    await onDeleteAccount(student.id, student.name);
+    setDeleting(false);
+  };
+
+  return (
+    <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+      <td style={{ padding: '1rem 0.5rem', fontWeight: 650 }}>{student.name}</td>
+      <td style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>{student.email}</td>
+      <td style={{ padding: '1rem 0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+          <input 
+            type="password" 
+            placeholder="New Password" 
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '130px', fontSize: '0.85rem' }} 
+          />
+          <button 
+            onClick={handleReset} 
+            disabled={resetting || !newPassword}
+            className="btn btn-outline" 
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+          >
+            {resetting ? '...' : 'Reset'}
+          </button>
+        </div>
+      </td>
+      <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
+        <button 
+          onClick={handleDelete} 
+          disabled={deleting} 
+          className="btn btn-outline" 
+          style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
+        >
+          {deleting ? '...' : 'Delete'}
+        </button>
+      </td>
+    </tr>
+  );
+};
+
 // Staff Roster table row
-const StaffRow = ({ staff, onUpdate, isSelf }: { staff: StaffProfile; onUpdate: Function; isSelf: boolean }) => {
+const StaffRow = ({ 
+  staff, 
+  onUpdate, 
+  isSelf,
+  onResetPassword,
+  onDeleteAccount
+}: { 
+  staff: StaffProfile; 
+  onUpdate: Function; 
+  isSelf: boolean;
+  onResetPassword: (userId: string, newPw: string) => Promise<void>;
+  onDeleteAccount: (userId: string, name: string) => Promise<void>;
+}) => {
   const [role, setRole] = useState(staff.role);
   const [designation, setDesignation] = useState(staff.designation || '');
   const [status, setStatus] = useState(staff.status);
   const [saving, setSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     await onUpdate(staff.id, role, designation, status);
     setSaving(false);
+  };
+
+  const handleReset = async () => {
+    if (!newPassword) return;
+    setResetting(true);
+    await onResetPassword(staff.id, newPassword);
+    setNewPassword('');
+    setResetting(false);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    await onDeleteAccount(staff.id, staff.name);
+    setDeleting(false);
   };
 
   return (
@@ -2612,8 +2798,37 @@ const StaffRow = ({ staff, onUpdate, isSelf }: { staff: StaffProfile; onUpdate: 
           <option value="inactive">Inactive / Deactivated</option>
         </select>
       </td>
+      <td style={{ padding: '1rem 0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+          <input 
+            type="password" 
+            placeholder="New Password" 
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '120px', fontSize: '0.85rem' }} 
+          />
+          <button 
+            onClick={handleReset} 
+            disabled={resetting || !newPassword}
+            className="btn btn-outline" 
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+          >
+            {resetting ? '...' : 'Reset'}
+          </button>
+        </div>
+      </td>
       <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
-        <button onClick={handleSave} className="btn btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }} disabled={saving}>{saving ? '...' : 'Save'}</button>
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <button onClick={handleSave} className="btn btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }} disabled={saving}>{saving ? '...' : 'Save'}</button>
+          <button 
+            onClick={handleDelete} 
+            disabled={deleting || isSelf} 
+            className="btn btn-outline" 
+            style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
+          >
+            {deleting ? '...' : 'Delete'}
+          </button>
+        </div>
       </td>
     </tr>
   );
