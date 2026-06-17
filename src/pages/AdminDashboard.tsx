@@ -595,66 +595,50 @@ const AdminDashboard = () => {
         const newPoints = existingPenalty ? existingPenalty.points - 2 : -2;
         
         if (existingPenalty) {
-          // Delete old row
-          const { error: deleteError } = await supabase
+          const { error: updateError } = await supabase
             .from('scores')
-            .delete()
+            .update({ points: newPoints })
             .eq('id', existingPenalty.id);
-          if (deleteError) throw deleteError;
-        }
-
-        // Insert new row
-        const { error: insertError } = await supabase.from('scores').insert([
-          {
-            student_id: studentId,
-            interval_id: activeInterval.id,
-            score_type: 'penalty',
-            points: newPoints,
-            max_points: 0,
-            activity_name: 'Malayalam Speaking Policy Violation',
-            logged_by: currentUser.id,
-            logged_date: targetDate
-          }
-        ]);
-        if (insertError) throw insertError;
-        
-        if (existingPenalty) {
+          if (updateError) throw updateError;
           await logActivity('malayalam_penalty_inc', `Increased Malayalam penalty count for ${studName} (Total: ${newPoints} XP) on ${targetDate}`);
           setMessage(`⚠️ Malayalam penalty count increased (Total: ${newPoints} XP) for ${studName}.`);
         } else {
+          const { error: insertError } = await supabase.from('scores').insert([
+            {
+              student_id: studentId,
+              interval_id: activeInterval.id,
+              score_type: 'penalty',
+              points: -2,
+              max_points: 0,
+              activity_name: 'Malayalam Speaking Policy Violation',
+              logged_by: currentUser.id,
+              logged_date: targetDate
+            }
+          ]);
+          if (insertError) throw insertError;
           await logActivity('malayalam_penalty_create', `Deducted -2 points from ${studName} for speaking Malayalam on ${targetDate}`);
           setMessage(`⚠️ Malayalam penalty logged: -2 XP applied to ${studName}.`);
         }
       } else if (action === 'decrement') {
         if (existingPenalty) {
-          // Delete old row
-          const { error: deleteError } = await supabase
-            .from('scores')
-            .delete()
-            .eq('id', existingPenalty.id);
-          if (deleteError) throw deleteError;
-
-          if (existingPenalty.points !== -2) {
-            const newPoints = existingPenalty.points + 2;
-            // Insert new row with reduced points
-            const { error: insertError } = await supabase.from('scores').insert([
-              {
-                student_id: studentId,
-                interval_id: activeInterval.id,
-                score_type: 'penalty',
-                points: newPoints,
-                max_points: 0,
-                activity_name: 'Malayalam Speaking Policy Violation',
-                logged_by: currentUser.id,
-                logged_date: targetDate
-              }
-            ]);
-            if (insertError) throw insertError;
-            await logActivity('malayalam_penalty_dec', `Reduced Malayalam penalty count for ${studName} (Total: ${newPoints} XP) on ${targetDate}`);
-            setMessage(`⚠️ Malayalam penalty reduced to ${newPoints} XP for ${studName}.`);
-          } else {
+          if (existingPenalty.points === -2) {
+            // Delete row if it gets reduced to 0
+            const { error: deleteError } = await supabase
+              .from('scores')
+              .delete()
+              .eq('id', existingPenalty.id);
+            if (deleteError) throw deleteError;
             await logActivity('malayalam_penalty_remove', `Removed all Malayalam penalties for ${studName} on ${targetDate}`);
             setMessage(`✅ Malayalam penalty completely removed for ${studName}.`);
+          } else {
+            const newPoints = existingPenalty.points + 2;
+            const { error: updateError } = await supabase
+              .from('scores')
+              .update({ points: newPoints })
+              .eq('id', existingPenalty.id);
+            if (updateError) throw updateError;
+            await logActivity('malayalam_penalty_dec', `Reduced Malayalam penalty count for ${studName} (Total: ${newPoints} XP) on ${targetDate}`);
+            setMessage(`⚠️ Malayalam penalty reduced to ${newPoints} XP for ${studName}.`);
           }
         }
       }
@@ -702,35 +686,34 @@ const AdminDashboard = () => {
         const dbActivityName = `Attendance: ${statusValue}`;
         
         if (existingAttendance) {
-          // Delete old row
-          const { error: deleteError } = await supabase
+          // Update points and status (activity_name)
+          const { error: updateError } = await supabase
             .from('scores')
-            .delete()
-            .eq('id', existingAttendance.id);
-          if (deleteError) throw deleteError;
-        }
-
-        // Insert new row
-        const { error: insertError } = await supabase
-          .from('scores')
-          .insert([
-            {
-              student_id: studentId,
-              interval_id: activeInterval.id,
+            .update({ 
               points: pointsValue,
-              max_points: 10,
-              score_type: 'attendance',
-              activity_name: dbActivityName,
-              logged_by: currentUser.id,
-              logged_date: targetDate
-            }
-          ]);
-        if (insertError) throw insertError;
-        
-        if (existingAttendance) {
+              activity_name: dbActivityName
+            })
+            .eq('id', existingAttendance.id);
+          if (updateError) throw updateError;
           await logActivity('attendance_update', `Updated attendance for ${studName} to ${statusValue} (${pointsValue} XP) on ${targetDate}`);
           setMessage(`📅 Attendance updated to ${statusValue} (${pointsValue} XP) for ${studName}.`);
         } else {
+          // Insert new score row
+          const { error: insertError } = await supabase
+            .from('scores')
+            .insert([
+              {
+                student_id: studentId,
+                interval_id: activeInterval.id,
+                points: pointsValue,
+                max_points: 10,
+                score_type: 'attendance',
+                activity_name: dbActivityName,
+                logged_by: currentUser.id,
+                logged_date: targetDate
+              }
+            ]);
+          if (insertError) throw insertError;
           await logActivity('attendance_insert', `Logged attendance for ${studName} as ${statusValue} (${pointsValue} XP) on ${targetDate}`);
           setMessage(`📅 Attendance logged as ${statusValue} (${pointsValue} XP) for ${studName}.`);
         }      }
@@ -776,35 +759,31 @@ const AdminDashboard = () => {
       } else {
         const pointsValue = parseInt(val);
         if (existingTalk) {
-          // Delete old row
-          const { error: deleteError } = await supabase
+          // Update points
+          const { error: updateError } = await supabase
             .from('scores')
-            .delete()
+            .update({ points: pointsValue })
             .eq('id', existingTalk.id);
-          if (deleteError) throw deleteError;
-        }
-
-        // Insert new row
-        const { error: insertError } = await supabase
-          .from('scores')
-          .insert([
-            {
-              student_id: studentId,
-              interval_id: activeInterval.id,
-              points: pointsValue,
-              max_points: 10,
-              score_type: 'custom',
-              activity_name: 'One Minute Talk',
-              logged_by: currentUser.id,
-              logged_date: targetDate
-            }
-          ]);
-        if (insertError) throw insertError;
-
-        if (existingTalk) {
+          if (updateError) throw updateError;
           await logActivity('one_minute_talk_update', `Updated One Minute Talk score for ${studName} to ${pointsValue}/10 on ${targetDate}`);
           setMessage(`🎙️ One Minute Talk score updated to ${pointsValue}/10 for ${studName}.`);
         } else {
+          // Insert new score row
+          const { error: insertError } = await supabase
+            .from('scores')
+            .insert([
+              {
+                student_id: studentId,
+                interval_id: activeInterval.id,
+                points: pointsValue,
+                max_points: 10,
+                score_type: 'custom',
+                activity_name: 'One Minute Talk',
+                logged_by: currentUser.id,
+                logged_date: targetDate
+              }
+            ]);
+          if (insertError) throw insertError;
           await logActivity('one_minute_talk_log', `Logged One Minute Talk score of ${pointsValue}/10 for ${studName} on ${targetDate}`);
           setMessage(`🎙️ One Minute Talk score logged: ${pointsValue}/10 for ${studName}.`);
         }
