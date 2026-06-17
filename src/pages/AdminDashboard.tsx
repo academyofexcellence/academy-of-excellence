@@ -1765,45 +1765,7 @@ const AdminDashboard = () => {
                 {/* LEFT COLUMN: Student & Classroom Activity */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                   
-                  {/* BATCHES & ACTIVE INTERVALS MONITOR */}
-                  <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
-                    <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
-                      <Briefcase size={18} className="text-primary" /> Active Batches & Intervals
-                    </h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-                      Monitor registered batches and scoring terms.
-                    </p>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                      {intervalsList.length === 0 ? (
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>No batches configured.</p>
-                      ) : (
-                        intervalsList.map(int => {
-                          const batchStudents = studentList.filter(s => s.course_id === int.course_id && s.batch_number === int.batch_number && s.status === 'active').length;
-                          return (
-                            <div key={int.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(0,0,0,0.015)', border: '1px solid rgba(0,0,0,0.03)', borderRadius: '8px', gap: '1rem', flexWrap: 'wrap' }}>
-                              <div>
-                                <strong style={{ fontSize: '0.95rem' }}>{int.name}</strong>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                  Course: <strong>{getShortCourseName(int.course_id)}</strong> • Batch: <strong>{int.batch_number}</strong>
-                                </div>
-                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-                                  Active Students: <strong style={{ color: 'var(--primary-dark)' }}>{batchStudents}</strong>
-                                </div>
-                              </div>
-                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                {int.is_active ? (
-                                  <span style={{ fontSize: '0.75rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.3rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Active</span>
-                                ) : (
-                                  <span style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Inactive</span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
                   {/* DAILY STUDENT GRADING PROGRESS */}
                   <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
                     <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
