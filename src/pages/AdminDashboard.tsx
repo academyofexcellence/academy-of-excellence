@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -116,6 +116,9 @@ const AdminDashboard = () => {
   // Student Report States
   const [selectedReportStudent, setSelectedReportStudent] = useState<StudentProfile | null>(null);
   const [studentReportData, setStudentReportData] = useState<{ scores: any[]; loading: boolean }>({ scores: [], loading: false });
+  
+  // Synchronous lock to prevent penalty double-clicks
+  const penaltyLockRef = useRef<Record<string, boolean>>({});
   
   // Classroom Selector States
   const [filterCourse, setFilterCourse] = useState('');
@@ -568,11 +571,24 @@ const AdminDashboard = () => {
     if (!activeInterval || !currentUser) return;
     const targetDate = selectedGradingDate;
     const lockKey = `${studentId}-penalty`;
-    if (updatingScores.includes(lockKey)) return;
+    
+    // Check both standard React state lock and synchronous ref lock
+    if (updatingScores.includes(lockKey) || penaltyLockRef.current[studentId]) return;
 
+    penaltyLockRef.current[studentId] = true;
     setUpdatingScores(prev => [...prev, lockKey]);
+
     try {
-      const existingPenalty = scoresList.find(s => s.student_id === studentId && s.score_type === 'penalty');
+      // Query the database directly to get the absolute latest state and prevent race conditions
+      const { data: dbScores, error: fetchError } = await supabase
+        .from('scores')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('score_type', 'penalty')
+        .eq('logged_date', targetDate);
+
+      if (fetchError) throw fetchError;
+      const existingPenalty = dbScores && dbScores.length > 0 ? dbScores[0] : null;
       const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
 
       if (action === 'increment') {
@@ -632,6 +648,7 @@ const AdminDashboard = () => {
       console.error(err);
       setMessage(`❌ Failed to update penalty: ${err.message}`);
     } finally {
+      penaltyLockRef.current[studentId] = false;
       setUpdatingScores(prev => prev.filter(k => k !== lockKey));
     }
     setTimeout(() => setMessage(''), 4000);
@@ -2267,14 +2284,14 @@ const AdminDashboard = () => {
                                               </button>
                                             )}
                                             <span style={{ 
-                                              fontSize: '0.8rem', fontWeight: count > 0 ? 805 : 500,
+                                              fontSize: '0.85rem', fontWeight: count > 0 ? 800 : 500,
                                               color: count > 0 ? '#dc2626' : 'var(--text-muted)',
                                               background: count > 0 ? 'rgba(239,68,68,0.06)' : 'rgba(0,0,0,0.02)',
-                                              padding: '0.25rem 0.6rem', borderRadius: '6px',
+                                              padding: '0.25rem 0.5rem', borderRadius: '6px',
                                               border: count > 0 ? '1px solid rgba(239,68,68,0.15)' : '1px solid transparent',
-                                              display: 'inline-flex', alignItems: 'center', gap: '0.2rem'
+                                              display: 'inline-flex', alignItems: 'center'
                                             }}>
-                                              💬 {count} {count === 1 ? 'Penalty' : 'Penalties'} ({points} XP)
+                                              {points} XP
                                             </span>
                                             <button
                                               onClick={() => handleMalayalamPenalty(student.id, 'increment')}
@@ -2457,7 +2474,7 @@ const AdminDashboard = () => {
                                           </button>
                                         )}
                                         <span style={{ fontSize: '0.8rem', fontWeight: 800, color: count > 0 ? '#dc2626' : 'var(--text-muted)', padding: '0 0.2rem' }}>
-                                          {count} ({points} XP)
+                                          {points} XP
                                         </span>
                                         <button
                                           onClick={() => handleMalayalamPenalty(student.id, 'increment')}
