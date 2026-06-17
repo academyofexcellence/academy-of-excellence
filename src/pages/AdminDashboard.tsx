@@ -65,6 +65,7 @@ interface StudentProfile {
   name: string;
   course_id: string;
   batch_number: number;
+  roll_number?: string;
   status: 'pending' | 'active' | 'inactive';
   courses?: Course;
 }
@@ -92,7 +93,7 @@ const AdminDashboard = () => {
 
   // Tab navigation states
   const [staffTab, setStaffTab] = useState<'checklist' | 'one_off' | 'history'>('checklist');
-  const [adminTab, setAdminTab] = useState<'kpis' | 'tasks' | 'students' | 'roster' | 'logs' | 'website' | 'settings'>('kpis');
+  const [adminTab, setAdminTab] = useState<'kpis' | 'tasks' | 'students' | 'roster' | 'student_roster' | 'logs' | 'website' | 'settings'>('kpis');
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
 
   // UI State Messages
@@ -113,6 +114,12 @@ const AdminDashboard = () => {
   const [overviewLeaderboard, setOverviewLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [overviewSelectedInterval, setOverviewSelectedInterval] = useState<string>('');
   
+  // Student Roster Tab Filters
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentFilterCourse, setStudentFilterCourse] = useState('');
+  const [studentFilterBatch, setStudentFilterBatch] = useState('');
+  const [studentFilterStatus, setStudentFilterStatus] = useState('');
+
   // Student Report States
   const [selectedReportStudent, setSelectedReportStudent] = useState<StudentProfile | null>(null);
   const [studentReportData, setStudentReportData] = useState<{ scores: any[]; loading: boolean }>({ scores: [], loading: false });
@@ -926,6 +933,31 @@ const AdminDashboard = () => {
     setTimeout(() => setMessage(''), 4000);
   };
 
+  // Update student profile details (Leadership only)
+  const handleUpdateStudent = async (studentId: string, name: string, courseId: string, batchNumber: number, rollNumber: string, status: string) => {
+    try {
+      const { error } = await supabase
+        .from('student_profiles')
+        .update({
+          name,
+          course_id: courseId,
+          batch_number: batchNumber,
+          roll_number: rollNumber,
+          status
+        })
+        .eq('id', studentId);
+      if (error) throw error;
+      
+      await logActivity('student_profile_update', `Updated student profile details: name=${name}, roll=${rollNumber}, status=${status}`);
+      setMessage('✅ Student profile updated successfully.');
+      fetchLeadershipDashboardData();
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Student profile update failed: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
   // Reset password of student/staff via RPC (Leadership only)
   const handleResetPassword = async (userId: string, newPw: string) => {
     if (!newPw) {
@@ -1342,6 +1374,46 @@ const AdminDashboard = () => {
     s => s.course_id === filterCourse && s.batch_number === parseInt(filterBatch) && s.status === 'active'
   );
 
+  const sortedFilteredActiveStudents = [...filteredActiveStudents].sort((a, b) => {
+    const rA = a.roll_number || '';
+    const rB = b.roll_number || '';
+    const numA = parseInt(rA);
+    const numB = parseInt(rB);
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numA - numB;
+    }
+    if (rA && !rB) return -1;
+    if (!rA && rB) return 1;
+    if (!rA && !rB) {
+      return a.name.localeCompare(b.name);
+    }
+    return rA.localeCompare(rB, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  const filteredStudentsForRoster = studentList.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
+                          s.email.toLowerCase().includes(studentSearch.toLowerCase());
+    const matchesCourse = studentFilterCourse === '' || s.course_id === studentFilterCourse;
+    const matchesBatch = studentFilterBatch === '' || s.batch_number === parseInt(studentFilterBatch);
+    const matchesStatus = studentFilterStatus === '' || s.status === studentFilterStatus;
+    return matchesSearch && matchesCourse && matchesBatch && matchesStatus;
+  }).sort((a, b) => {
+    if (a.course_id !== b.course_id) {
+      return a.course_id.localeCompare(b.course_id);
+    }
+    if (a.batch_number !== b.batch_number) {
+      return a.batch_number - b.batch_number;
+    }
+    const rA = a.roll_number || '';
+    const rB = b.roll_number || '';
+    const numA = parseInt(rA);
+    const numB = parseInt(rB);
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numA - numB;
+    }
+    return rA.localeCompare(rB, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
   return (
     <div style={{ paddingTop: '120px', paddingBottom: '60px', minHeight: '100vh', background: 'var(--bg-light)' }} className="bg-grid-pattern">
       <div className="container" style={{ maxWidth: '1150px' }}>
@@ -1544,6 +1616,18 @@ const AdminDashboard = () => {
                 }}
               >
                 <UserCheck size={16} /> Staff Roster
+              </button>
+
+              <button 
+                onClick={() => setAdminTab('student_roster')}
+                style={{
+                  padding: '0.8rem 1.2rem', background: 'none', border: 'none',
+                  borderBottom: adminTab === 'student_roster' ? '3px solid var(--primary)' : '3px solid transparent',
+                  color: adminTab === 'student_roster' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                  fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+                }}
+              >
+                <Users size={16} /> Student Roster
               </button>
 
               <button 
@@ -2155,14 +2239,17 @@ const AdminDashboard = () => {
                               </tr>
                             </thead>
                             <tbody>
-                              {filteredActiveStudents.map(student => {
+                              {sortedFilteredActiveStudents.map(student => {
                                 const hasVocabToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_vocab');
                                 const hasSentencesToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_sentences');
                                 const hasVlogToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'weekly_vlog');
 
                                 return (
                                   <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                                    <td style={{ padding: '1rem 0.5rem', fontWeight: 650 }}>{student.name}</td>
+                                    <td style={{ padding: '1rem 0.5rem', fontWeight: 650 }}>
+                                      {student.roll_number && <span style={{ color: 'var(--primary)', marginRight: '0.4rem', fontWeight: 800 }}>#{student.roll_number}</span>}
+                                      {student.name}
+                                    </td>
                                     
                                     {/* Attendance select */}
                                     <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
@@ -2319,7 +2406,7 @@ const AdminDashboard = () => {
 
                         {/* MOBILE CARDS VIEW */}
                         <div className="mobile-score-cards" style={{ display: 'none', flexDirection: 'column', gap: '1.2rem' }}>
-                          {filteredActiveStudents.map(student => {
+                          {sortedFilteredActiveStudents.map(student => {
                             const hasVocabToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_vocab');
                             const hasSentencesToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_sentences');
                             const hasVlogToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'weekly_vlog');
@@ -2327,7 +2414,10 @@ const AdminDashboard = () => {
                             return (
                               <div key={student.id} className="glass-card" style={{ padding: '1.2rem', border: '1px solid rgba(201,156,51,0.15)', background: 'white', borderRadius: '14px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                  <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-main)' }}>{student.name}</span>
+                                  <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-main)' }}>
+                                    {student.roll_number && <span style={{ color: 'var(--primary)', marginRight: '0.4rem', fontWeight: 800 }}>#{student.roll_number}</span>}
+                                    {student.name}
+                                  </span>
                                   <span style={{ fontSize: '0.75rem', background: 'rgba(201,156,51,0.1)', color: 'var(--primary-dark)', padding: '0.25rem 0.6rem', borderRadius: '50px', fontWeight: 700 }}>Active</span>
                                 </div>
 
@@ -2682,9 +2772,12 @@ const AdminDashboard = () => {
                         {/* Marks entries list */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '2rem' }}>
                           <h4 style={{ fontSize: '0.95rem', borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.5rem', color: 'var(--text-muted)' }}>Enter Student Marks</h4>
-                          {filteredActiveStudents.map(student => (
+                          {sortedFilteredActiveStudents.map(student => (
                             <div key={student.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.01)', padding: '0.6rem 1rem', borderRadius: '8px' }}>
-                              <span style={{ fontWeight: 600 }}>{student.name}</span>
+                              <span style={{ fontWeight: 600 }}>
+                                {student.roll_number && <span style={{ color: 'var(--primary)', marginRight: '0.4rem', fontWeight: 800 }}>#{student.roll_number}</span>}
+                                {student.name}
+                              </span>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <input 
                                   type="number" 
@@ -2746,9 +2839,12 @@ const AdminDashboard = () => {
                         {/* Marks entries list */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '2rem' }}>
                           <h4 style={{ fontSize: '0.95rem', borderBottom: '1px solid rgba(0,0,0,0.05)', paddingBottom: '0.5rem', color: 'var(--text-muted)' }}>Enter Points</h4>
-                          {filteredActiveStudents.map(student => (
+                          {sortedFilteredActiveStudents.map(student => (
                             <div key={student.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.01)', padding: '0.6rem 1rem', borderRadius: '8px' }}>
-                              <span style={{ fontWeight: 600 }}>{student.name}</span>
+                              <span style={{ fontWeight: 600 }}>
+                                {student.roll_number && <span style={{ color: 'var(--primary)', marginRight: '0.4rem', fontWeight: 800 }}>#{student.roll_number}</span>}
+                                {student.name}
+                              </span>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <input 
                                   type="number" 
@@ -2793,13 +2889,14 @@ const AdminDashboard = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {filteredActiveStudents.map(student => (
+                            {sortedFilteredActiveStudents.map(student => (
                               <StudentManageRow 
                                 key={student.id} 
                                 student={student}
                                 onResetPassword={handleResetPassword}
                                 onDeleteAccount={handleDeleteAccount}
                                 onOpenReport={handleOpenReport}
+                                onUpdateStudent={handleUpdateStudent}
                               />
                             ))}
                           </tbody>
@@ -2844,6 +2941,111 @@ const AdminDashboard = () => {
                       onDeleteAccount={handleDeleteAccount}
                     />
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: Student Roster Management */}
+        {isLeadership && adminTab === 'student_roster' && (
+          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+            <h3 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>Student Roster & Profiles</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              Manage student accounts: assign roll numbers, update course, batch, or status, reset passwords, view reports, or delete accounts.
+            </p>
+
+            {/* Filters */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Search Student</label>
+                <input 
+                  type="text" 
+                  placeholder="Search by name or email..." 
+                  value={studentSearch} 
+                  onChange={(e) => setStudentSearch(e.target.value)} 
+                  style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                />
+              </div>
+
+              <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Course</label>
+                <select 
+                  value={studentFilterCourse} 
+                  onChange={(e) => setStudentFilterCourse(e.target.value)} 
+                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                >
+                  <option value="">All Courses</option>
+                  {courses.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ flex: '1 1 100px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Batch</label>
+                <select 
+                  value={studentFilterBatch} 
+                  onChange={(e) => setStudentFilterBatch(e.target.value)} 
+                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                >
+                  <option value="">All Batches</option>
+                  {[...Array(20)].map((_, i) => (
+                    <option key={i + 1} value={i + 1}>Batch {i + 1}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ flex: '1 1 120px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Status</label>
+                <select 
+                  value={studentFilterStatus} 
+                  onChange={(e) => setStudentFilterStatus(e.target.value)} 
+                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                >
+                  <option value="">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '950px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)', paddingBottom: '0.8rem' }}>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Student Name</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Email Address</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Roll #</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Course</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Batch</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Status</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700 }}>Reset Password</th>
+                    <th style={{ padding: '1rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudentsForRoster.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '2rem 0.5rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        No students found matching your filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStudentsForRoster.map(student => (
+                      <StudentRosterRow 
+                        key={student.id} 
+                        student={student} 
+                        courses={courses} 
+                        onUpdate={handleUpdateStudent} 
+                        onResetPassword={handleResetPassword} 
+                        onDeleteAccount={handleDeleteAccount} 
+                        onOpenReport={handleOpenReport} 
+                      />
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -3349,16 +3551,28 @@ const StudentManageRow = ({
   student, 
   onResetPassword, 
   onDeleteAccount,
-  onOpenReport
+  onOpenReport,
+  onUpdateStudent
 }: { 
   student: StudentProfile; 
   onResetPassword: (userId: string, newPw: string) => Promise<void>;
   onDeleteAccount: (userId: string, name: string) => Promise<void>;
   onOpenReport: (student: StudentProfile) => void;
+  onUpdateStudent: (studentId: string, name: string, courseId: string, batchNumber: number, rollNumber: string, status: string) => Promise<void>;
 }) => {
+  const [name, setName] = useState(student.name);
+  const [rollNumber, setRollNumber] = useState(student.roll_number || '');
+  const [status, setStatus] = useState(student.status);
+  const [saving, setSaving] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [resetting, setResetting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onUpdateStudent(student.id, name, student.course_id, student.batch_number, rollNumber, status);
+    setSaving(false);
+  };
 
   const handleReset = async () => {
     if (!newPassword) return;
@@ -3376,16 +3590,43 @@ const StudentManageRow = ({
 
   return (
     <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-      <td style={{ padding: '1rem 0.5rem', fontWeight: 650 }}>{student.name}</td>
-      <td style={{ padding: '1rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>{student.email}</td>
-      <td style={{ padding: '1rem 0.5rem' }}>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <input 
+          type="text" 
+          value={rollNumber} 
+          onChange={(e) => setRollNumber(e.target.value)} 
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '70px', fontSize: '0.9rem', fontWeight: 700, textAlign: 'center' }} 
+          placeholder="Roll #"
+        />
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <input 
+          type="text" 
+          value={name} 
+          onChange={(e) => setName(e.target.value)} 
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '100%', fontSize: '0.9rem', fontWeight: 650 }} 
+        />
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>{student.email}</td>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <select 
+          value={status} 
+          onChange={(e) => setStatus(e.target.value as any)} 
+          style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none' }}
+        >
+          <option value="pending">Pending</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
         <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
           <input 
             type="password" 
             placeholder="New Password" 
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '130px', fontSize: '0.85rem' }} 
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '110px', fontSize: '0.85rem' }} 
           />
           <button 
             onClick={handleReset} 
@@ -3397,12 +3638,13 @@ const StudentManageRow = ({
           </button>
         </div>
       </td>
-      <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+      <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <button onClick={handleSave} className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} disabled={saving}>{saving ? '...' : 'Save'}</button>
           <button 
             onClick={() => onOpenReport(student)}
             className="btn btn-outline" 
-            style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'rgba(201,156,51,0.02)' }}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'rgba(201,156,51,0.02)' }}
           >
             Report
           </button>
@@ -3410,7 +3652,7 @@ const StudentManageRow = ({
             onClick={handleDelete} 
             disabled={deleting} 
             className="btn btn-outline" 
-            style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
           >
             {deleting ? '...' : 'Delete'}
           </button>
@@ -3511,6 +3753,146 @@ const StaffRow = ({
             disabled={deleting || isSelf} 
             className="btn btn-outline" 
             style={{ padding: '0.4rem 1rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
+          >
+            {deleting ? '...' : 'Delete'}
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
+// Student Roster table row
+const StudentRosterRow = ({
+  student,
+  courses,
+  onUpdate,
+  onResetPassword,
+  onDeleteAccount,
+  onOpenReport
+}: {
+  student: StudentProfile;
+  courses: Course[];
+  onUpdate: Function;
+  onResetPassword: (userId: string, newPw: string) => Promise<void>;
+  onDeleteAccount: (userId: string, name: string) => Promise<void>;
+  onOpenReport: (student: StudentProfile) => void;
+}) => {
+  const [name, setName] = useState(student.name);
+  const [rollNumber, setRollNumber] = useState(student.roll_number || '');
+  const [courseId, setCourseId] = useState(student.course_id);
+  const [batchNumber, setBatchNumber] = useState(student.batch_number);
+  const [status, setStatus] = useState(student.status);
+  
+  const [saving, setSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onUpdate(student.id, name, courseId, batchNumber, rollNumber, status);
+    setSaving(false);
+  };
+
+  const handleReset = async () => {
+    if (!newPassword) return;
+    setResetting(true);
+    await onResetPassword(student.id, newPassword);
+    setNewPassword('');
+    setResetting(false);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    await onDeleteAccount(student.id, student.name);
+    setDeleting(false);
+  };
+
+  return (
+    <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <input 
+          type="text" 
+          value={name} 
+          onChange={(e) => setName(e.target.value)} 
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '100%', fontSize: '0.9rem', fontWeight: 600 }} 
+        />
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>{student.email}</td>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <input 
+          type="text" 
+          value={rollNumber} 
+          onChange={(e) => setRollNumber(e.target.value)} 
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '70px', fontSize: '0.9rem', textAlign: 'center', fontWeight: 600 }} 
+          placeholder="Roll #"
+        />
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <select 
+          value={courseId} 
+          onChange={(e) => setCourseId(e.target.value)} 
+          style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', maxWidth: '200px' }}
+        >
+          {courses.map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <input 
+          type="number" 
+          value={batchNumber} 
+          onChange={(e) => setBatchNumber(parseInt(e.target.value) || 1)} 
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '60px', fontSize: '0.9rem', textAlign: 'center' }} 
+        />
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <select 
+          value={status} 
+          onChange={(e) => setStatus(e.target.value as any)} 
+          style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none' }}
+        >
+          <option value="pending">Pending</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+          <input 
+            type="password" 
+            placeholder="New Password" 
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '110px', fontSize: '0.85rem' }} 
+          />
+          <button 
+            onClick={handleReset} 
+            disabled={resetting || !newPassword}
+            className="btn btn-outline" 
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}
+          >
+            {resetting ? '...' : 'Reset'}
+          </button>
+        </div>
+      </td>
+      <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <button onClick={handleSave} className="btn btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} disabled={saving}>{saving ? '...' : 'Save'}</button>
+          <button 
+            onClick={() => onOpenReport(student)}
+            className="btn btn-outline" 
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'rgba(201,156,51,0.02)' }}
+          >
+            Report
+          </button>
+          <button 
+            onClick={handleDelete} 
+            disabled={deleting} 
+            className="btn btn-outline" 
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
           >
             {deleting ? '...' : 'Delete'}
           </button>

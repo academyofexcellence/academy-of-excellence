@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS public.student_profiles (
     name TEXT NOT NULL,
     course_id UUID REFERENCES public.courses(id) ON DELETE RESTRICT NOT NULL,
     batch_number INTEGER NOT NULL,
+    roll_number TEXT,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'inactive')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -145,14 +146,15 @@ BEGIN
         selected_course_id := (new.raw_user_meta_data->>'course_id')::uuid;
         student_batch := (new.raw_user_meta_data->>'batch_number')::integer;
 
-        INSERT INTO public.student_profiles (id, email, name, course_id, batch_number, status)
+        INSERT INTO public.student_profiles (id, email, name, course_id, batch_number, status, roll_number)
         VALUES (
             new.id,
             new.email,
             COALESCE(new.raw_user_meta_data->>'name', 'Student User'),
             selected_course_id,
             student_batch,
-            'pending'
+            'pending',
+            new.raw_user_meta_data->>'roll_number'
         );
         
         INSERT INTO public.activity_logs (actor_name, action_type, details)

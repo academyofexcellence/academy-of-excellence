@@ -14,6 +14,7 @@ const AdminLogin = () => {
   const [courses, setCourses] = useState<any[]>([]);
   const [selectedCourse, setSelectedCourse] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
+  const [rollNumber, setRollNumber] = useState('');
 
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -158,6 +159,7 @@ const AdminLogin = () => {
             name: fullName,
             course_id: selectedCourse,
             batch_number: parseInt(batchNumber),
+            roll_number: rollNumber,
           },
         },
       });
@@ -179,6 +181,7 @@ const AdminLogin = () => {
     setFullName('');
     setDesignation('');
     setBatchNumber('');
+    setRollNumber('');
     if (courses.length > 0) setSelectedCourse(courses[0].id);
   };
 
@@ -279,7 +282,7 @@ const AdminLogin = () => {
           )}
 
           {activeTab === 'register_student' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
               <div className="form-group">
                 <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Select Course</label>
                 <select
@@ -306,6 +309,19 @@ const AdminLogin = () => {
                   style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
                   placeholder="e.g. 25"
                   min="1"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Roll #</label>
+                <input 
+                  type="text" 
+                  value={rollNumber}
+                  onChange={(e) => setRollNumber(e.target.value)}
+                  className="form-input"
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                  placeholder="e.g. 1"
                   required
                 />
               </div>
