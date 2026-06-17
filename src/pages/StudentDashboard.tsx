@@ -34,7 +34,7 @@ interface LeaderboardEntry {
 interface ScoreLog {
   id: string;
   activity_name: string;
-  score_type: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog' | 'exam' | 'penalty' | 'custom';
+  score_type: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog' | 'exam' | 'penalty' | 'custom' | 'attendance';
   points: number;
   max_points: number;
   logged_date: string;

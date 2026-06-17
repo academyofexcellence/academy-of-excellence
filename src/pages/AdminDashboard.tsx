@@ -607,6 +607,82 @@ const AdminDashboard = () => {
     setTimeout(() => setMessage(''), 4000);
   };
 
+  // Attendance Score Grade (On Time = 10, Late = 0, Absent = 0)
+  const handleToggleAttendance = async (studentId: string, statusValue: string) => {
+    if (!activeInterval || !currentUser) return;
+    const targetDate = selectedGradingDate;
+    const lockKey = `${studentId}-attendance`;
+    if (updatingScores.includes(lockKey)) return;
+
+    setUpdatingScores(prev => [...prev, lockKey]);
+    try {
+      const existingAttendance = scoresList.find(
+        s => s.student_id === studentId && s.score_type === 'attendance'
+      );
+
+      const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
+
+      if (statusValue === '') {
+        // If cleared, delete from database
+        if (existingAttendance) {
+          const { error: deleteError } = await supabase
+            .from('scores')
+            .delete()
+            .eq('id', existingAttendance.id);
+          if (deleteError) throw deleteError;
+          await logActivity('attendance_delete', `Removed attendance record for ${studName} on ${targetDate}`);
+          setMessage(`📅 Attendance removed for ${studName}.`);
+        }
+      } else {
+        const pointsValue = statusValue === 'On Time' ? 10 : 0;
+        const dbActivityName = `Attendance: ${statusValue}`;
+        
+        if (existingAttendance) {
+          // Update points and status (activity_name)
+          const { error: updateError } = await supabase
+            .from('scores')
+            .update({ 
+              points: pointsValue,
+              activity_name: dbActivityName
+            })
+            .eq('id', existingAttendance.id);
+          if (updateError) throw updateError;
+          await logActivity('attendance_update', `Updated attendance for ${studName} to ${statusValue} (${pointsValue} XP) on ${targetDate}`);
+          setMessage(`📅 Attendance updated to ${statusValue} (${pointsValue} XP) for ${studName}.`);
+        } else {
+          // Insert new score row
+          const { error: insertError } = await supabase
+            .from('scores')
+            .insert([
+              {
+                student_id: studentId,
+                interval_id: activeInterval.id,
+                points: pointsValue,
+                max_points: 10,
+                score_type: 'attendance',
+                activity_name: dbActivityName,
+                logged_by: currentUser.id,
+                logged_date: targetDate
+              }
+            ]);
+          if (insertError) throw insertError;
+          await logActivity('attendance_insert', `Logged attendance for ${studName} as ${statusValue} (${pointsValue} XP) on ${targetDate}`);
+          setMessage(`📅 Attendance logged as ${statusValue} (${pointsValue} XP) for ${studName}.`);
+        }
+      }
+      
+      // Refresh scores and leaderboard
+      await fetchClassroomScores(targetDate);
+      await fetchClassroomLeaderboard(activeInterval.id);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to update attendance: ${err.message}`);
+    } finally {
+      setUpdatingScores(prev => prev.filter(k => k !== lockKey));
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
   // One Minute Talk Score Grade (0-10)
   const handleToggleOneMinuteTalk = async (studentId: string, val: string) => {
     if (!activeInterval || !currentUser) return;
@@ -1985,6 +2061,7 @@ const AdminDashboard = () => {
                             <thead>
                               <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)' }}>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700 }}>Student Name</th>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Attendance (10 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Vocab (+5 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Daily Sentences (+5 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Weekly Vlog (+15 XP)</th>
@@ -2002,6 +2079,40 @@ const AdminDashboard = () => {
                                   <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                                     <td style={{ padding: '1rem 0.5rem', fontWeight: 650 }}>{student.name}</td>
                                     
+                                    {/* Attendance select */}
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
+                                      {(() => {
+                                        const attendanceObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'attendance');
+                                        const currentValue = attendanceObj 
+                                          ? attendanceObj.activity_name.replace('Attendance: ', '') 
+                                          : '';
+                                        
+                                        return (
+                                          <select
+                                            value={currentValue}
+                                            onChange={(e) => handleToggleAttendance(student.id, e.target.value)}
+                                            disabled={updatingScores.includes(`${student.id}-attendance`)}
+                                            style={{
+                                              padding: '0.35rem 0.5rem',
+                                              borderRadius: '8px',
+                                              border: '1px solid rgba(201,156,51,0.25)',
+                                              background: currentValue === 'On Time' ? 'rgba(34,197,94,0.08)' : currentValue ? 'rgba(0,0,0,0.04)' : 'white',
+                                              color: currentValue === 'On Time' ? '#16a34a' : currentValue === 'Absent' ? '#dc2626' : currentValue === 'Late' ? '#b45309' : 'var(--text-muted)',
+                                              fontWeight: currentValue ? 700 : 500,
+                                              outline: 'none',
+                                              cursor: 'pointer',
+                                              fontSize: '0.85rem'
+                                            }}
+                                          >
+                                            <option value="">- Select -</option>
+                                            <option value="On Time">On Time (+10 XP)</option>
+                                            <option value="Late">Late (0 XP)</option>
+                                            <option value="Absent">Absent (0 XP)</option>
+                                          </select>
+                                        );
+                                      })()}
+                                    </td>
+
                                     {/* Vocab check */}
                                     <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
                                       <input 
@@ -2158,6 +2269,40 @@ const AdminDashboard = () => {
                                     <span>Vlog</span>
                                     <span style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.1rem' }}>{hasVlogToday ? '✓ Approved' : '+15 XP'}</span>
                                   </button>
+                                </div>
+
+                                {/* Attendance (Mobile) */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem', background: 'rgba(0,0,0,0.02)', borderRadius: '10px', marginBottom: '0.6rem', border: '1px solid rgba(0,0,0,0.03)' }}>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>📅 Attendance:</span>
+                                  {(() => {
+                                    const attendanceObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'attendance');
+                                    const currentValue = attendanceObj 
+                                      ? attendanceObj.activity_name.replace('Attendance: ', '') 
+                                      : '';
+                                    return (
+                                      <select
+                                        value={currentValue}
+                                        onChange={(e) => handleToggleAttendance(student.id, e.target.value)}
+                                        disabled={updatingScores.includes(`${student.id}-attendance`)}
+                                        style={{
+                                          padding: '0.3rem 0.5rem',
+                                          borderRadius: '6px',
+                                          border: '1px solid rgba(201,156,51,0.25)',
+                                          background: currentValue === 'On Time' ? 'rgba(34,197,94,0.08)' : currentValue ? 'rgba(0,0,0,0.04)' : 'white',
+                                          color: currentValue === 'On Time' ? '#16a34a' : currentValue === 'Absent' ? '#dc2626' : currentValue === 'Late' ? '#b45309' : 'var(--text-muted)',
+                                          fontWeight: currentValue ? 700 : 500,
+                                          outline: 'none',
+                                          cursor: 'pointer',
+                                          fontSize: '0.8rem'
+                                        }}
+                                      >
+                                        <option value="">- Select -</option>
+                                        <option value="On Time">On Time (+10 XP)</option>
+                                        <option value="Late">Late (0 XP)</option>
+                                        <option value="Absent">Absent (0 XP)</option>
+                                      </select>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* One Minute Talk (Mobile) */}

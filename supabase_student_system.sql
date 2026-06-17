@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS public.scores (
     student_id UUID REFERENCES public.student_profiles(id) ON DELETE CASCADE NOT NULL,
     interval_id UUID REFERENCES public.scoring_intervals(id) ON DELETE CASCADE NOT NULL,
     activity_name TEXT NOT NULL,
-    score_type TEXT NOT NULL CHECK (score_type IN ('daily_vocab', 'daily_sentences', 'weekly_vlog', 'exam', 'penalty', 'custom')),
+    score_type TEXT NOT NULL CHECK (score_type IN ('daily_vocab', 'daily_sentences', 'weekly_vlog', 'exam', 'penalty', 'custom', 'attendance')),
     points INTEGER NOT NULL,
     max_points INTEGER NOT NULL,
     logged_by UUID REFERENCES public.staff_profiles(id) ON DELETE SET NULL,
