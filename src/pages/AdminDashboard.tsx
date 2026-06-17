@@ -493,7 +493,7 @@ const AdminDashboard = () => {
       let currentRank = 1;
       for (let i = 0; i < entries.length; i++) {
         if (i > 0 && entries[i].total_score < entries[i - 1].total_score) {
-          currentRank = i + 1;
+          currentRank += 1;
         }
         entries[i].rank = currentRank;
       }
@@ -2812,7 +2812,7 @@ const AdminDashboard = () => {
                           let currentRank = 1;
                           for (let i = 0; i < entries.length; i++) {
                             if (i > 0 && entries[i].total_score < entries[i - 1].total_score) {
-                              currentRank = i + 1;
+                              currentRank += 1;
                             }
                             entries[i].rank = currentRank;
                           }
