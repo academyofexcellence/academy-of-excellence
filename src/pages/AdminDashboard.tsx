@@ -104,6 +104,7 @@ const AdminDashboard = () => {
   const [taskList, setTaskList] = useState<Task[]>([]);
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [todayScores, setTodayScores] = useState<any[]>([]);
 
   // Data States (Students & Leaderboards)
   const [courses, setCourses] = useState<Course[]>([]);
@@ -295,13 +296,20 @@ const AdminDashboard = () => {
         .order('created_at', { ascending: false });
       if (tasks) setTaskList(tasks);
 
-      // 3. Fetch daily task logs for today
+       // 3. Fetch daily task logs for today
       const todayStr = new Date().toISOString().split('T')[0];
       const { data: logs } = await supabase
         .from('daily_task_logs')
         .select('*')
         .eq('completed_date', todayStr);
       if (logs) setDailyLogs(logs);
+
+      // Fetch today's student scores (attendance, vocabulary, penalties, etc.)
+      const { data: todaySc } = await supabase
+        .from('scores')
+        .select('*')
+        .eq('logged_date', todayStr);
+      if (todaySc) setTodayScores(todaySc);
 
       // 4. Fetch Activity Logs
       const { data: actLogs } = await supabase
@@ -1081,6 +1089,19 @@ const AdminDashboard = () => {
     setTimeout(() => setMessage(''), 4000);
   };
 
+  const handleSetIntervalInactive = async (intervalId: string) => {
+    try {
+      const { error } = await supabase.from('scoring_intervals').update({ is_active: false }).eq('id', intervalId);
+      if (error) throw error;
+      setMessage('✅ Interval deactivated successfully.');
+      fetchLeadershipDashboardData();
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to deactivate interval: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
     setUploading(true);
     try {
@@ -1670,226 +1691,443 @@ const AdminDashboard = () => {
         </div>
 
         {/* TAB: KPI Overview (leadership only) */}
-        {isLeadership && adminTab === 'kpis' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            <div className="grid grid-3" style={{ gap: '1.5rem' }}>
-              <div className="glass-card text-center" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.15)' }}>
-                <h4 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Daily Tasks Done (Today)</h4>
-                <p style={{ fontSize: '3rem', fontWeight: 800, margin: '0.5rem 0', color: 'var(--primary-dark)' }}>
-                  {dailyLogs.length} / {taskList.filter(t => t.task_type === 'daily').length}
-                </p>
-                <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>Active checklist monitoring</span>
+        {/* TAB: KPI Overview (leadership only) */}
+        {isLeadership && adminTab === 'kpis' && (() => {
+          const activeStudents = studentList.filter(s => s.status === 'active');
+          const activeStudentsCount = activeStudents.length;
+
+          // Attendance stats for today
+          const attPresent = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: On Time')).length;
+          const attLate = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: Late')).length;
+          const attAbsent = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: Absent')).length;
+          const attMarked = attPresent + attLate + attAbsent;
+          const attendancePercent = attMarked > 0 ? Math.round(((attPresent + attLate) / attMarked) * 100) : 0;
+
+          // Student activities check-ins today
+          const vocabCount = todayScores.filter(s => s.score_type === 'daily_vocab').length;
+          const sentencesCount = todayScores.filter(s => s.score_type === 'daily_sentences').length;
+          const vlogsCount = todayScores.filter(s => s.score_type === 'weekly_vlog').length;
+          const penaltiesCount = todayScores.filter(s => s.score_type === 'penalty').length;
+          const examsCount = todayScores.filter(s => s.score_type === 'exam').length;
+          const customCount = todayScores.filter(s => s.score_type === 'custom' && s.activity_name === 'One Minute Talk').length;
+
+          // Batches and active intervals
+          const activeIntervals = intervalsList.filter(i => i.is_active);
+
+          // Task summaries
+          const pendingOneOffs = taskList.filter(t => t.task_type === 'one_off' && t.status !== 'completed');
+          const completedOneOffs = taskList.filter(t => t.task_type === 'one_off' && t.status === 'completed');
+          const dailyTasks = taskList.filter(t => t.task_type === 'daily');
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              
+              {/* Top Stats Cards Grid */}
+              <div className="grid grid-4" style={{ gap: '1.5rem' }}>
+                <div className="glass-card text-center" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <h4 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 700 }}>Daily Tasks Done (Today)</h4>
+                  <p style={{ fontSize: '2.2rem', fontWeight: 800, margin: '0.5rem 0', color: 'var(--primary-dark)' }}>
+                    {dailyLogs.length} / {dailyTasks.length}
+                  </p>
+                  <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>Active checklist monitoring</span>
+                </div>
+
+                <div className="glass-card text-center" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <h4 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 700 }}>Pending Staff Duties</h4>
+                  <p style={{ fontSize: '2.2rem', fontWeight: 800, margin: '0.5rem 0', color: '#dc2626' }}>
+                    {pendingOneOffs.length}
+                  </p>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Assigned to staff roster</span>
+                </div>
+
+                <div className="glass-card text-center" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <h4 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 700 }}>Total Active Students</h4>
+                  <p style={{ fontSize: '2.2rem', fontWeight: 800, margin: '0.5rem 0', color: '#1e3a8a' }}>
+                    {activeStudentsCount}
+                  </p>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{studentList.filter(s => s.status === 'pending').length} pending approval</span>
+                </div>
+
+                <div className="glass-card text-center" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <h4 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', fontWeight: 700 }}>Today's Attendance</h4>
+                  <p style={{ fontSize: '2.2rem', fontWeight: 800, margin: '0.5rem 0', color: '#16a34a' }}>
+                    {attendancePercent}%
+                  </p>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                    {attPresent + attLate} Present / {attMarked} Marked
+                  </span>
+                </div>
               </div>
 
-              <div className="glass-card text-center" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.15)' }}>
-                <h4 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Pending Staff Duties</h4>
-                <p style={{ fontSize: '3rem', fontWeight: 800, margin: '0.5rem 0', color: '#dc2626' }}>
-                  {taskList.filter(t => t.task_type === 'one_off' && t.status !== 'completed').length}
-                </p>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Assigned to staff roster</span>
-              </div>
+              {/* Main Dashboard Command Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '2rem' }}>
+                
+                {/* LEFT COLUMN: Student & Classroom Activity */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  
+                  {/* BATCHES & ACTIVE INTERVALS MONITOR */}
+                  <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+                      <Briefcase size={18} className="text-primary" /> Active Batches & Intervals
+                    </h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                      Monitor registered batches and scoring terms. You can toggle their active status directly from here.
+                    </p>
 
-              <div className="glass-card text-center" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.15)' }}>
-                <h4 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', textTransform: 'uppercase' }}>Total Registered Staff</h4>
-                <p style={{ fontSize: '3rem', fontWeight: 800, margin: '0.5rem 0', color: '#1e3a8a' }}>
-                  {staffList.filter(s => s.status === 'active').length}
-                </p>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{staffList.filter(s => s.status === 'pending').length} pending approval</span>
-              </div>
-            </div>
-
-            {/* Dashboard Shortcut lists */}
-            <div className="grid grid-2" style={{ gap: '2rem' }}>
-              <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle2 size={18} className="text-primary" /> Daily Tasks Status</h3>
-                {taskList.filter(t => t.task_type === 'daily').map(task => {
-                  const completed = dailyLogs.some(log => log.task_id === task.id);
-                  return (
-                    <div key={task.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.8rem 0', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                      <span style={{ fontSize: '0.95rem' }}>{task.title}</span>
-                      <span style={{ color: completed ? '#16a34a' : '#ea580c', fontWeight: 600, fontSize: '0.85rem' }}>
-                        {completed ? '✓ Completed' : '✕ Pending'}
-                      </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                      {intervalsList.length === 0 ? (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>No batches configured.</p>
+                      ) : (
+                        intervalsList.map(int => {
+                          const batchStudents = studentList.filter(s => s.course_id === int.course_id && s.batch_number === int.batch_number && s.status === 'active').length;
+                          return (
+                            <div key={int.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(0,0,0,0.015)', border: '1px solid rgba(0,0,0,0.03)', borderRadius: '8px', gap: '1rem', flexWrap: 'wrap' }}>
+                              <div>
+                                <strong style={{ fontSize: '0.95rem' }}>{int.name}</strong>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                                  Course: <strong>{getShortCourseName(int.course_id)}</strong> • Batch: <strong>{int.batch_number}</strong>
+                                </div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                                  Active Students: <strong style={{ color: 'var(--primary-dark)' }}>{batchStudents}</strong>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                {int.is_active ? (
+                                  <>
+                                    <span style={{ fontSize: '0.75rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.3rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Active</span>
+                                    <button 
+                                      onClick={() => handleSetIntervalInactive(int.id)} 
+                                      className="btn btn-outline" 
+                                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
+                                    >
+                                      Deactivate
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)', padding: '0.3rem 0.6rem', borderRadius: '4px', fontWeight: 700 }}>Inactive</span>
+                                    <button 
+                                      onClick={() => handleToggleIntervalActiveStatus(int.id, int.course_id, int.batch_number)} 
+                                      className="btn btn-outline" 
+                                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                                    >
+                                      Activate
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
 
-              <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
-                <h3 style={{ fontSize: '1.2rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Users size={18} className="text-primary" /> Pending Staff Registrations</h3>
-                {staffList.filter(s => s.status === 'pending').length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No new staff signups waiting for approval.</p>
-                ) : (
-                  staffList.filter(s => s.status === 'pending').map(staff => (
-                    <div key={staff.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.8rem 0', borderBottom: '1px solid rgba(0,0,0,0.04)', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{staff.name}</div>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{staff.designation}</div>
+                  {/* DAILY STUDENT GRADING PROGRESS */}
+                  <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+                      <TrendingUp size={18} className="text-primary" /> Student Daily Activity Logged (Today)
+                    </h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                      Number of items recorded by staff in the classrooms today.
+                    </p>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                      <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #3b82f6', borderRadius: '0 8px 8px 0' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Daily Vocab Checks</div>
+                        <strong style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>{vocabCount}</strong>
                       </div>
-                      <button onClick={() => setAdminTab('roster')} className="btn btn-outline" style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem' }}>
-                        Review Roster
-                      </button>
+                      <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #8b5cf6', borderRadius: '0 8px 8px 0' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Daily Sentences Checks</div>
+                        <strong style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>{sentencesCount}</strong>
+                      </div>
+                      <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #10b981', borderRadius: '0 8px 8px 0' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Weekly Vlogs Checks</div>
+                        <strong style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>{vlogsCount}</strong>
+                      </div>
+                      <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #f59e0b', borderRadius: '0 8px 8px 0' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Oral Talks Graded</div>
+                        <strong style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>{customCount}</strong>
+                      </div>
+                      <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #1e3a8a', borderRadius: '0 8px 8px 0' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Exams Recorded</div>
+                        <strong style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>{examsCount}</strong>
+                      </div>
+                      <div style={{ padding: '1rem', background: 'rgba(239,68,68,0.03)', borderLeft: '3px solid #dc2626', borderRadius: '0 8px 8px 0' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#dc2626', textTransform: 'uppercase', fontWeight: 600 }}>Speaking Penalties</div>
+                        <strong style={{ fontSize: '1.4rem', color: '#dc2626' }}>{penaltiesCount}</strong>
+                      </div>
                     </div>
-                  ))
-                )}
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Staff Duties & Task Completion */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  
+                  {/* DAILY TASKS LOGGED BY STAFF (TODAY) */}
+                  <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+                      <CheckCircle2 size={18} className="text-primary" /> Daily Checklist Tasks Completed
+                    </h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                      Status of daily checks to be completed by staff today.
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                      {dailyTasks.length === 0 ? (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', fontStyle: 'italic' }}>No daily checklist tasks configured.</p>
+                      ) : (
+                        dailyTasks.map(task => {
+                          const log = dailyLogs.find(l => l.task_id === task.id);
+                          const completed = !!log;
+                          return (
+                            <div key={task.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.8rem', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                              <div>
+                                <strong style={{ fontSize: '0.95rem' }}>{task.title}</strong>
+                                {completed && log && (
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                                    Completed by: <strong>{staffList.find(s => s.id === log.completed_by)?.name || 'Staff'}</strong>
+                                  </div>
+                                )}
+                              </div>
+                              <span style={{ 
+                                fontSize: '0.75rem', 
+                                padding: '0.2rem 0.5rem', 
+                                borderRadius: '4px', 
+                                fontWeight: 700, 
+                                background: completed ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', 
+                                color: completed ? '#16a34a' : '#ea580c' 
+                              }}>
+                                {completed ? '✓ Done' : '✕ Pending'}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* PENDING STAFF ONE-OFF DUTIES */}
+                  <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+                      <AlertTriangle size={18} className="text-primary" /> Pending One-Off Staff Duties
+                    </h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+                      Assigned duties currently pending or in progress.
+                    </p>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                      {pendingOneOffs.length === 0 ? (
+                        <p style={{ color: '#16a34a', fontSize: '0.9rem', fontStyle: 'italic', fontWeight: 600 }}>✓ All one-off duties completed!</p>
+                      ) : (
+                        pendingOneOffs.map(task => (
+                          <div key={task.id} style={{ padding: '0.8rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #ea580c', borderRadius: '0 8px 8px 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <strong style={{ fontSize: '0.95rem' }}>{task.title}</strong>
+                              <span style={{ 
+                                fontSize: '0.7rem', 
+                                background: task.status === 'in_progress' ? 'rgba(234,88,12,0.1)' : 'rgba(0,0,0,0.05)', 
+                                color: task.status === 'in_progress' ? '#ea580c' : 'var(--text-muted)', 
+                                padding: '0.2rem 0.5rem', 
+                                borderRadius: '4px', 
+                                fontWeight: 700 
+                              }}>
+                                {task.status.replace('_', ' ')}
+                              </span>
+                            </div>
+                            {task.description && <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.3rem 0' }}>{task.description}</p>}
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                              Assigned to: <strong>{task.staff_profiles?.name || 'Unassigned'}</strong>
+                              {task.due_date && ` • Due: ${new Date(task.due_date).toLocaleDateString()}`}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RECENTLY COMPLETED ONE-OFF DUTIES */}
+                  {completedOneOffs.length > 0 && (
+                    <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+                      <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+                        <CheckCircle2 size={18} className="text-primary" /> Recently Completed One-Off Duties
+                      </h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '200px', overflowY: 'auto' }}>
+                        {completedOneOffs.map(task => (
+                          <div key={task.id} style={{ padding: '0.8rem', background: 'rgba(0,0,0,0.01)', borderLeft: '3px solid #16a34a', borderRadius: '0 8px 8px 0', opacity: 0.85 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <strong style={{ fontSize: '0.9rem', textDecoration: 'line-through' }}>{task.title}</strong>
+                              <span style={{ fontSize: '0.7rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>completed</span>
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                              Completed by: <strong>{task.staff_profiles?.name || 'Unassigned'}</strong>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
               </div>
-            </div>
 
-            {/* Live Leaderboard / Scoreboard Section */}
-            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(201,156,51,0.12)', paddingBottom: '1rem', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
-                <h3 style={{ fontSize: '1.25rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
-                  <TrendingUp size={20} className="text-primary" /> Live Leaderboard Standings
-                </h3>
+              {/* Live Leaderboard / Scoreboard Section */}
+              <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(201,156,51,0.12)', paddingBottom: '1rem', marginBottom: '1.5rem', gap: '1rem', flexWrap: 'wrap' }}>
+                  <h3 style={{ fontSize: '1.25rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+                    <TrendingUp size={20} className="text-primary" /> Live Leaderboard Standings
+                  </h3>
 
-                {/* Active Batches Selection Pills */}
-                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Select Live Batch:</span>
-                  {intervalsList.filter(i => i.is_active).length === 0 ? (
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No active batches</span>
+                  {/* Active Batches Selection Pills */}
+                  <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Select Live Batch:</span>
+                    {activeIntervals.length === 0 ? (
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No active batches</span>
+                    ) : (
+                      activeIntervals.map(interval => {
+                        const isSelected = overviewSelectedInterval === interval.id;
+                        return (
+                          <button
+                            key={interval.id}
+                            onClick={() => setOverviewSelectedInterval(interval.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              padding: '0.4rem 0.8rem',
+                              borderRadius: '20px',
+                              border: '1.5px solid',
+                              borderColor: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.06)',
+                              background: isSelected ? 'linear-gradient(135deg, rgba(201,156,51,0.12), rgba(201,156,51,0.03))' : 'white',
+                              color: isSelected ? 'var(--primary-dark)' : 'var(--text-main)',
+                              fontWeight: 700,
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              outline: 'none'
+                            }}
+                          >
+                            <span style={{
+                              display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
+                              background: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.2)'
+                            }}></span>
+                            <span>{getShortCourseName(interval.course_id)} • Batch {interval.batch_number}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Leaderboard list container */}
+                <div className="leaderboard-list">
+                  {overviewLeaderboard.length === 0 ? (
+                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      No student rankings logged for this period.
+                    </div>
                   ) : (
-                    intervalsList.filter(i => i.is_active).map(interval => {
-                      const isSelected = overviewSelectedInterval === interval.id;
+                    overviewLeaderboard.map(entry => {
+                      const initials = entry.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?';
+                      const topScore = overviewLeaderboard[0]?.total_score || 100;
+                      const relativePercent = topScore > 0 ? Math.min(100, Math.max(0, (entry.total_score / topScore) * 100)) : 0;
+
+                      // Rank badge logic
+                      const getRankBadge = (rank: number) => {
+                        if (rank === 1) return { bg: 'linear-gradient(135deg, #fbbf24, #d97706)', text: '👑 1st', color: 'white' };
+                        if (rank === 2) return { bg: 'linear-gradient(135deg, #e2e8f0, #94a3b8)', text: '🥈 2nd', color: '#1e293b' };
+                        if (rank === 3) return { bg: 'linear-gradient(135deg, #ffedd5, #b45309)', text: '🥉 3rd', color: '#78350f' };
+                        return { bg: '#f1f5f9', text: `#${rank}`, color: '#64748b' };
+                      };
+                      const rankBadge = getRankBadge(entry.rank);
+
+                      // Dynamic Avatar color gradient
+                      const getAvatarGradient = (id: string) => {
+                        const colors = [
+                          'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
+                          'linear-gradient(135deg, #10b981, #047857)', // Green
+                          'linear-gradient(135deg, #8b5cf6, #5b21b6)', // Purple
+                          'linear-gradient(135deg, #ec4899, #be185d)', // Pink
+                          'linear-gradient(135deg, #f97316, #c2410c)'  // Orange
+                        ];
+                        const charCodeSum = id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+                        return colors[charCodeSum % colors.length];
+                      };
+
                       return (
-                        <button
-                          key={interval.id}
-                          onClick={() => setOverviewSelectedInterval(interval.id)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            padding: '0.4rem 0.8rem',
-                            borderRadius: '20px',
-                            border: '1.5px solid',
-                            borderColor: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.06)',
-                            background: isSelected ? 'linear-gradient(135deg, rgba(201,156,51,0.12), rgba(201,156,51,0.03))' : 'white',
-                            color: isSelected ? 'var(--primary-dark)' : 'var(--text-main)',
-                            fontWeight: 700,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            outline: 'none'
+                        <div 
+                          key={entry.student_id} 
+                          className="rank-card"
+                          onClick={() => {
+                            const studentObj = studentList.find(s => s.id === entry.student_id);
+                            if (studentObj) handleOpenReport(studentObj);
                           }}
+                          style={{ cursor: 'pointer' }}
                         >
-                          <span style={{
-                            display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%',
-                            background: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.2)'
-                          }}></span>
-                          <span>{getShortCourseName(interval.course_id)} • Batch {interval.batch_number}</span>
-                        </button>
+                          {/* Rank Pill */}
+                          <div 
+                            className="rank-badge"
+                            style={{
+                              background: rankBadge.bg,
+                              color: rankBadge.color,
+                            }}
+                          >
+                            {rankBadge.text}
+                          </div>
+
+                          {/* Avatar Bubble */}
+                          <div 
+                            className="avatar-bubble"
+                            style={{
+                              background: getAvatarGradient(entry.student_id)
+                            }}
+                          >
+                            {initials}
+                          </div>
+
+                          {/* Name & Gamified Level progress bar */}
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 750, fontSize: '0.95rem', color: 'var(--text-main)' }}>
+                                {entry.name}
+                              </span>
+                            </div>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                              <span style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.06)', color: 'var(--text-muted)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                Lvl {entry.level}
+                              </span>
+                              <div style={{ height: '6px', flex: 1, background: 'rgba(0,0,0,0.05)', borderRadius: '10px', overflow: 'hidden', maxWidth: '200px' }}>
+                                <div 
+                                  style={{ 
+                                    height: '100%', 
+                                    width: `${relativePercent}%`, 
+                                    background: 'linear-gradient(90deg, #64748b 0%, #94a3b8 100%)', 
+                                    borderRadius: '10px' 
+                                  }}
+                                ></div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Total points XP */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '45px' }}>
+                            <span className="xp-badge" style={{ color: 'var(--text-main)' }}>
+                              {entry.total_score}
+                            </span>
+                            <span className="xp-label">
+                              XP
+                            </span>
+                          </div>
+                        </div>
                       );
                     })
                   )}
                 </div>
               </div>
 
-              {/* Leaderboard list container */}
-              <div className="leaderboard-list">
-                {overviewLeaderboard.length === 0 ? (
-                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    No student rankings logged for this period.
-                  </div>
-                ) : (
-                  overviewLeaderboard.map(entry => {
-                    const initials = entry.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?';
-                    const topScore = overviewLeaderboard[0]?.total_score || 100;
-                    const relativePercent = topScore > 0 ? Math.min(100, Math.max(0, (entry.total_score / topScore) * 100)) : 0;
-
-                    // Rank badge logic
-                    const getRankBadge = (rank: number) => {
-                      if (rank === 1) return { bg: 'linear-gradient(135deg, #fbbf24, #d97706)', text: '👑 1st', color: 'white' };
-                      if (rank === 2) return { bg: 'linear-gradient(135deg, #e2e8f0, #94a3b8)', text: '🥈 2nd', color: '#1e293b' };
-                      if (rank === 3) return { bg: 'linear-gradient(135deg, #ffedd5, #b45309)', text: '🥉 3rd', color: '#78350f' };
-                      return { bg: '#f1f5f9', text: `#${rank}`, color: '#64748b' };
-                    };
-                    const rankBadge = getRankBadge(entry.rank);
-
-                    // Dynamic Avatar color gradient
-                    const getAvatarGradient = (id: string) => {
-                      const colors = [
-                        'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
-                        'linear-gradient(135deg, #10b981, #047857)', // Green
-                        'linear-gradient(135deg, #8b5cf6, #5b21b6)', // Purple
-                        'linear-gradient(135deg, #ec4899, #be185d)', // Pink
-                        'linear-gradient(135deg, #f97316, #c2410c)'  // Orange
-                      ];
-                      const charCodeSum = id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-                      return colors[charCodeSum % colors.length];
-                    };
-
-                    return (
-                      <div 
-                        key={entry.student_id} 
-                        className="rank-card"
-                        onClick={() => {
-                          const studentObj = studentList.find(s => s.id === entry.student_id);
-                          if (studentObj) handleOpenReport(studentObj);
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        {/* Rank Pill */}
-                        <div 
-                          className="rank-badge"
-                          style={{
-                            background: rankBadge.bg,
-                            color: rankBadge.color,
-                          }}
-                        >
-                          {rankBadge.text}
-                        </div>
-
-                        {/* Avatar Bubble */}
-                        <div 
-                          className="avatar-bubble"
-                          style={{
-                            background: getAvatarGradient(entry.student_id)
-                          }}
-                        >
-                          {initials}
-                        </div>
-
-                        {/* Name & Gamified Level progress bar */}
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 750, fontSize: '0.95rem', color: 'var(--text-main)' }}>
-                              {entry.name}
-                            </span>
-                          </div>
-                          
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                            <span style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.06)', color: 'var(--text-muted)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
-                              Lvl {entry.level}
-                            </span>
-                            <div style={{ height: '6px', flex: 1, background: 'rgba(0,0,0,0.05)', borderRadius: '10px', overflow: 'hidden', maxWidth: '200px' }}>
-                              <div 
-                                style={{ 
-                                  height: '100%', 
-                                  width: `${relativePercent}%`, 
-                                  background: 'linear-gradient(90deg, #64748b 0%, #94a3b8 100%)', 
-                                  borderRadius: '10px' 
-                                }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Total points XP */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '45px' }}>
-                          <span className="xp-badge" style={{ color: 'var(--text-main)' }}>
-                            {entry.total_score}
-                          </span>
-                          <span className="xp-label">
-                            XP
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* TAB: Manage Tasks (Create and Delete Staff Tasks) */}
         {isLeadership && adminTab === 'tasks' && (
@@ -3175,7 +3413,16 @@ const AdminDashboard = () => {
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{cName} (Batch {int.batch_number})</div>
                         </div>
                         {int.is_active ? (
-                          <span style={{ fontSize: '0.75rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>Active</span>
+                          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', background: 'rgba(34,197,94,0.1)', color: '#16a34a', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>Active</span>
+                            <button 
+                              onClick={() => handleSetIntervalInactive(int.id)} 
+                              className="btn btn-outline" 
+                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.02)' }}
+                            >
+                              Deactivate
+                            </button>
+                          </div>
                         ) : (
                           <button 
                             onClick={() => handleToggleIntervalActiveStatus(int.id, int.course_id, int.batch_number)} 
