@@ -556,7 +556,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // Malayalam Penalty Trigger (-10 XP)
+  // Malayalam Penalty Trigger (-2 XP, multi-clickable)
   const handleMalayalamPenalty = async (studentId: string) => {
     if (!activeInterval || !currentUser) return;
     const targetDate = selectedGradingDate;
@@ -565,33 +565,112 @@ const AdminDashboard = () => {
 
     setUpdatingScores(prev => [...prev, lockKey]);
     try {
-      const { error } = await supabase.from('scores').insert([
-        {
-          student_id: studentId,
-          interval_id: activeInterval.id,
-          score_type: 'penalty',
-          points: -10,
-          max_points: 0,
-          activity_name: 'Malayalam Speaking Policy Violation',
-          logged_by: currentUser.id,
-          logged_date: targetDate
-        }
-      ]);
-      if (error) throw error;
+      const existingPenalty = scoresList.find(s => s.student_id === studentId && s.score_type === 'penalty');
+
+      if (existingPenalty) {
+        // Decrement points by 2
+        const { error: updateError } = await supabase
+          .from('scores')
+          .update({ points: existingPenalty.points - 2 })
+          .eq('id', existingPenalty.id);
+        if (updateError) throw updateError;
+      } else {
+        // Insert new penalty row
+        const { error: insertError } = await supabase.from('scores').insert([
+          {
+            student_id: studentId,
+            interval_id: activeInterval.id,
+            score_type: 'penalty',
+            points: -2,
+            max_points: 0,
+            activity_name: 'Malayalam Speaking Policy Violation',
+            logged_by: currentUser.id,
+            logged_date: targetDate
+          }
+        ]);
+        if (insertError) throw insertError;
+      }
 
       const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
-      await logActivity('malayalam_penalty', `Deducted -10 points from ${studName} for speaking Malayalam on ${targetDate}`);
+      const pointsAccrued = existingPenalty ? existingPenalty.points - 2 : -2;
+      await logActivity('malayalam_penalty', `Deducted -2 points from ${studName} for speaking Malayalam (Total: ${pointsAccrued} XP) on ${targetDate}`);
       
-      setMessage(`⚠️ Penalty logged: -10 points applied to ${studName}.`);
+      setMessage(`⚠️ Penalty logged: ${pointsAccrued} XP applied to ${studName}.`);
       await fetchClassroomScores(activeInterval.id, targetDate);
       await fetchClassroomLeaderboard(activeInterval.id);
     } catch (err: any) {
       console.error(err);
-      if (err.code === '23505') {
-        setMessage(`❌ Malayalam Penalty already logged for this student today.`);
+      setMessage(`❌ Failed to log penalty: ${err.message}`);
+    } finally {
+      setUpdatingScores(prev => prev.filter(k => k !== lockKey));
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  // One Minute Talk Score Grade (0-10)
+  const handleToggleOneMinuteTalk = async (studentId: string, val: string) => {
+    if (!activeInterval || !currentUser) return;
+    const targetDate = selectedGradingDate;
+    const lockKey = `${studentId}-talk`;
+    if (updatingScores.includes(lockKey)) return;
+
+    setUpdatingScores(prev => [...prev, lockKey]);
+    try {
+      const existingTalk = scoresList.find(
+        s => s.student_id === studentId && s.score_type === 'custom' && s.activity_name === 'One Minute Talk'
+      );
+
+      const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
+
+      if (val === '') {
+        // If cleared, delete from database
+        if (existingTalk) {
+          const { error: deleteError } = await supabase
+            .from('scores')
+            .delete()
+            .eq('id', existingTalk.id);
+          if (deleteError) throw deleteError;
+          await logActivity('one_minute_talk_delete', `Removed One Minute Talk score for ${studName} on ${targetDate}`);
+          setMessage(`🎙️ One Minute Talk score removed for ${studName}.`);
+        }
       } else {
-        setMessage(`❌ Failed to log penalty: ${err.message}`);
+        const pointsValue = parseInt(val);
+        if (existingTalk) {
+          // Update points
+          const { error: updateError } = await supabase
+            .from('scores')
+            .update({ points: pointsValue })
+            .eq('id', existingTalk.id);
+          if (updateError) throw updateError;
+          await logActivity('one_minute_talk_update', `Updated One Minute Talk score for ${studName} to ${pointsValue}/10 on ${targetDate}`);
+          setMessage(`🎙️ One Minute Talk score updated to ${pointsValue}/10 for ${studName}.`);
+        } else {
+          // Insert new score row
+          const { error: insertError } = await supabase
+            .from('scores')
+            .insert([
+              {
+                student_id: studentId,
+                interval_id: activeInterval.id,
+                points: pointsValue,
+                max_points: 10,
+                score_type: 'custom',
+                activity_name: 'One Minute Talk',
+                logged_by: currentUser.id,
+                logged_date: targetDate
+              }
+            ]);
+          if (insertError) throw insertError;
+          await logActivity('one_minute_talk_log', `Logged One Minute Talk score of ${pointsValue}/10 for ${studName} on ${targetDate}`);
+          setMessage(`🎙️ One Minute Talk score logged: ${pointsValue}/10 for ${studName}.`);
+        }
       }
+
+      await fetchClassroomScores(activeInterval.id, targetDate);
+      await fetchClassroomLeaderboard(activeInterval.id);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to log One Minute Talk score: ${err.message}`);
     } finally {
       setUpdatingScores(prev => prev.filter(k => k !== lockKey));
     }
@@ -1855,6 +1934,7 @@ const AdminDashboard = () => {
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Vocab (+5 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Daily Sentences (+5 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Weekly Vlog (+15 XP)</th>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>One Minute Talk (10 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Language Policy</th>
                               </tr>
                             </thead>
@@ -1898,15 +1978,58 @@ const AdminDashboard = () => {
                                       />
                                     </td>
 
+                                    {/* One Minute Talk select */}
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
+                                      {(() => {
+                                        const talkScoreObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'custom' && s.activity_name === 'One Minute Talk');
+                                        const currentValue = talkScoreObj ? talkScoreObj.points.toString() : '';
+                                        
+                                        return (
+                                          <select
+                                            value={currentValue}
+                                            onChange={(e) => handleToggleOneMinuteTalk(student.id, e.target.value)}
+                                            disabled={updatingScores.includes(`${student.id}-talk`)}
+                                            style={{
+                                              padding: '0.35rem 0.5rem',
+                                              borderRadius: '8px',
+                                              border: '1px solid rgba(201,156,51,0.25)',
+                                              background: currentValue ? 'rgba(201,156,51,0.08)' : 'white',
+                                              fontWeight: currentValue ? 700 : 500,
+                                              outline: 'none',
+                                              cursor: 'pointer',
+                                              fontSize: '0.85rem'
+                                            }}
+                                          >
+                                            <option value="">-</option>
+                                            {[...Array(11).keys()].map(n => (
+                                              <option key={n} value={n}>{n}/10</option>
+                                            ))}
+                                          </select>
+                                        );
+                                      })()}
+                                    </td>
+
                                     {/* Red Malayalam speaking deduction */}
                                     <td style={{ padding: '1rem 0.5rem', textAlign: 'right' }}>
-                                      <button 
-                                        onClick={() => handleMalayalamPenalty(student.id)} 
-                                        className="btn btn-outline" 
-                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5', background: 'rgba(239,68,68,0.03)' }}
-                                      >
-                                        <XCircle size={12} /> Malayalam Penalty (-10)
-                                      </button>
+                                      {(() => {
+                                        const penalty = scoresList.find(s => s.student_id === student.id && s.score_type === 'penalty');
+                                        const points = penalty ? penalty.points : 0;
+                                        return (
+                                          <button 
+                                            onClick={() => handleMalayalamPenalty(student.id)} 
+                                            className="btn btn-outline" 
+                                            style={{ 
+                                              padding: '0.4rem 0.8rem', fontSize: '0.75rem', 
+                                              color: points < 0 ? '#b91c1c' : '#dc2626', 
+                                              borderColor: points < 0 ? '#ef4444' : '#fca5a5', 
+                                              background: points < 0 ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.03)',
+                                              fontWeight: points < 0 ? 800 : 500
+                                            }}
+                                          >
+                                            <XCircle size={12} /> {points < 0 ? `Malayalam Penalty (${points})` : 'Malayalam Penalty (-2)'}
+                                          </button>
+                                        );
+                                      })()}
                                     </td>
                                   </tr>
                                 );
@@ -1983,17 +2106,58 @@ const AdminDashboard = () => {
                                   </button>
                                 </div>
 
+                                {/* One Minute Talk (Mobile) */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.8rem', background: 'rgba(0,0,0,0.02)', borderRadius: '10px', marginBottom: '0.8rem', border: '1px solid rgba(0,0,0,0.03)' }}>
+                                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>🎙️ One Minute Talk:</span>
+                                  {(() => {
+                                    const talkScoreObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'custom' && s.activity_name === 'One Minute Talk');
+                                    const currentValue = talkScoreObj ? talkScoreObj.points.toString() : '';
+                                    return (
+                                      <select
+                                        value={currentValue}
+                                        onChange={(e) => handleToggleOneMinuteTalk(student.id, e.target.value)}
+                                        disabled={updatingScores.includes(`${student.id}-talk`)}
+                                        style={{
+                                          padding: '0.3rem 0.5rem',
+                                          borderRadius: '6px',
+                                          border: '1px solid rgba(201,156,51,0.25)',
+                                          background: currentValue ? 'rgba(201,156,51,0.08)' : 'white',
+                                          fontWeight: currentValue ? 700 : 500,
+                                          outline: 'none',
+                                          cursor: 'pointer',
+                                          fontSize: '0.8rem'
+                                        }}
+                                      >
+                                        <option value="">-</option>
+                                        {[...Array(11).keys()].map(n => (
+                                          <option key={n} value={n}>{n}/10</option>
+                                        ))}
+                                      </select>
+                                    );
+                                  })()}
+                                </div>
+
                                 {/* Penalty */}
-                                <button
-                                  onClick={() => handleMalayalamPenalty(student.id)}
-                                  className="btn btn-outline"
-                                  style={{
-                                    padding: '0.4rem 0.8rem', fontSize: '0.75rem', color: '#dc2626', borderColor: '#fca5a5',
-                                    background: 'rgba(239,68,68,0.03)', width: '100%', justifyContent: 'center'
-                                  }}
-                                >
-                                  <XCircle size={12} /> Malayalam Speaking Penalty (-10 XP)
-                                </button>
+                                {(() => {
+                                  const penalty = scoresList.find(s => s.student_id === student.id && s.score_type === 'penalty');
+                                  const points = penalty ? penalty.points : 0;
+                                  return (
+                                    <button
+                                      onClick={() => handleMalayalamPenalty(student.id)}
+                                      className="btn btn-outline"
+                                      style={{
+                                        padding: '0.4rem 0.8rem', fontSize: '0.75rem', 
+                                        color: points < 0 ? '#b91c1c' : '#dc2626', 
+                                        borderColor: points < 0 ? '#ef4444' : '#fca5a5',
+                                        background: points < 0 ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.03)', 
+                                        width: '100%', justifyContent: 'center',
+                                        fontWeight: points < 0 ? 800 : 500
+                                      }}
+                                    >
+                                      <XCircle size={12} /> {points < 0 ? `Malayalam Speaking Penalty (${points} XP)` : 'Malayalam Speaking Penalty (-2 XP)'}
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             );
                           })}
