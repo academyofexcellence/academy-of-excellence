@@ -2334,14 +2334,25 @@ const AdminDashboard = () => {
               <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
                 
                 {/* Mode Selector */}
-                <div style={{ display: 'flex', borderBottom: '1px solid rgba(0,0,0,0.05)', marginBottom: '2rem', gap: '1.5rem' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  borderBottom: '1px solid rgba(0,0,0,0.05)', 
+                  marginBottom: '2rem', 
+                  gap: '1.5rem',
+                  overflowX: 'auto',
+                  whiteSpace: 'nowrap',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none'
+                }}>
                   <button 
                     onClick={() => setGradingMode('vocab_sentences')}
                     style={{
                       padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                       borderBottom: gradingMode === 'vocab_sentences' ? '3px solid var(--primary)' : '3px solid transparent',
                       color: gradingMode === 'vocab_sentences' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem'
+                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                      whiteSpace: 'nowrap', flexShrink: 0
                     }}
                   >
                     WhatsApp & Vlog Check-ins
@@ -2352,7 +2363,8 @@ const AdminDashboard = () => {
                       padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                       borderBottom: gradingMode === 'exam' ? '3px solid var(--primary)' : '3px solid transparent',
                       color: gradingMode === 'exam' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem'
+                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                      whiteSpace: 'nowrap', flexShrink: 0
                     }}
                   >
                     Conduct Exam
@@ -2363,7 +2375,8 @@ const AdminDashboard = () => {
                       padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                       borderBottom: gradingMode === 'custom' ? '3px solid var(--primary)' : '3px solid transparent',
                       color: gradingMode === 'custom' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem'
+                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                      whiteSpace: 'nowrap', flexShrink: 0
                     }}
                   >
                     Custom Activities
@@ -2374,7 +2387,8 @@ const AdminDashboard = () => {
                       padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                       borderBottom: gradingMode === 'leaderboard' ? '3px solid var(--primary)' : '3px solid transparent',
                       color: gradingMode === 'leaderboard' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem'
+                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                      whiteSpace: 'nowrap', flexShrink: 0
                     }}
                   >
                     🏆 Live Scoreboard
@@ -2386,7 +2400,8 @@ const AdminDashboard = () => {
                         padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                         borderBottom: gradingMode === 'manage' ? '3px solid var(--primary)' : '3px solid transparent',
                         color: gradingMode === 'manage' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                        fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem'
+                        fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                        whiteSpace: 'nowrap', flexShrink: 0
                       }}
                     >
                       Manage Students
@@ -2726,7 +2741,7 @@ const AdminDashboard = () => {
                                       outline: 'none', borderColor: hasHadithulArabiaToday ? '#22c55e' : 'transparent'
                                     }}
                                   >
-                                    <span style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>🕌</span>
+                                    <span style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>🌐</span>
                                     <span>Hadithul A</span>
                                     <span style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.1rem' }}>{hasHadithulArabiaToday ? '✓ Done' : '+10 XP'}</span>
                                   </button>
@@ -3221,16 +3236,16 @@ const AdminDashboard = () => {
                   placeholder="Search by name or email..." 
                   value={studentSearch} 
                   onChange={(e) => setStudentSearch(e.target.value)} 
-                  style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
                 />
               </div>
 
-              <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '0.4rem', minWidth: 0 }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Course</label>
                 <select 
                   value={studentFilterCourse} 
                   onChange={(e) => setStudentFilterCourse(e.target.value)} 
-                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
                 >
                   <option value="">All Courses</option>
                   {courses.map(c => (
@@ -3239,12 +3254,12 @@ const AdminDashboard = () => {
                 </select>
               </div>
 
-              <div style={{ flex: '1 1 100px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{ flex: '1 1 100px', display: 'flex', flexDirection: 'column', gap: '0.4rem', minWidth: 0 }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Batch</label>
                 <select 
                   value={studentFilterBatch} 
                   onChange={(e) => setStudentFilterBatch(e.target.value)} 
-                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
                 >
                   <option value="">All Batches</option>
                   {[...Array(20)].map((_, i) => (
@@ -3253,12 +3268,12 @@ const AdminDashboard = () => {
                 </select>
               </div>
 
-              <div style={{ flex: '1 1 120px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{ flex: '1 1 120px', display: 'flex', flexDirection: 'column', gap: '0.4rem', minWidth: 0 }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Status</label>
                 <select 
                   value={studentFilterStatus} 
                   onChange={(e) => setStudentFilterStatus(e.target.value)} 
-                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
                 >
                   <option value="">All Statuses</option>
                   <option value="pending">Pending</option>

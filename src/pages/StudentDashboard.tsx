@@ -12,7 +12,8 @@ import {
   Award,
   FileText,
   Volume2,
-  AlertTriangle
+  AlertTriangle,
+  Globe
 } from 'lucide-react';
 
 interface StudentProfile {
@@ -705,7 +706,7 @@ const StudentDashboard = () => {
                 {/* Hadithul Arabia item */}
                 <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <BookOpen size={20} style={{ color: weeklyStatus.hadithulArabia ? '#16a34a' : 'var(--text-muted)' }} />
+                    <Globe size={20} style={{ color: weeklyStatus.hadithulArabia ? '#16a34a' : 'var(--text-muted)' }} />
                     <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Hadithul Arabia Attendance</span>
                   </div>
                   <span style={{ fontSize: '0.7rem', color: weeklyStatus.hadithulArabia ? '#16a34a' : '#ea580c', fontWeight: 700, padding: '0.2rem 0.5rem', background: weeklyStatus.hadithulArabia ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', borderRadius: '50px' }}>
