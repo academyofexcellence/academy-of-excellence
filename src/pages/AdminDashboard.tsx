@@ -522,7 +522,7 @@ const AdminDashboard = () => {
   // --- STUDENT SCOREBOARD & LOG OPERATIONS ---
 
   // Toggle student check-in (Daily Vocab / Sentences / Weekly Vlog)
-  const handleToggleStudentScore = async (studentId: string, scoreType: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog', isChecked: boolean) => {
+  const handleToggleStudentScore = async (studentId: string, scoreType: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog' | 'video_reaction' | 'hadithul_arabia', isChecked: boolean) => {
     if (!activeInterval || !currentUser) return;
     const lockKey = `${studentId}-${scoreType}`;
     if (updatingScores.includes(lockKey)) return;
@@ -531,8 +531,14 @@ const AdminDashboard = () => {
     const targetDate = selectedGradingDate;
     
     // Define point values
-    const pointsMap = { daily_vocab: 5, daily_sentences: 5, weekly_vlog: 15 };
-    const activityNameMap = { daily_vocab: 'Daily Vocabulary', daily_sentences: 'Daily Sentences', weekly_vlog: 'Weekly Vlog' };
+    const pointsMap = { daily_vocab: 5, daily_sentences: 5, weekly_vlog: 15, video_reaction: 15, hadithul_arabia: 10 };
+    const activityNameMap = { 
+      daily_vocab: 'Daily Vocabulary', 
+      daily_sentences: 'Daily Sentences', 
+      weekly_vlog: 'Weekly Vlog',
+      video_reaction: 'Video Reaction Task',
+      hadithul_arabia: 'Hadithul Arabia Attendance'
+    };
 
     try {
       if (isChecked) {
@@ -1707,6 +1713,8 @@ const AdminDashboard = () => {
           const vocabCount = todayScores.filter(s => s.score_type === 'daily_vocab').length;
           const sentencesCount = todayScores.filter(s => s.score_type === 'daily_sentences').length;
           const vlogsCount = todayScores.filter(s => s.score_type === 'weekly_vlog').length;
+          const videoReactionCount = todayScores.filter(s => s.score_type === 'video_reaction').length;
+          const hadithulArabiaCount = todayScores.filter(s => s.score_type === 'hadithul_arabia').length;
           const penaltiesCount = todayScores.filter(s => s.score_type === 'penalty').length;
           const examsCount = todayScores.filter(s => s.score_type === 'exam').length;
           const customCount = todayScores.filter(s => s.score_type === 'custom' && s.activity_name === 'One Minute Talk').length;
@@ -1787,6 +1795,14 @@ const AdminDashboard = () => {
                       <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #10b981', borderRadius: '0 8px 8px 0' }}>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Weekly Vlogs Checks</div>
                         <strong style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>{vlogsCount}</strong>
+                      </div>
+                      <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #f43f5e', borderRadius: '0 8px 8px 0' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Video Reactions Logged</div>
+                        <strong style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>{videoReactionCount}</strong>
+                      </div>
+                      <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #06b6d4', borderRadius: '0 8px 8px 0' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Hadithul Arabia Logged</div>
+                        <strong style={{ fontSize: '1.4rem', color: 'var(--text-main)' }}>{hadithulArabiaCount}</strong>
                       </div>
                       <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.015)', borderLeft: '3px solid #f59e0b', borderRadius: '0 8px 8px 0' }}>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Oral Talks Graded</div>
@@ -2415,6 +2431,8 @@ const AdminDashboard = () => {
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Vocab (+5 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Daily Sentences (+5 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Weekly Vlog (+15 XP)</th>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Video Reaction (+15 XP)</th>
+                                <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>Hadithul Arabia (+10 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'center' }}>One Minute Talk (10 XP)</th>
                                 <th style={{ padding: '0.8rem 0.5rem', fontWeight: 700, textAlign: 'right' }}>Language Policy</th>
                               </tr>
@@ -2424,6 +2442,8 @@ const AdminDashboard = () => {
                                 const hasVocabToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_vocab');
                                 const hasSentencesToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_sentences');
                                 const hasVlogToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'weekly_vlog');
+                                const hasVideoReactionToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'video_reaction');
+                                const hasHadithulArabiaToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'hadithul_arabia');
 
                                 return (
                                   <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
@@ -2492,6 +2512,26 @@ const AdminDashboard = () => {
                                         type="checkbox" 
                                         checked={hasVlogToday}
                                         onChange={(e) => handleToggleStudentScore(student.id, 'weekly_vlog', e.target.checked)}
+                                        style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                      />
+                                    </td>
+
+                                    {/* Video Reaction check */}
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={hasVideoReactionToday}
+                                        onChange={(e) => handleToggleStudentScore(student.id, 'video_reaction', e.target.checked)}
+                                        style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                      />
+                                    </td>
+
+                                    {/* Hadithul Arabia check */}
+                                    <td style={{ padding: '1rem 0.5rem', textAlign: 'center' }}>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={hasHadithulArabiaToday}
+                                        onChange={(e) => handleToggleStudentScore(student.id, 'hadithul_arabia', e.target.checked)}
                                         style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: 'var(--primary)' }}
                                       />
                                     </td>
@@ -2591,6 +2631,8 @@ const AdminDashboard = () => {
                             const hasVocabToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_vocab');
                             const hasSentencesToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'daily_sentences');
                             const hasVlogToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'weekly_vlog');
+                            const hasVideoReactionToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'video_reaction');
+                            const hasHadithulArabiaToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'hadithul_arabia');
 
                             return (
                               <div key={student.id} className="glass-card" style={{ padding: '1.2rem', border: '1px solid rgba(201,156,51,0.15)', background: 'white', borderRadius: '14px' }}>
@@ -2653,6 +2695,40 @@ const AdminDashboard = () => {
                                     <span style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>🎥</span>
                                     <span>Vlog</span>
                                     <span style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.1rem' }}>{hasVlogToday ? '✓ Approved' : '+15 XP'}</span>
+                                  </button>
+
+                                  {/* Video Reaction */}
+                                  <button
+                                    onClick={() => handleToggleStudentScore(student.id, 'video_reaction', !hasVideoReactionToday)}
+                                    style={{
+                                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                      padding: '0.6rem 0.4rem', borderRadius: '10px', border: '1px solid transparent',
+                                      background: hasVideoReactionToday ? 'rgba(34,197,94,0.12)' : 'rgba(0,0,0,0.03)',
+                                      color: hasVideoReactionToday ? '#16a34a' : 'var(--text-muted)',
+                                      fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
+                                      outline: 'none', borderColor: hasVideoReactionToday ? '#22c55e' : 'transparent'
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>💬</span>
+                                    <span>Reaction</span>
+                                    <span style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.1rem' }}>{hasVideoReactionToday ? '✓ Done' : '+15 XP'}</span>
+                                  </button>
+
+                                  {/* Hadithul Arabia */}
+                                  <button
+                                    onClick={() => handleToggleStudentScore(student.id, 'hadithul_arabia', !hasHadithulArabiaToday)}
+                                    style={{
+                                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                                      padding: '0.6rem 0.4rem', borderRadius: '10px', border: '1px solid transparent',
+                                      background: hasHadithulArabiaToday ? 'rgba(34,197,94,0.12)' : 'rgba(0,0,0,0.03)',
+                                      color: hasHadithulArabiaToday ? '#16a34a' : 'var(--text-muted)',
+                                      fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s',
+                                      outline: 'none', borderColor: hasHadithulArabiaToday ? '#22c55e' : 'transparent'
+                                    }}
+                                  >
+                                    <span style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>🕌</span>
+                                    <span>Hadithul A</span>
+                                    <span style={{ fontSize: '0.65rem', opacity: 0.8, marginTop: '0.1rem' }}>{hasHadithulArabiaToday ? '✓ Done' : '+10 XP'}</span>
                                   </button>
                                 </div>
 
@@ -3582,6 +3658,8 @@ const AdminDashboard = () => {
                   const vocabCount = scores.filter(s => s.score_type === 'daily_vocab').length;
                   const sentencesCount = scores.filter(s => s.score_type === 'daily_sentences').length;
                   const vlogCount = scores.filter(s => s.score_type === 'weekly_vlog').length;
+                  const videoReactionCount = scores.filter(s => s.score_type === 'video_reaction').length;
+                  const hadithulArabiaCount = scores.filter(s => s.score_type === 'hadithul_arabia').length;
 
                   // 3. Oral Talk (One Minute Talk)
                   const talkScores = scores.filter(s => s.score_type === 'custom' && s.activity_name === 'One Minute Talk');
@@ -3677,6 +3755,16 @@ const AdminDashboard = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Weekly Vlogs</span>
                             <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount}</span>
+                          </div>
+                          <div style={{ width: '1px', height: '25px', background: 'rgba(201,156,51,0.2)' }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Video Reaction</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{videoReactionCount}</span>
+                          </div>
+                          <div style={{ width: '1px', height: '25px', background: 'rgba(201,156,51,0.2)' }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hadithul Arabia</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{hadithulArabiaCount}</span>
                           </div>
                         </div>
                       </div>

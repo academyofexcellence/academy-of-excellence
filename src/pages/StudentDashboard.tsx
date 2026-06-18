@@ -38,7 +38,7 @@ interface LeaderboardEntry {
 interface ScoreLog {
   id: string;
   activity_name: string;
-  score_type: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog' | 'exam' | 'penalty' | 'custom' | 'attendance';
+  score_type: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog' | 'video_reaction' | 'hadithul_arabia' | 'exam' | 'penalty' | 'custom' | 'attendance';
   points: number;
   max_points: number;
   logged_date: string;
@@ -67,7 +67,9 @@ const StudentDashboard = () => {
     vocab: { [key: string]: boolean };
     sentences: { [key: string]: boolean };
     vlog: boolean;
-  }>({ vocab: {}, sentences: {}, vlog: false });
+    videoReaction: boolean;
+    hadithulArabia: boolean;
+  }>({ vocab: {}, sentences: {}, vlog: false, videoReaction: false, hadithulArabia: false });
 
   useEffect(() => {
     checkSession();
@@ -232,6 +234,8 @@ const StudentDashboard = () => {
         const vocabMap: { [key: string]: boolean } = {};
         const sentenceMap: { [key: string]: boolean } = {};
         let hasVlog = false;
+        let hasVideoReaction = false;
+        let hasHadithulArabia = false;
 
         weekDates.forEach(d => {
           vocabMap[d] = false;
@@ -244,17 +248,25 @@ const StudentDashboard = () => {
             if (log.score_type === 'daily_vocab') vocabMap[logDateStr] = true;
             if (log.score_type === 'daily_sentences') sentenceMap[logDateStr] = true;
           }
-          // Vlog is checked weekly, check if any vlog is logged in current week (last 7 days)
           const logDateObj = new Date(log.logged_date);
+          // Vlog is checked weekly, check if any vlog is logged in current week (last 7 days)
           if (log.score_type === 'weekly_vlog' && logDateObj >= monday) {
             hasVlog = true;
+          }
+          if (log.score_type === 'video_reaction' && logDateObj >= monday) {
+            hasVideoReaction = true;
+          }
+          if (log.score_type === 'hadithul_arabia' && logDateObj >= monday) {
+            hasHadithulArabia = true;
           }
         });
 
         setWeeklyStatus({
           vocab: vocabMap,
           sentences: sentenceMap,
-          vlog: hasVlog
+          vlog: hasVlog,
+          videoReaction: hasVideoReaction,
+          hadithulArabia: hasHadithulArabia
         });
       }
     } catch (err) {
@@ -310,6 +322,8 @@ const StudentDashboard = () => {
   const vocabCount = recentLogs.filter(log => log.score_type === 'daily_vocab').length;
   const sentencesCount = recentLogs.filter(log => log.score_type === 'daily_sentences').length;
   const vlogCount = recentLogs.filter(log => log.score_type === 'weekly_vlog').length;
+  const videoReactionCount = recentLogs.filter(log => log.score_type === 'video_reaction').length;
+  const hadithulArabiaCount = recentLogs.filter(log => log.score_type === 'hadithul_arabia').length;
 
   const talkLogs = recentLogs.filter(log => log.score_type === 'custom' && log.activity_name === 'One Minute Talk');
   const talkAvg = talkLogs.length > 0 ? (talkLogs.reduce((sum, log) => sum + log.points, 0) / talkLogs.length).toFixed(1) : 'N/A';
@@ -677,6 +691,28 @@ const StudentDashboard = () => {
                   </span>
                 </div>
 
+                {/* Video Reaction item */}
+                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <MessageSquare size={20} style={{ color: weeklyStatus.videoReaction ? '#16a34a' : 'var(--text-muted)' }} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Video Reaction Task</span>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: weeklyStatus.videoReaction ? '#16a34a' : '#ea580c', fontWeight: 700, padding: '0.2rem 0.5rem', background: weeklyStatus.videoReaction ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', borderRadius: '50px' }}>
+                    {weeklyStatus.videoReaction ? 'Approved' : 'Pending'}
+                  </span>
+                </div>
+
+                {/* Hadithul Arabia item */}
+                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <BookOpen size={20} style={{ color: weeklyStatus.hadithulArabia ? '#16a34a' : 'var(--text-muted)' }} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Hadithul Arabia Attendance</span>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', color: weeklyStatus.hadithulArabia ? '#16a34a' : '#ea580c', fontWeight: 700, padding: '0.2rem 0.5rem', background: weeklyStatus.hadithulArabia ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', borderRadius: '50px' }}>
+                    {weeklyStatus.hadithulArabia ? 'Approved' : 'Pending'}
+                  </span>
+                </div>
+
               </div>
             </div>
 
@@ -754,6 +790,16 @@ const StudentDashboard = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vlogs</span>
                   <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount}</span>
+                </div>
+                <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Reactions</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{videoReactionCount}</span>
+                </div>
+                <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hadithul A.</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{hadithulArabiaCount}</span>
                 </div>
               </div>
 
