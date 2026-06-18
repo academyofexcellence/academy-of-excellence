@@ -317,6 +317,7 @@ const StudentDashboard = () => {
   const totalAttendance = attendanceLogs.length;
   const onTimeCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('on time')).length;
   const lateCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('late')).length;
+  const halfDayCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('half day')).length;
   const absentCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('absent')).length;
   const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
 
@@ -733,7 +734,7 @@ const StudentDashboard = () => {
                     <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--primary-dark)' }}>{attendanceRate}%</span>
                   </div>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    On Time: {onTimeCount}/{totalAttendance} Days (Late: {lateCount}, Absent: {absentCount})
+                    On Time: {onTimeCount}/{totalAttendance} Days (Late: {lateCount}, Half Day: {halfDayCount}, Absent: {absentCount})
                   </span>
                 </div>
 

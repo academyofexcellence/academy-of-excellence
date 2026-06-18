@@ -703,7 +703,7 @@ const AdminDashboard = () => {
           setMessage(`📅 Attendance removed for ${studName}.`);
         }
       } else {
-        const pointsValue = statusValue === 'On Time' ? 10 : 0;
+        const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
         const dbActivityName = `Attendance: ${statusValue}`;
         
         if (existingAttendance) {
@@ -1705,9 +1705,10 @@ const AdminDashboard = () => {
           // Attendance stats for today
           const attPresent = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: On Time')).length;
           const attLate = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: Late')).length;
+          const attHalfDay = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: Half Day')).length;
           const attAbsent = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: Absent')).length;
-          const attMarked = attPresent + attLate + attAbsent;
-          const attendancePercent = attMarked > 0 ? Math.round(((attPresent + attLate) / attMarked) * 100) : 0;
+          const attMarked = attPresent + attLate + attHalfDay + attAbsent;
+          const attendancePercent = attMarked > 0 ? Math.round(((attPresent + attLate + attHalfDay) / attMarked) * 100) : 0;
 
           // Student activities check-ins today
           const vocabCount = todayScores.filter(s => s.score_type === 'daily_vocab').length;
@@ -1762,7 +1763,7 @@ const AdminDashboard = () => {
                     {attendancePercent}%
                   </p>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                    {attPresent + attLate} Present / {attMarked} Marked
+                    {attPresent + attLate + attHalfDay} Present / {attMarked} Marked
                   </span>
                 </div>
               </div>
@@ -2484,8 +2485,8 @@ const AdminDashboard = () => {
                                               padding: '0.35rem 0.5rem',
                                               borderRadius: '8px',
                                               border: '1px solid rgba(201,156,51,0.25)',
-                                              background: currentValue === 'On Time' ? 'rgba(34,197,94,0.08)' : currentValue ? 'rgba(0,0,0,0.04)' : 'white',
-                                              color: currentValue === 'On Time' ? '#16a34a' : currentValue === 'Absent' ? '#dc2626' : currentValue === 'Late' ? '#b45309' : 'var(--text-muted)',
+                                              background: currentValue === 'On Time' ? 'rgba(34,197,94,0.08)' : currentValue === 'Late' ? 'rgba(180,83,9,0.08)' : currentValue === 'Half Day' ? 'rgba(59,130,246,0.08)' : currentValue === 'Absent' ? 'rgba(239,68,68,0.08)' : 'white',
+                                              color: currentValue === 'On Time' ? '#16a34a' : currentValue === 'Late' ? '#b45309' : currentValue === 'Half Day' ? '#3b82f6' : currentValue === 'Absent' ? '#dc2626' : 'var(--text-muted)',
                                               fontWeight: currentValue ? 700 : 500,
                                               outline: 'none',
                                               cursor: 'pointer',
@@ -2494,7 +2495,8 @@ const AdminDashboard = () => {
                                           >
                                             <option value="">- Select -</option>
                                             <option value="On Time">On Time (+10 XP)</option>
-                                            <option value="Late">Late (0 XP)</option>
+                                            <option value="Late">Late (+7 XP)</option>
+                                            <option value="Half Day">Half Day (+5 XP)</option>
                                             <option value="Absent">Absent (0 XP)</option>
                                           </select>
                                         );
@@ -2764,8 +2766,8 @@ const AdminDashboard = () => {
                                           padding: '0.3rem 0.5rem',
                                           borderRadius: '6px',
                                           border: '1px solid rgba(201,156,51,0.25)',
-                                          background: currentValue === 'On Time' ? 'rgba(34,197,94,0.08)' : currentValue ? 'rgba(0,0,0,0.04)' : 'white',
-                                          color: currentValue === 'On Time' ? '#16a34a' : currentValue === 'Absent' ? '#dc2626' : currentValue === 'Late' ? '#b45309' : 'var(--text-muted)',
+                                          background: currentValue === 'On Time' ? 'rgba(34,197,94,0.08)' : currentValue === 'Late' ? 'rgba(180,83,9,0.08)' : currentValue === 'Half Day' ? 'rgba(59,130,246,0.08)' : currentValue === 'Absent' ? 'rgba(239,68,68,0.08)' : 'white',
+                                          color: currentValue === 'On Time' ? '#16a34a' : currentValue === 'Late' ? '#b45309' : currentValue === 'Half Day' ? '#3b82f6' : currentValue === 'Absent' ? '#dc2626' : 'var(--text-muted)',
                                           fontWeight: currentValue ? 700 : 500,
                                           outline: 'none',
                                           cursor: 'pointer',
@@ -2774,7 +2776,8 @@ const AdminDashboard = () => {
                                       >
                                         <option value="">- Select -</option>
                                         <option value="On Time">On Time (+10 XP)</option>
-                                        <option value="Late">Late (0 XP)</option>
+                                        <option value="Late">Late (+7 XP)</option>
+                                        <option value="Half Day">Half Day (+5 XP)</option>
                                         <option value="Absent">Absent (0 XP)</option>
                                       </select>
                                     );
@@ -3666,6 +3669,7 @@ const AdminDashboard = () => {
                   const totalAttendance = attendanceRecords.length;
                   const onTimeCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('on time')).length;
                   const lateCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('late')).length;
+                  const halfDayCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('half day')).length;
                   const absentCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('absent')).length;
                   const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
 
@@ -3705,7 +3709,7 @@ const AdminDashboard = () => {
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
                             <div>On Time: <strong style={{ color: 'var(--text-main)' }}>{onTimeCount}</strong></div>
-                            <div>Late: <strong style={{ color: 'var(--text-main)' }}>{lateCount}</strong> | Absent: <strong style={{ color: 'var(--text-main)' }}>{absentCount}</strong></div>
+                            <div>Late: <strong style={{ color: 'var(--text-main)' }}>{lateCount}</strong> | Half Day: <strong style={{ color: 'var(--text-main)' }}>{halfDayCount}</strong> | Absent: <strong style={{ color: 'var(--text-main)' }}>{absentCount}</strong></div>
                           </div>
                         </div>
 
