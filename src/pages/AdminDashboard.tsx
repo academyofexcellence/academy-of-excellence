@@ -120,6 +120,7 @@ const AdminDashboard = () => {
   const [scoresList, setScoresList] = useState<any[]>([]);
   const [updatingScores, setUpdatingScores] = useState<string[]>([]);
   const [overviewLeaderboard, setOverviewLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [classroomLeaderboard, setClassroomLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [overviewSelectedInterval, setOverviewSelectedInterval] = useState<string>('');
   
   // Student Roster Tab Filters
@@ -566,6 +567,7 @@ const AdminDashboard = () => {
   const fetchClassroomLeaderboard = async (intervalId: string) => {
     if (!filterCourse || !filterBatch) return;
     const entries = await fetchLeaderboardData(intervalId, filterCourse, parseInt(filterBatch));
+    setClassroomLeaderboard(entries);
     if (overviewSelectedInterval === intervalId) {
       setOverviewLeaderboard(entries);
     }
@@ -1052,6 +1054,7 @@ const AdminDashboard = () => {
         scores: prev.scores.map(s => s.id === scoreId ? { ...s, points: pointsValue, activity_name: dbActivityName } : s)
       }));
       
+      if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
       setMessage('📅 Attendance updated successfully.');
     } catch (err: any) {
       console.error(err);
@@ -1076,6 +1079,7 @@ const AdminDashboard = () => {
         scores: prev.scores.filter(s => s.id !== scoreId)
       }));
       
+      if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
       setMessage('🗑️ Log entry deleted successfully.');
     } catch (err: any) {
       console.error(err);
@@ -1103,6 +1107,7 @@ const AdminDashboard = () => {
           ...prev,
           scores: prev.scores.filter(s => s.id !== existing.id)
         }));
+        if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
         setMessage(`Removed ${scoreType.replace('daily_', '').replace('_', ' ')} submission.`);
       } else {
         const studentCourseId = selectedReportStudent.course_id;
@@ -1144,6 +1149,7 @@ const AdminDashboard = () => {
             scores: [...prev.scores, data[0]].sort((a, b) => new Date(b.logged_date).getTime() - new Date(a.logged_date).getTime())
           }));
         }
+        if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
         setMessage(`Logged ${activityName} submission.`);
       }
     } catch (err: any) {
@@ -1194,6 +1200,7 @@ const AdminDashboard = () => {
           };
         });
       }
+      if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
       setMessage(`📅 Attendance logged for ${addLogDate} as ${statusValue}.`);
     } catch (err: any) {
       console.error(err);
@@ -1272,6 +1279,7 @@ const AdminDashboard = () => {
       setAddWorkReaction(false);
       setAddWorkHadithul(false);
 
+      if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
       setMessage(`📚 Checklist tasks logged for ${addLogDate}.`);
     } catch (err: any) {
       console.error(err);
@@ -1336,6 +1344,7 @@ const AdminDashboard = () => {
       setAddGradeTitle('');
       setAddGradePoints(0);
       setAddGradeMaxPoints(100);
+      if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
       setMessage(`📝 Log entry created successfully.`);
     } catch (err: any) {
       console.error(err);
@@ -3323,7 +3332,10 @@ const AdminDashboard = () => {
                     Custom Activities
                   </button>
                   <button 
-                    onClick={() => setGradingMode('leaderboard')}
+                    onClick={() => {
+                      setGradingMode('leaderboard');
+                      if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
+                    }}
                     style={{
                       padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                       borderBottom: gradingMode === 'leaderboard' ? '3px solid var(--primary)' : '3px solid transparent',
@@ -3817,40 +3829,7 @@ const AdminDashboard = () => {
                     ) : (
                       <div className="leaderboard-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                         {(() => {
-                          // Calculate leaderboard scores in-memory
-                          const scoreMap: { [studentId: string]: number } = {};
-                          filteredActiveStudents.forEach(s => { scoreMap[s.id] = 0; });
-                          
-                          scoresList.forEach(s => {
-                            if (scoreMap[s.student_id] !== undefined) {
-                              scoreMap[s.student_id] += s.points;
-                            }
-                          });
-
-                          const entries: LeaderboardEntry[] = filteredActiveStudents.map(s => {
-                            const total = scoreMap[s.id];
-                            const level = Math.min(100, Math.max(1, Math.floor(total / 100) + 1));
-                            return {
-                              student_id: s.id,
-                              name: s.name,
-                              total_score: total,
-                              level: level,
-                              rank: 1
-                            };
-                          });
-
-                          // Sort descending
-                          entries.sort((a, b) => b.total_score - a.total_score);
-
-                          // Assign ranks
-                          let currentRank = 1;
-                          for (let i = 0; i < entries.length; i++) {
-                            if (i > 0 && entries[i].total_score < entries[i - 1].total_score) {
-                              currentRank += 1;
-                            }
-                            entries[i].rank = currentRank;
-                          }
-
+                          const entries = classroomLeaderboard;
                           const topScore = entries[0]?.total_score || 100;
 
                           // Rank badge helper
