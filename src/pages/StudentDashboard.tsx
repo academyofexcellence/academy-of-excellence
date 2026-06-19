@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   Globe,
   Sparkles,
-  Compass
+  Compass,
+  Printer
 } from 'lucide-react';
 
 interface StudentProfile {
@@ -24,6 +25,7 @@ interface StudentProfile {
   name: string;
   course_id: string;
   batch_number: number;
+  roll_number?: string;
   status: 'pending' | 'active' | 'inactive';
   courses?: {
     name: string;
@@ -102,6 +104,473 @@ const StudentDashboard = () => {
     } catch (err) {
       console.error('Error fetching student remarks:', err);
     }
+  };
+
+  const handlePrintReport = (student: StudentProfile, scores: any[]) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to print the report.');
+      return;
+    }
+    
+    // Format the date
+    const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    // Calculate metrics
+    const attendanceRecords = scores.filter(s => s.score_type === 'attendance');
+    const totalAttendance = attendanceRecords.length;
+    const onTimeCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('on time')).length;
+    const lateCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('late')).length;
+    const halfDayCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('half day')).length;
+    const absentCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('absent')).length;
+    const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
+
+    const vocabCount = scores.filter(s => s.score_type === 'daily_vocab').length;
+    const sentencesCount = scores.filter(s => s.score_type === 'daily_sentences').length;
+    const vlogCount = scores.filter(s => s.score_type === 'weekly_vlog').length;
+    const videoReactionCount = scores.filter(s => s.score_type === 'video_reaction').length;
+    const hadithulArabiaCount = scores.filter(s => s.score_type === 'hadithul_arabia').length;
+
+    const talkScores = scores.filter(s => s.score_type === 'custom' && s.activity_name === 'One Minute Talk');
+    const talkAvg = talkScores.length > 0 ? (talkScores.reduce((sum, s) => sum + s.points, 0) / talkScores.length).toFixed(1) : 'N/A';
+
+    const examScoresList = scores.filter(s => s.score_type === 'exam');
+    const examAvg = examScoresList.length > 0 
+      ? Math.round(examScoresList.reduce((sum, s) => sum + (s.points / s.max_points) * 100, 0) / examScoresList.length) 
+      : null;
+
+    const penaltyRecords = scores.filter(s => s.score_type === 'penalty');
+    const totalPenaltiesCount = penaltyRecords.reduce((sum, r) => sum + Math.round(Math.abs(r.points) / 2), 0);
+
+    // Format Attendance Rows
+    const attendanceRows = attendanceRecords.length === 0 
+      ? `<tr><td colspan="3" style="padding: 10px; text-align: center; color: #888; font-style: italic;">No attendance logged.</td></tr>`
+      : attendanceRecords.map(rec => {
+          const status = rec.activity_name.replace('Attendance: ', '');
+          let statusColor = '#666';
+          if (status === 'On Time') statusColor = '#16a34a';
+          else if (status === 'Late') statusColor = '#b45309';
+          else if (status === 'Half Day') statusColor = '#3b82f6';
+          else if (status === 'Absent') statusColor = '#dc2626';
+          
+          return `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 8px 10px;">${new Date(rec.logged_date).toLocaleDateString()}</td>
+              <td style="padding: 8px 10px; font-weight: bold; color: ${statusColor};">${status}</td>
+              <td style="padding: 8px 10px; text-align: right;">${rec.points > 0 ? '+' : ''}${rec.points} XP</td>
+            </tr>
+          `;
+        }).join('');
+
+    // Format Work Rows
+    const workTypes = ['daily_vocab', 'daily_sentences', 'weekly_vlog', 'video_reaction', 'hadithul_arabia'];
+    const workRecords = scores.filter(s => workTypes.includes(s.score_type));
+    const workGroupByDate = workRecords.reduce((acc, score) => {
+      const d = score.logged_date;
+      if (!acc[d]) {
+        acc[d] = { daily_vocab: false, daily_sentences: false, weekly_vlog: false, video_reaction: false, hadithul_arabia: false };
+      }
+      acc[d][score.score_type] = true;
+      return acc;
+    }, {} as any);
+    const workDatesSorted = Object.keys(workGroupByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+    const workRows = workDatesSorted.length === 0
+      ? `<tr><td colspan="6" style="padding: 10px; text-align: center; color: #888; font-style: italic;">No work logged.</td></tr>`
+      : workDatesSorted.map(dateStr => {
+          const entry = workGroupByDate[dateStr];
+          const check = (done: boolean) => done ? `<span style="color: #16a34a; font-weight: bold;">✓</span>` : `<span style="color: #ccc;">-</span>`;
+          return `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 8px 10px;">${new Date(dateStr).toLocaleDateString()}</td>
+              <td style="padding: 8px 10px; text-align: center;">${check(entry.daily_vocab)}</td>
+              <td style="padding: 8px 10px; text-align: center;">${check(entry.daily_sentences)}</td>
+              <td style="padding: 8px 10px; text-align: center;">${check(entry.weekly_vlog)}</td>
+              <td style="padding: 8px 10px; text-align: center;">${check(entry.video_reaction)}</td>
+              <td style="padding: 8px 10px; text-align: center;">${check(entry.hadithul_arabia)}</td>
+            </tr>
+          `;
+        }).join('');
+
+    // Format Grades/Penalties Rows
+    const gradeTypes = ['exam', 'penalty', 'custom'];
+    const gradeRecords = scores.filter(s => gradeTypes.includes(s.score_type));
+    const gradeRows = gradeRecords.length === 0
+      ? `<tr><td colspan="3" style="padding: 10px; text-align: center; color: #888; font-style: italic;">No grades or penalties logged.</td></tr>`
+      : gradeRecords.map(rec => {
+          let title = rec.activity_name;
+          let score = `${rec.points > 0 ? '+' : ''}${rec.points} XP`;
+          let color = rec.points >= 0 ? '#333' : '#dc2626';
+
+          if (rec.score_type === 'exam') {
+            const pct = Math.round((rec.points / rec.max_points) * 100);
+            title = `📝 Exam: ${rec.activity_name.replace(/^exam:\s*/i, '')}`;
+            score = `${rec.points}/${rec.max_points} (${pct}%)`;
+            color = '#c99c33';
+          } else if (rec.score_type === 'penalty') {
+            const count = Math.round(Math.abs(rec.points) / 2);
+            title = `⚠️ Malayalam Speaking violation`;
+            score = `-${Math.abs(rec.points)} XP (${count} ${count === 1 ? 'penalty' : 'penalties'})`;
+            color = '#dc2626';
+          } else if (rec.score_type === 'custom' && rec.activity_name === 'One Minute Talk') {
+            title = `🎙️ One Minute Talk`;
+            score = `${rec.points} / 10`;
+          }
+
+          return `
+            <tr style="border-bottom: 1px solid #eee;">
+              <td style="padding: 8px 10px;">${new Date(rec.logged_date).toLocaleDateString()}</td>
+              <td style="padding: 8px 10px; font-weight: 600;">${title}</td>
+              <td style="padding: 8px 10px; text-align: right; font-weight: bold; color: ${color};">${score}</td>
+            </tr>
+          `;
+        }).join('');
+
+    // Remarks content formatting
+    const rStrengths = remarks?.strengths || 'No strengths recorded yet.';
+    const rWeaknesses = remarks?.weaknesses || 'No improvement areas recorded yet.';
+    const rCareerPath = remarks?.career_path || 'No career path recommendations recorded yet.';
+    const rGeneral = remarks?.general_remarks || 'No general remarks recorded yet.';
+
+    // Construct print template
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Academic Report Card - ${student.name}</title>
+          <style>
+            body {
+              font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              color: #1e293b;
+              margin: 0;
+              padding: 40px;
+              background: white;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 3px solid #c99c33;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .title-section h1 {
+              margin: 0 0 5px 0;
+              font-size: 24px;
+              font-weight: 800;
+              color: #1e293b;
+            }
+            .title-section p {
+              margin: 0;
+              color: #64748b;
+              font-size: 14px;
+            }
+            .academy-info {
+              text-align: right;
+            }
+            .academy-info h2 {
+              margin: 0 0 5px 0;
+              font-size: 18px;
+              font-weight: 800;
+              color: #c99c33;
+            }
+            .academy-info p {
+              margin: 0;
+              font-size: 12px;
+              color: #64748b;
+            }
+            .student-profile {
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 12px;
+              padding: 15px 20px;
+              margin-bottom: 30px;
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 15px;
+            }
+            .profile-item {
+              display: flex;
+              flex-direction: column;
+            }
+            .profile-item span.label {
+              font-size: 11px;
+              color: #64748b;
+              text-transform: uppercase;
+              font-weight: 700;
+              margin-bottom: 3px;
+            }
+            .profile-item span.value {
+              font-size: 14px;
+              font-weight: bold;
+              color: #0f172a;
+            }
+            .metrics-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 15px;
+              margin-bottom: 30px;
+            }
+            .metric-card {
+              border: 1px solid #e2e8f0;
+              border-radius: 12px;
+              padding: 15px;
+              text-align: center;
+              background: #ffffff;
+            }
+            .metric-card span.label {
+              display: block;
+              font-size: 11px;
+              color: #64748b;
+              font-weight: 700;
+              text-transform: uppercase;
+              margin-bottom: 5px;
+            }
+            .metric-card span.value {
+              display: block;
+              font-size: 24px;
+              font-weight: 800;
+              color: #0f172a;
+            }
+            .section-title {
+              font-size: 16px;
+              font-weight: 800;
+              border-bottom: 2px solid #f1f5f9;
+              padding-bottom: 8px;
+              margin: 30px 0 15px 0;
+              color: #0f172a;
+              page-break-after: avoid;
+            }
+            .remarks-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 20px;
+              margin-bottom: 30px;
+            }
+            .remarks-card {
+              border: 1px solid #e2e8f0;
+              border-radius: 12px;
+              padding: 15px;
+              background: #fafafa;
+            }
+            .remarks-card h4 {
+              margin: 0 0 8px 0;
+              font-size: 13px;
+              font-weight: 800;
+              text-transform: uppercase;
+            }
+            .remarks-card p {
+              margin: 0;
+              font-size: 13px;
+              line-height: 1.5;
+              white-space: pre-wrap;
+              color: #334155;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+              font-size: 12px;
+            }
+            th {
+              background: #f8fafc;
+              border-bottom: 2px solid #cbd5e1;
+              padding: 8px 10px;
+              font-weight: 700;
+              text-align: left;
+            }
+            td {
+              padding: 8px 10px;
+              border-bottom: 1px solid #f1f5f9;
+            }
+            .checklist-table th {
+              text-align: center;
+            }
+            .checklist-table td {
+              text-align: center;
+            }
+            .page-break {
+              page-break-before: always;
+            }
+            .footer {
+              margin-top: 50px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 11px;
+              color: #94a3b8;
+              border-top: 1px solid #f1f5f9;
+              padding-top: 15px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title-section">
+              <h1>ACADEMIC PERFORMANCE REPORT</h1>
+              <p>Report Generated on: ${printDate}</p>
+            </div>
+            <div class="academy-info">
+              <h2>ACADEMY OF EXCELLENCE</h2>
+              <p>Elegance in Arabic Education</p>
+            </div>
+          </div>
+
+          <div class="student-profile">
+            <div class="profile-item">
+              <span class="label">Student Name</span>
+              <span class="value">${student.name}</span>
+            </div>
+            <div class="profile-item">
+              <span class="label">Roll Number</span>
+              <span class="value">${student.roll_number || 'N/A'}</span>
+            </div>
+            <div class="profile-item">
+              <span class="label">Email Address</span>
+              <span class="value">${student.email}</span>
+            </div>
+            <div class="profile-item">
+              <span class="label">Course</span>
+              <span class="value">${student.courses?.name || 'N/A'}</span>
+            </div>
+            <div class="profile-item">
+              <span class="label">Batch Number</span>
+              <span class="value">Batch ${student.batch_number}</span>
+            </div>
+            <div class="profile-item">
+              <span class="label">Status</span>
+              <span class="value" style="text-transform: capitalize;">${student.status}</span>
+            </div>
+          </div>
+
+          <div class="section-title">Key Academic Statistics</div>
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <span class="label">Attendance Rate</span>
+              <span class="value">${attendanceRate}%</span>
+              <span class="label" style="font-size: 9px; margin-top: 5px; font-weight: normal; text-transform: none;">
+                On Time: ${onTimeCount} | Late: ${lateCount} | Half Day: ${halfDayCount} | Absent: ${absentCount}
+              </span>
+            </div>
+            <div class="metric-card" style="${totalPenaltiesCount > 0 ? 'border-color: #fca5a5; background: #fffafb;' : ''}">
+              <span class="label" style="${totalPenaltiesCount > 0 ? 'color: #b91c1c;' : ''}">Malayalam Penalties</span>
+              <span class="value" style="${totalPenaltiesCount > 0 ? 'color: #dc2626;' : ''}">${totalPenaltiesCount}</span>
+            </div>
+            <div class="metric-card">
+              <span class="label">Exam Average</span>
+              <span class="value">${examAvg !== null ? `${examAvg}%` : 'N/A'}</span>
+            </div>
+            <div class="metric-card">
+              <span class="label">One Minute Talk</span>
+              <span class="value">${talkAvg}${talkAvg !== 'N/A' ? '/10' : ''}</span>
+            </div>
+          </div>
+
+          <div class="section-title">Checklist Tasks Completed Summary</div>
+          <table class="checklist-table">
+            <thead>
+              <tr>
+                <th>Vocabulary Tasks</th>
+                <th>Sentences Tasks</th>
+                <th>Weekly Vlogs</th>
+                <th>Video Reactions</th>
+                <th>Hadithul Arabia Attendance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-size: 16px; font-weight: bold;">${vocabCount}</td>
+                <td style="font-size: 16px; font-weight: bold;">${sentencesCount}</td>
+                <td style="font-size: 16px; font-weight: bold;">${vlogCount}</td>
+                <td style="font-size: 16px; font-weight: bold;">${videoReactionCount}</td>
+                <td style="font-size: 16px; font-weight: bold;">${hadithulArabiaCount}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="section-title">Instructor Remarks & Counseling</div>
+          <div class="remarks-grid">
+            <div class="remarks-card" style="border-left: 4px solid #10b981;">
+              <h4 style="color: #047857;">💪 Strengths</h4>
+              <p>${rStrengths}</p>
+            </div>
+            <div class="remarks-card" style="border-left: 4px solid #ef4444;">
+              <h4 style="color: #b91c1c;">⚠️ Areas for Improvement</h4>
+              <p>${rWeaknesses}</p>
+            </div>
+            <div class="remarks-card" style="border-left: 4px solid #3b82f6;">
+              <h4 style="color: #1d4ed8;">🎯 Apt Career Path</h4>
+              <p>${rCareerPath}</p>
+            </div>
+            <div class="remarks-card" style="border-left: 4px solid #c99c33;">
+              <h4 style="color: #c99c33;">📝 General Remarks</h4>
+              <p>${rGeneral}</p>
+            </div>
+          </div>
+
+          <div class="page-break"></div>
+
+          <div class="section-title">Attendance History Logs</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40%;">Date</th>
+                <th style="width: 40%;">Status</th>
+                <th style="width: 20%; text-align: right;">Points Credit</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${attendanceRows}
+            </tbody>
+          </table>
+
+          <div class="section-title">Grades & Penalty Audits</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30%;">Date</th>
+                <th style="width: 50%;">Activity Description / Speaking Violation</th>
+                <th style="width: 20%; text-align: right;">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${gradeRows}
+            </tbody>
+          </table>
+
+          <div class="section-title">Daily Task Submission Timeline</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Vocab</th>
+                <th>Sentences</th>
+                <th>Vlog</th>
+                <th>Reaction</th>
+                <th>Hadithul A.</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${workRows}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <span>Academy of Excellence • Academic Performance Report</span>
+            <span>Page 2 of 2</span>
+          </div>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Allow styles to load before printing
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
   };
 
   useEffect(() => {
@@ -793,9 +1262,28 @@ const StudentDashboard = () => {
 
             {/* Academic Performance Report Card */}
             <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem' }}>
-              <h3 style={{ fontSize: '1.15rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 750 }}>
-                <Award size={18} className="text-primary" /> Performance Report
-              </h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', gap: '1rem', flexWrap: 'wrap' }}>
+                <h3 style={{ fontSize: '1.15rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 750 }}>
+                  <Award size={18} className="text-primary" /> Performance Report
+                </h3>
+                <button
+                  onClick={() => handlePrintReport(currentStudent, recentLogs)}
+                  className="btn btn-outline"
+                  style={{ 
+                    padding: '0.35rem 0.75rem', 
+                    fontSize: '0.75rem', 
+                    fontWeight: 700, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.3rem', 
+                    borderColor: 'var(--primary)',
+                    color: 'var(--primary-dark)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Printer size={12} /> Print Report
+                </button>
+              </div>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.2rem' }}>A complete academic summary for this period.</p>
 
               {/* Grid of Metrics */}
