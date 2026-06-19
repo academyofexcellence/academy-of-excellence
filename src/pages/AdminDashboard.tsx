@@ -124,6 +124,7 @@ const AdminDashboard = () => {
   // Student Report States
   const [selectedReportStudent, setSelectedReportStudent] = useState<StudentProfile | null>(null);
   const [studentReportData, setStudentReportData] = useState<{ scores: any[]; loading: boolean }>({ scores: [], loading: false });
+  const [reportTab, setReportTab] = useState<'attendance' | 'work' | 'grades'>('attendance');
   
   // Synchronous lock to prevent penalty double-clicks
   const penaltyLockRef = useRef<Record<string, boolean>>({});
@@ -902,6 +903,7 @@ const AdminDashboard = () => {
   // Load and open student performance report modal
   const handleOpenReport = async (student: StudentProfile) => {
     setSelectedReportStudent(student);
+    setReportTab('attendance');
     setStudentReportData({ scores: [], loading: true });
     try {
       const { data, error } = await supabase
@@ -3788,50 +3790,228 @@ const AdminDashboard = () => {
                         </div>
                       </div>
 
-                      {/* Detailed Exams list */}
-                      {examScoresList.length > 0 && (
-                        <div>
-                          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '0 0 0.6rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                            <ClipboardList size={16} className="text-primary" /> Detailed Exam Grades
-                          </h4>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.3rem' }}>
-                            {examScoresList.map(exam => {
-                              const examNameFormatted = exam.activity_name.replace(/^exam:\s*/i, '');
-                              const percent = Math.round((exam.points / exam.max_points) * 100);
-                              return (
-                                <div key={exam.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.01)', padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.03)', fontSize: '0.8rem' }}>
-                                  <span style={{ fontWeight: 650, color: 'var(--text-main)' }}>{examNameFormatted}</span>
-                                  <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{exam.points} / {exam.max_points} ({percent}%)</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                      {/* Sub tab navigation */}
+                      <div style={{ display: 'flex', borderBottom: '1px solid rgba(0,0,0,0.05)', gap: '1rem', marginTop: '1rem', marginBottom: '1.2rem' }}>
+                        <button 
+                          onClick={() => setReportTab('attendance')}
+                          style={{
+                            padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
+                            borderBottom: reportTab === 'attendance' ? '3px solid var(--primary)' : '3px solid transparent',
+                            color: reportTab === 'attendance' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem'
+                          }}
+                        >
+                          📅 Attendance History
+                        </button>
+                        <button 
+                          onClick={() => setReportTab('work')}
+                          style={{
+                            padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
+                            borderBottom: reportTab === 'work' ? '3px solid var(--primary)' : '3px solid transparent',
+                            color: reportTab === 'work' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem'
+                          }}
+                        >
+                          📚 Work Submissions
+                        </button>
+                        <button 
+                          onClick={() => setReportTab('grades')}
+                          style={{
+                            padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
+                            borderBottom: reportTab === 'grades' ? '3px solid var(--primary)' : '3px solid transparent',
+                            color: reportTab === 'grades' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem'
+                          }}
+                        >
+                          📝 Grades & Penalties
+                        </button>
+                      </div>
 
-                      {/* Malayalam Penalty details */}
-                      {penaltyRecords.length > 0 && (
-                        <div>
-                          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '1rem 0 0.6rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#dc2626' }}>
-                            <AlertTriangle size={16} /> Penalty History Logs
-                          </h4>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.3rem' }}>
-                            {penaltyRecords.map(pen => {
-                              const penaltyCount = Math.round(Math.abs(pen.points) / 2);
-                              return (
-                                <div key={pen.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(239,68,68,0.02)', padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.1)', fontSize: '0.8rem' }}>
-                                  <span style={{ fontWeight: 600, color: '#dc2626' }}>
-                                    {penaltyCount} {penaltyCount === 1 ? 'penalty' : 'penalties'} ({pen.points} XP)
-                                  </span>
-                                  <span style={{ color: 'var(--text-muted)' }}>
-                                    {new Date(pen.logged_date).toLocaleDateString()}
-                                  </span>
-                                </div>
-                              );
-                            })}
+                      {/* Tab 1: Attendance Table */}
+                      {reportTab === 'attendance' && (() => {
+                        const attRecords = scores.filter(s => s.score_type === 'attendance');
+                        return (
+                          <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                              <thead>
+                                <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
+                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Status</th>
+                                  <th style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700 }}>Points</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {attRecords.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={3} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                      No attendance records logged.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  attRecords.map(rec => {
+                                    const status = rec.activity_name.replace('Attendance: ', '');
+                                    let statusBg = 'rgba(0,0,0,0.04)';
+                                    let statusColor = 'var(--text-muted)';
+                                    if (status === 'On Time') { statusBg = 'rgba(34,197,94,0.08)'; statusColor = '#16a34a'; }
+                                    else if (status === 'Late') { statusBg = 'rgba(180,83,9,0.08)'; statusColor = '#b45309'; }
+                                    else if (status === 'Half Day') { statusBg = 'rgba(59,130,246,0.08)'; statusColor = '#3b82f6'; }
+                                    else if (status === 'Absent') { statusBg = 'rgba(239,68,68,0.08)'; statusColor = '#dc2626'; }
+
+                                    return (
+                                      <tr key={rec.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                        <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
+                                          {new Date(rec.logged_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </td>
+                                        <td style={{ padding: '0.6rem 1rem' }}>
+                                          <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', background: statusBg, color: statusColor, fontWeight: 700, fontSize: '0.75rem' }}>
+                                            {status}
+                                          </span>
+                                        </td>
+                                        <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700, color: rec.points > 0 ? '#16a34a' : 'var(--text-muted)' }}>
+                                          {rec.points > 0 ? `+${rec.points}` : rec.points} XP
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
+
+                      {/* Tab 2: Work Submission Table */}
+                      {reportTab === 'work' && (() => {
+                        const workTypes = ['daily_vocab', 'daily_sentences', 'weekly_vlog', 'video_reaction', 'hadithul_arabia'];
+                        const workRecords = scores.filter(s => workTypes.includes(s.score_type));
+
+                        const workGroupByDate = workRecords.reduce((acc, score) => {
+                          const d = score.logged_date;
+                          if (!acc[d]) {
+                            acc[d] = { daily_vocab: false, daily_sentences: false, weekly_vlog: false, video_reaction: false, hadithul_arabia: false };
+                          }
+                          acc[d][score.score_type as 'daily_vocab' | 'daily_sentences' | 'weekly_vlog' | 'video_reaction' | 'hadithul_arabia'] = true;
+                          return acc;
+                        }, {} as { [date: string]: { daily_vocab: boolean, daily_sentences: boolean, weekly_vlog: boolean, video_reaction: boolean, hadithul_arabia: boolean } });
+
+                        const workDatesSorted = Object.keys(workGroupByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+                        return (
+                          <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                              <thead>
+                                <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
+                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Vocab</th>
+                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Sentences</th>
+                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Vlog</th>
+                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Reaction</th>
+                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Hadithul A.</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {workDatesSorted.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={6} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                      No task submissions logged.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  workDatesSorted.map(dateStr => {
+                                    const entry = workGroupByDate[dateStr];
+                                    const renderStatus = (done: boolean) => (
+                                      <span style={{ 
+                                        color: done ? '#16a34a' : 'rgba(0,0,0,0.2)', 
+                                        fontWeight: 800, 
+                                        fontSize: done ? '1.1rem' : '0.9rem' 
+                                      }}>
+                                        {done ? '✓' : '-'}
+                                      </span>
+                                    );
+
+                                    return (
+                                      <tr key={dateStr} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                        <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
+                                          {new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </td>
+                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.daily_vocab)}</td>
+                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.daily_sentences)}</td>
+                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.weekly_vlog)}</td>
+                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.video_reaction)}</td>
+                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.hadithul_arabia)}</td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Tab 3: Grades & Penalties Table */}
+                      {reportTab === 'grades' && (() => {
+                        const gradeTypes = ['exam', 'penalty', 'custom'];
+                        const gradeRecords = scores.filter(s => gradeTypes.includes(s.score_type));
+
+                        return (
+                          <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                              <thead>
+                                <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
+                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Activity / Violation</th>
+                                  <th style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700 }}>Grade / Score</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {gradeRecords.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={3} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                      No grades or penalties logged.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  gradeRecords.map(rec => {
+                                    let displayTitle = rec.activity_name;
+                                    let displayScore = `${rec.points > 0 ? '+' : ''}${rec.points} XP`;
+                                    let scoreColor = rec.points >= 0 ? 'var(--text-main)' : '#dc2626';
+
+                                    if (rec.score_type === 'exam') {
+                                      const pct = Math.round((rec.points / rec.max_points) * 100);
+                                      displayTitle = `📝 Exam: ${rec.activity_name.replace(/^exam:\s*/i, '')}`;
+                                      displayScore = `${rec.points}/${rec.max_points} (${pct}%)`;
+                                      scoreColor = 'var(--primary-dark)';
+                                    } else if (rec.score_type === 'penalty') {
+                                      const count = Math.round(Math.abs(rec.points) / 2);
+                                      displayTitle = `⚠️ Malayalam Speaking violation`;
+                                      displayScore = `-${Math.abs(rec.points)} XP (${count} ${count === 1 ? 'penalty' : 'penalties'})`;
+                                      scoreColor = '#dc2626';
+                                    } else if (rec.score_type === 'custom' && rec.activity_name === 'One Minute Talk') {
+                                      displayTitle = `🎙️ One Minute Talk`;
+                                      displayScore = `${rec.points} / 10`;
+                                    }
+
+                                    return (
+                                      <tr key={rec.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                        <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
+                                          {new Date(rec.logged_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </td>
+                                        <td style={{ padding: '0.6rem 1rem' }}>
+                                          <div style={{ fontWeight: 600 }}>{displayTitle}</div>
+                                        </td>
+                                        <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700, color: scoreColor }}>
+                                          {displayScore}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()
