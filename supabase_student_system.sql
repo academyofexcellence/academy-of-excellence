@@ -250,3 +250,40 @@ BEGIN
 END;
 $$;
 
+
+-- 9. Create student_remarks table
+CREATE TABLE IF NOT EXISTS public.student_remarks (
+    student_id UUID PRIMARY KEY REFERENCES public.student_profiles(id) ON DELETE CASCADE,
+    strengths TEXT,
+    weaknesses TEXT,
+    career_path TEXT,
+    general_remarks TEXT,
+    updated_by UUID REFERENCES public.staff_profiles(id) ON DELETE SET NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable RLS
+ALTER TABLE public.student_remarks ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS Select Policy
+CREATE POLICY "Enable select for staff and self" 
+ON public.student_remarks FOR SELECT 
+TO authenticated 
+USING (
+    (auth.uid() = student_id) OR
+    EXISTS (
+        SELECT 1 FROM public.staff_profiles 
+        WHERE id = auth.uid() AND status = 'active'
+    )
+);
+
+-- Create RLS Write Policy
+CREATE POLICY "Enable all for staff" 
+ON public.student_remarks FOR ALL 
+TO authenticated 
+USING (
+    EXISTS (
+        SELECT 1 FROM public.staff_profiles 
+        WHERE id = auth.uid() AND status = 'active'
+    )
+);

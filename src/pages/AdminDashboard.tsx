@@ -124,7 +124,12 @@ const AdminDashboard = () => {
   // Student Report States
   const [selectedReportStudent, setSelectedReportStudent] = useState<StudentProfile | null>(null);
   const [studentReportData, setStudentReportData] = useState<{ scores: any[]; loading: boolean }>({ scores: [], loading: false });
-  const [reportTab, setReportTab] = useState<'attendance' | 'work' | 'grades'>('attendance');
+  const [reportTab, setReportTab] = useState<'attendance' | 'work' | 'grades' | 'remarks'>('attendance');
+  const [remarksStrengths, setRemarksStrengths] = useState('');
+  const [remarksWeaknesses, setRemarksWeaknesses] = useState('');
+  const [remarksCareerPath, setRemarksCareerPath] = useState('');
+  const [remarksGeneral, setRemarksGeneral] = useState('');
+  const [savingRemarks, setSavingRemarks] = useState(false);
   
   // Synchronous lock to prevent penalty double-clicks
   const penaltyLockRef = useRef<Record<string, boolean>>({});
@@ -905,6 +910,32 @@ const AdminDashboard = () => {
     setSelectedReportStudent(student);
     setReportTab('attendance');
     setStudentReportData({ scores: [], loading: true });
+    
+    // Reset remarks textareas
+    setRemarksStrengths('');
+    setRemarksWeaknesses('');
+    setRemarksCareerPath('');
+    setRemarksGeneral('');
+
+    // Fetch remarks from Supabase student_remarks table
+    try {
+      const { data: remarksData, error: remarksError } = await supabase
+        .from('student_remarks')
+        .select('*')
+        .eq('student_id', student.id)
+        .maybeSingle();
+
+      if (remarksError) throw remarksError;
+      if (remarksData) {
+        setRemarksStrengths(remarksData.strengths || '');
+        setRemarksWeaknesses(remarksData.weaknesses || '');
+        setRemarksCareerPath(remarksData.career_path || '');
+        setRemarksGeneral(remarksData.general_remarks || '');
+      }
+    } catch (err) {
+      console.error('Failed to fetch student remarks:', err);
+    }
+    
     try {
       const { data, error } = await supabase
         .from('scores')
@@ -918,6 +949,35 @@ const AdminDashboard = () => {
       console.error(err);
       setStudentReportData({ scores: [], loading: false });
     }
+  };
+
+  // Save/Update student remarks
+  const handleSaveRemarks = async () => {
+    if (!selectedReportStudent || !currentUser) return;
+    setSavingRemarks(true);
+    try {
+      const { error } = await supabase
+        .from('student_remarks')
+        .upsert({
+          student_id: selectedReportStudent.id,
+          strengths: remarksStrengths,
+          weaknesses: remarksWeaknesses,
+          career_path: remarksCareerPath,
+          general_remarks: remarksGeneral,
+          updated_by: currentUser.id,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'student_id' });
+
+      if (error) throw error;
+      await logActivity('student_remarks_update', `Updated counseling remarks for ${selectedReportStudent.name}`);
+      setMessage(`📝 Remarks saved successfully for ${selectedReportStudent.name}.`);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to save remarks: ${err.message}`);
+    } finally {
+      setSavingRemarks(false);
+    }
+    setTimeout(() => setMessage(''), 4000);
   };
 
   // Approve Pending Student
@@ -3791,14 +3851,14 @@ const AdminDashboard = () => {
                       </div>
 
                       {/* Sub tab navigation */}
-                      <div style={{ display: 'flex', borderBottom: '1px solid rgba(0,0,0,0.05)', gap: '1rem', marginTop: '1rem', marginBottom: '1.2rem' }}>
+                      <div style={{ display: 'flex', borderBottom: '1px solid rgba(0,0,0,0.05)', gap: '1rem', marginTop: '1rem', marginBottom: '1.2rem', overflowX: 'auto', whiteSpace: 'nowrap' }}>
                         <button 
                           onClick={() => setReportTab('attendance')}
                           style={{
                             padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                             borderBottom: reportTab === 'attendance' ? '3px solid var(--primary)' : '3px solid transparent',
                             color: reportTab === 'attendance' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem'
+                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', whiteSpace: 'nowrap', flexShrink: 0
                           }}
                         >
                           📅 Attendance History
@@ -3809,7 +3869,7 @@ const AdminDashboard = () => {
                             padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                             borderBottom: reportTab === 'work' ? '3px solid var(--primary)' : '3px solid transparent',
                             color: reportTab === 'work' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem'
+                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', whiteSpace: 'nowrap', flexShrink: 0
                           }}
                         >
                           📚 Work Submissions
@@ -3820,10 +3880,21 @@ const AdminDashboard = () => {
                             padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
                             borderBottom: reportTab === 'grades' ? '3px solid var(--primary)' : '3px solid transparent',
                             color: reportTab === 'grades' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem'
+                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', whiteSpace: 'nowrap', flexShrink: 0
                           }}
                         >
                           📝 Grades & Penalties
+                        </button>
+                        <button 
+                          onClick={() => setReportTab('remarks')}
+                          style={{
+                            padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
+                            borderBottom: reportTab === 'remarks' ? '3px solid var(--primary)' : '3px solid transparent',
+                            color: reportTab === 'remarks' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                            fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', whiteSpace: 'nowrap', flexShrink: 0
+                          }}
+                        >
+                          💬 Counseling & Remarks
                         </button>
                       </div>
 
@@ -4012,6 +4083,64 @@ const AdminDashboard = () => {
                           </div>
                         );
                       })()}
+
+                      {/* Tab 4: Counseling & Remarks Table */}
+                      {reportTab === 'remarks' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>💪 Strengths</label>
+                            <textarea 
+                              placeholder="e.g. Excellent communication skills, active participant, fast learner..."
+                              value={remarksStrengths}
+                              onChange={(e) => setRemarksStrengths(e.target.value)}
+                              rows={2}
+                              style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>⚠️ Weaknesses / Areas for Improvement</label>
+                            <textarea 
+                              placeholder="e.g. Needs to improve daily attendance consistency, avoid side talking..."
+                              value={remarksWeaknesses}
+                              onChange={(e) => setRemarksWeaknesses(e.target.value)}
+                              rows={2}
+                              style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>🎯 Apt Career Path</label>
+                            <textarea 
+                              placeholder="e.g. Arabic Language Instructor, Translator, Content Creator..."
+                              value={remarksCareerPath}
+                              onChange={(e) => setRemarksCareerPath(e.target.value)}
+                              rows={2}
+                              style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>📝 General Remarks</label>
+                            <textarea 
+                              placeholder="Add any other general counseling notes or feedback here..."
+                              value={remarksGeneral}
+                              onChange={(e) => setRemarksGeneral(e.target.value)}
+                              rows={3}
+                              style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                            />
+                          </div>
+
+                          <button
+                            onClick={handleSaveRemarks}
+                            disabled={savingRemarks}
+                            className="btn btn-primary"
+                            style={{ padding: '0.6rem 1.2rem', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 700, marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                          >
+                            {savingRemarks ? 'Saving Remarks...' : '✓ Save Remarks'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })()

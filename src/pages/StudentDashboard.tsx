@@ -13,7 +13,9 @@ import {
   FileText,
   Volume2,
   AlertTriangle,
-  Globe
+  Globe,
+  Sparkles,
+  Compass
 } from 'lucide-react';
 
 interface StudentProfile {
@@ -72,6 +74,36 @@ const StudentDashboard = () => {
     hadithulArabia: boolean;
   }>({ vocab: {}, sentences: {}, vlog: false, videoReaction: false, hadithulArabia: false });
 
+  // Counselor/Instructor Remarks
+  const [remarks, setRemarks] = useState<{
+    strengths: string;
+    weaknesses: string;
+    career_path: string;
+    general_remarks: string;
+  } | null>(null);
+
+  const fetchStudentRemarks = async (studentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('student_remarks')
+        .select('strengths, weaknesses, career_path, general_remarks')
+        .eq('student_id', studentId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setRemarks({
+          strengths: data.strengths || '',
+          weaknesses: data.weaknesses || '',
+          career_path: data.career_path || '',
+          general_remarks: data.general_remarks || '',
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching student remarks:', err);
+    }
+  };
+
   useEffect(() => {
     checkSession();
   }, []);
@@ -107,6 +139,9 @@ const StudentDashboard = () => {
       
       // Load student data
       await fetchIntervalsAndData(student.course_id, student.batch_number, student.id);
+
+      // Load counseling remarks
+      await fetchStudentRemarks(student.id);
     } catch (err) {
       console.error(err);
       await supabase.auth.signOut();
@@ -437,6 +472,44 @@ const StudentDashboard = () => {
             }
             .xp-badge {
               font-size: 1rem;
+            }
+          }
+          .remarks-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.2rem;
+            margin-top: 1.2rem;
+          }
+          .remarks-card {
+            padding: 1.2rem;
+            border-radius: 12px;
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.01);
+          }
+          .remarks-title {
+            font-size: 0.9rem;
+            font-weight: 750;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+          }
+          .remarks-content {
+            font-size: 0.85rem;
+            color: var(--text-main);
+            line-height: 1.5;
+            white-space: pre-wrap;
+          }
+          .remarks-empty {
+            font-style: italic;
+            color: var(--text-muted);
+          }
+          @media (max-width: 768px) {
+            .remarks-grid {
+              grid-template-columns: 1fr;
             }
           }
         `}</style>
@@ -878,6 +951,84 @@ const StudentDashboard = () => {
             </div>
 
           </div>
+
+        </div>
+
+        {/* --- INSTRUCTOR REMARKS & COUNSELING --- */}
+        <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginTop: '1.5rem' }}>
+          <h3 style={{ fontSize: '1.25rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+            <MessageSquare size={20} className="text-primary" /> Instructor Remarks & Counseling
+          </h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
+            Personalized guidance, performance feedback, and career counseling remarks from the academy instructors.
+          </p>
+
+          {(() => {
+            const hasAnyRemarks = remarks && (
+              remarks.strengths?.trim() ||
+              remarks.weaknesses?.trim() ||
+              remarks.career_path?.trim() ||
+              remarks.general_remarks?.trim()
+            );
+
+            if (hasAnyRemarks) {
+              return (
+                <div className="remarks-grid">
+                  {/* Strengths */}
+                  <div className="remarks-card" style={{ background: 'rgba(16, 185, 129, 0.015)', borderColor: 'rgba(16, 185, 129, 0.12)' }}>
+                    <div className="remarks-title" style={{ color: '#047857' }}>
+                      <Sparkles size={16} /> 💪 Strengths
+                    </div>
+                    <div className="remarks-content">
+                      {remarks.strengths?.trim() ? remarks.strengths : <span className="remarks-empty">No strengths recorded yet.</span>}
+                    </div>
+                  </div>
+
+                  {/* Weaknesses */}
+                  <div className="remarks-card" style={{ background: 'rgba(239, 68, 68, 0.015)', borderColor: 'rgba(239, 68, 68, 0.12)' }}>
+                    <div className="remarks-title" style={{ color: '#b91c1c' }}>
+                      <AlertTriangle size={16} /> ⚠️ Areas for Improvement
+                    </div>
+                    <div className="remarks-content">
+                      {remarks.weaknesses?.trim() ? remarks.weaknesses : <span className="remarks-empty">No improvement areas recorded yet.</span>}
+                    </div>
+                  </div>
+
+                  {/* Career Path */}
+                  <div className="remarks-card" style={{ background: 'rgba(59, 130, 246, 0.015)', borderColor: 'rgba(59, 130, 246, 0.12)' }}>
+                    <div className="remarks-title" style={{ color: '#1d4ed8' }}>
+                      <Compass size={16} /> 🎯 Apt Career Path
+                    </div>
+                    <div className="remarks-content">
+                      {remarks.career_path?.trim() ? remarks.career_path : <span className="remarks-empty">No career path recommendations recorded yet.</span>}
+                    </div>
+                  </div>
+
+                  {/* General Remarks */}
+                  <div className="remarks-card" style={{ background: 'rgba(201, 156, 51, 0.015)', borderColor: 'rgba(201, 156, 51, 0.12)' }}>
+                    <div className="remarks-title" style={{ color: 'var(--primary-dark)' }}>
+                      <MessageSquare size={16} /> 📝 General Remarks
+                    </div>
+                    <div className="remarks-content">
+                      {remarks.general_remarks?.trim() ? remarks.general_remarks : <span className="remarks-empty">No general remarks recorded yet.</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1.5rem', textAlign: 'center', background: 'rgba(201, 156, 51, 0.02)', borderRadius: '16px', border: '1px dashed rgba(201, 156, 51, 0.2)', marginTop: '1rem' }}>
+                <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(201, 156, 51, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                  <MessageSquare size={28} className="text-primary" />
+                </div>
+                <h4 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>Remarks will appear here</h4>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '400px', margin: 0 }}>
+                  Once logged by your course instructors, your strengths, weaknesses, and career counseling remarks will be shown here.
+                </p>
+              </div>
+            );
+          })()}
 
         </div>
 
