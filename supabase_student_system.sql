@@ -297,6 +297,7 @@ ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS total_reaction_tas
 ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS total_hadithul_tasks INTEGER DEFAULT 4 NOT NULL;
 
 -- 11. Add UPDATE policy to scores table
+DROP POLICY IF EXISTS "Enable update for staff and leadership" ON public.scores;
 CREATE POLICY "Enable update for staff and leadership" 
 ON public.scores FOR UPDATE 
 TO authenticated 
