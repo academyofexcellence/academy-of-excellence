@@ -77,6 +77,12 @@ interface ScoringInterval {
   course_id: string;
   batch_number: number;
   is_active: boolean;
+  total_working_days?: number;
+  total_vocab_tasks?: number;
+  total_sentences_tasks?: number;
+  total_vlog_tasks?: number;
+  total_reaction_tasks?: number;
+  total_hadithul_tasks?: number;
 }
 
 interface LeaderboardEntry {
@@ -131,6 +137,29 @@ const AdminDashboard = () => {
   const [remarksCareerPath, setRemarksCareerPath] = useState('');
   const [remarksGeneral, setRemarksGeneral] = useState('');
   const [savingRemarks, setSavingRemarks] = useState(false);
+  
+  // Report Edit Form States
+  const [addLogDate, setAddLogDate] = useState(new Date().toISOString().split('T')[0]);
+  const [addAttStatus, setAddAttStatus] = useState('On Time');
+  const [addWorkVocab, setAddWorkVocab] = useState(false);
+  const [addWorkSentences, setAddWorkSentences] = useState(false);
+  const [addWorkVlog, setAddWorkVlog] = useState(false);
+  const [addWorkReaction, setAddWorkReaction] = useState(false);
+  const [addWorkHadithul, setAddWorkHadithul] = useState(false);
+  
+  const [addGradeType, setAddGradeType] = useState<'exam' | 'penalty' | 'custom'>('exam');
+  const [addGradeTitle, setAddGradeTitle] = useState('');
+  const [addGradePoints, setAddGradePoints] = useState(0);
+  const [addGradeMaxPoints, setAddGradeMaxPoints] = useState(100);
+
+  // Active Config Edit States
+  const [selectedConfigIntervalId, setSelectedConfigIntervalId] = useState('');
+  const [configWorkingDays, setConfigWorkingDays] = useState(20);
+  const [configVocab, setConfigVocab] = useState(20);
+  const [configSentences, setConfigSentences] = useState(20);
+  const [configVlog, setConfigVlog] = useState(4);
+  const [configReaction, setConfigReaction] = useState(4);
+  const [configHadithul, setConfigHadithul] = useState(4);
   
   // Synchronous lock to prevent penalty double-clicks
   const penaltyLockRef = useRef<Record<string, boolean>>({});
@@ -424,6 +453,28 @@ const AdminDashboard = () => {
       }
     }
   }, [overviewSelectedInterval, intervalsList]);
+
+  // Synchronize configuration editor states when intervalsList or selectedConfigIntervalId changes
+  useEffect(() => {
+    const activeInts = intervalsList.filter(i => i.is_active);
+    if (activeInts.length > 0 && !selectedConfigIntervalId) {
+      setSelectedConfigIntervalId(activeInts[0].id);
+    }
+  }, [intervalsList, selectedConfigIntervalId]);
+
+  useEffect(() => {
+    if (selectedConfigIntervalId) {
+      const selected = intervalsList.find(i => i.id === selectedConfigIntervalId);
+      if (selected) {
+        setConfigWorkingDays(selected.total_working_days ?? 20);
+        setConfigVocab(selected.total_vocab_tasks ?? 20);
+        setConfigSentences(selected.total_sentences_tasks ?? 20);
+        setConfigVlog(selected.total_vlog_tasks ?? 4);
+        setConfigReaction(selected.total_reaction_tasks ?? 4);
+        setConfigHadithul(selected.total_hadithul_tasks ?? 4);
+      }
+    }
+  }, [selectedConfigIntervalId, intervalsList]);
 
   const loadClassroomActiveInterval = () => {
     const active = intervalsList.find(
@@ -981,6 +1032,354 @@ const AdminDashboard = () => {
     setTimeout(() => setMessage(''), 4000);
   };
 
+  // Report editing helper functions
+  const handleUpdateAttendanceScore = async (scoreId: string, statusValue: string) => {
+    if (!selectedReportStudent) return;
+    try {
+      const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
+      const dbActivityName = `Attendance: ${statusValue}`;
+      const { error } = await supabase
+        .from('scores')
+        .update({
+          points: pointsValue,
+          activity_name: dbActivityName
+        })
+        .eq('id', scoreId);
+      if (error) throw error;
+      
+      setStudentReportData(prev => ({
+        ...prev,
+        scores: prev.scores.map(s => s.id === scoreId ? { ...s, points: pointsValue, activity_name: dbActivityName } : s)
+      }));
+      
+      setMessage('📅 Attendance updated successfully.');
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to update attendance: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  const handleDeleteScore = async (scoreId: string) => {
+    if (!selectedReportStudent) return;
+    const confirmDelete = window.confirm('Are you sure you want to delete this log entry?');
+    if (!confirmDelete) return;
+    try {
+      const { error } = await supabase
+        .from('scores')
+        .delete()
+        .eq('id', scoreId);
+      if (error) throw error;
+      
+      setStudentReportData(prev => ({
+        ...prev,
+        scores: prev.scores.filter(s => s.id !== scoreId)
+      }));
+      
+      setMessage('🗑️ Log entry deleted successfully.');
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to delete entry: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  const handleToggleWorkCell = async (dateStr: string, scoreType: string) => {
+    if (!selectedReportStudent) return;
+    
+    const existing = studentReportData.scores.find(
+      s => s.logged_date === dateStr && s.score_type === scoreType
+    );
+    
+    try {
+      if (existing) {
+        const { error } = await supabase
+          .from('scores')
+          .delete()
+          .eq('id', existing.id);
+        if (error) throw error;
+        
+        setStudentReportData(prev => ({
+          ...prev,
+          scores: prev.scores.filter(s => s.id !== existing.id)
+        }));
+        setMessage(`Removed ${scoreType.replace('daily_', '').replace('_', ' ')} submission.`);
+      } else {
+        const studentCourseId = selectedReportStudent.course_id;
+        const studentBatchNum = selectedReportStudent.batch_number;
+        const activeInt = intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum && i.is_active)
+          || intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum);
+        if (!activeInt) {
+          setMessage('❌ Cannot log: No active interval found for this student\'s course & batch.');
+          return;
+        }
+        
+        let activityName = 'Daily Task';
+        if (scoreType === 'daily_vocab') activityName = 'Daily Vocab';
+        else if (scoreType === 'daily_sentences') activityName = 'Daily Sentences';
+        else if (scoreType === 'weekly_vlog') activityName = 'Weekly Vlog';
+        else if (scoreType === 'video_reaction') activityName = 'Video Reaction';
+        else if (scoreType === 'hadithul_arabia') activityName = 'Hadithul Arabia';
+        
+        const points = scoreType.startsWith('daily_') ? 10 : 15;
+        
+        const { data, error } = await supabase
+          .from('scores')
+          .insert([{
+            student_id: selectedReportStudent.id,
+            interval_id: activeInt.id,
+            score_type: scoreType,
+            activity_name: activityName,
+            points: points,
+            max_points: points,
+            logged_date: dateStr,
+            logged_by: currentUser?.id
+          }])
+          .select();
+        
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setStudentReportData(prev => ({
+            ...prev,
+            scores: [...prev.scores, data[0]].sort((a, b) => new Date(b.logged_date).getTime() - new Date(a.logged_date).getTime())
+          }));
+        }
+        setMessage(`Logged ${activityName} submission.`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Error updating task: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  const handleAddAttendanceLog = async () => {
+    if (!selectedReportStudent || !currentUser) return;
+    try {
+      const statusValue = addAttStatus;
+      const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
+      const dbActivityName = `Attendance: ${statusValue}`;
+      
+      const studentCourseId = selectedReportStudent.course_id;
+      const studentBatchNum = selectedReportStudent.batch_number;
+      const activeInt = intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum && i.is_active)
+        || intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum);
+      if (!activeInt) {
+        setMessage('❌ Cannot log: No active interval found for this student\'s course & batch.');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('scores')
+        .upsert({
+          student_id: selectedReportStudent.id,
+          interval_id: activeInt.id,
+          points: pointsValue,
+          max_points: 10,
+          score_type: 'attendance',
+          activity_name: dbActivityName,
+          logged_by: currentUser.id,
+          logged_date: addLogDate
+        }, { onConflict: 'student_id,logged_date,score_type' })
+        .select();
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setStudentReportData(prev => {
+          const filtered = prev.scores.filter(s => !(s.logged_date === addLogDate && s.score_type === 'attendance'));
+          return {
+            ...prev,
+            scores: [data[0], ...filtered].sort((a, b) => new Date(b.logged_date).getTime() - new Date(a.logged_date).getTime())
+          };
+        });
+      }
+      setMessage(`📅 Attendance logged for ${addLogDate} as ${statusValue}.`);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to log attendance: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  const handleAddWorkLog = async () => {
+    if (!selectedReportStudent || !currentUser) return;
+    
+    const studentCourseId = selectedReportStudent.course_id;
+    const studentBatchNum = selectedReportStudent.batch_number;
+    const activeInt = intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum && i.is_active)
+      || intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum);
+    if (!activeInt) {
+      setMessage('❌ Cannot log: No active interval found for this student\'s course & batch.');
+      return;
+    }
+
+    const tasksToLog: { score_type: string; activity_name: string; points: number }[] = [];
+    if (addWorkVocab) {
+      tasksToLog.push({ score_type: 'daily_vocab', activity_name: 'Daily Vocab', points: 10 });
+    }
+    if (addWorkSentences) {
+      tasksToLog.push({ score_type: 'daily_sentences', activity_name: 'Daily Sentences', points: 10 });
+    }
+    if (addWorkVlog) {
+      tasksToLog.push({ score_type: 'weekly_vlog', activity_name: 'Weekly Vlog', points: 15 });
+    }
+    if (addWorkReaction) {
+      tasksToLog.push({ score_type: 'video_reaction', activity_name: 'Video Reaction', points: 15 });
+    }
+    if (addWorkHadithul) {
+      tasksToLog.push({ score_type: 'hadithul_arabia', activity_name: 'Hadithul Arabia', points: 15 });
+    }
+
+    if (tasksToLog.length === 0) {
+      setMessage('⚠️ Select at least one checklist item to log.');
+      return;
+    }
+
+    try {
+      const insertedData: any[] = [];
+      for (const task of tasksToLog) {
+        const { data, error } = await supabase
+          .from('scores')
+          .upsert({
+            student_id: selectedReportStudent.id,
+            interval_id: activeInt.id,
+            score_type: task.score_type,
+            activity_name: task.activity_name,
+            points: task.points,
+            max_points: task.points,
+            logged_by: currentUser.id,
+            logged_date: addLogDate
+          }, { onConflict: 'student_id,logged_date,score_type' })
+          .select();
+        
+        if (error) throw error;
+        if (data && data[0]) insertedData.push(data[0]);
+      }
+
+      setStudentReportData(prev => {
+        const types = tasksToLog.map(t => t.score_type);
+        const filtered = prev.scores.filter(s => !(s.logged_date === addLogDate && types.includes(s.score_type)));
+        return {
+          ...prev,
+          scores: [...insertedData, ...filtered].sort((a, b) => new Date(b.logged_date).getTime() - new Date(a.logged_date).getTime())
+        };
+      });
+
+      setAddWorkVocab(false);
+      setAddWorkSentences(false);
+      setAddWorkVlog(false);
+      setAddWorkReaction(false);
+      setAddWorkHadithul(false);
+
+      setMessage(`📚 Checklist tasks logged for ${addLogDate}.`);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to log tasks: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  const handleAddGradeLog = async () => {
+    if (!selectedReportStudent || !currentUser) return;
+    if (addGradeType === 'exam' && !addGradeTitle) {
+      setMessage('⚠️ Enter an exam description/title.');
+      return;
+    }
+    
+    const studentCourseId = selectedReportStudent.course_id;
+    const studentBatchNum = selectedReportStudent.batch_number;
+    const activeInt = intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum && i.is_active)
+      || intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum);
+    if (!activeInt) {
+      setMessage('❌ Cannot log: No active interval found for this student\'s course & batch.');
+      return;
+    }
+
+    try {
+      let scoreType = addGradeType;
+      let actName = addGradeTitle;
+      let points = addGradePoints;
+      let maxPoints = addGradeMaxPoints;
+
+      if (scoreType === 'penalty') {
+        points = -Math.abs(points);
+        maxPoints = 0;
+        actName = 'Malayalam Speaking violation';
+      } else if (scoreType === 'custom' && !actName) {
+        actName = 'One Minute Talk';
+        maxPoints = 10;
+      }
+
+      const { data, error } = await supabase
+        .from('scores')
+        .insert([{
+          student_id: selectedReportStudent.id,
+          interval_id: activeInt.id,
+          score_type: scoreType,
+          activity_name: actName,
+          points: points,
+          max_points: maxPoints,
+          logged_by: currentUser.id,
+          logged_date: addLogDate
+        }])
+        .select();
+
+      if (error) throw error;
+      if (data && data[0]) {
+        setStudentReportData(prev => ({
+          ...prev,
+          scores: [data[0], ...prev.scores].sort((a, b) => new Date(b.logged_date).getTime() - new Date(a.logged_date).getTime())
+        }));
+      }
+
+      setAddGradeTitle('');
+      setAddGradePoints(0);
+      setAddGradeMaxPoints(100);
+      setMessage(`📝 Log entry created successfully.`);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to log: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
+  const handleSaveIntervalTargets = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedConfigIntervalId) return;
+    try {
+      const { error } = await supabase
+        .from('scoring_intervals')
+        .update({
+          total_working_days: configWorkingDays,
+          total_vocab_tasks: configVocab,
+          total_sentences_tasks: configSentences,
+          total_vlog_tasks: configVlog,
+          total_reaction_tasks: configReaction,
+          total_hadithul_tasks: configHadithul
+        })
+        .eq('id', selectedConfigIntervalId);
+
+      if (error) throw error;
+
+      setIntervalsList(prev => prev.map(int => int.id === selectedConfigIntervalId ? {
+        ...int,
+        total_working_days: configWorkingDays,
+        total_vocab_tasks: configVocab,
+        total_sentences_tasks: configSentences,
+        total_vlog_tasks: configVlog,
+        total_reaction_tasks: configReaction,
+        total_hadithul_tasks: configHadithul
+      } : int));
+
+      setMessage('⚙️ Period targets updated successfully.');
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed to save targets: ${err.message}`);
+    }
+    setTimeout(() => setMessage(''), 4000);
+  };
+
   const handlePrintReport = (student: StudentProfile, scores: any[]) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -992,13 +1391,24 @@ const AdminDashboard = () => {
     const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     // Calculate metrics
+    const studentInterval = intervalsList.find(i => i.course_id === student.course_id && i.batch_number === student.batch_number && i.is_active) 
+      || intervalsList.find(i => i.course_id === student.course_id && i.batch_number === student.batch_number);
+    const totalWorkingDays = studentInterval?.total_working_days ?? 20;
+    const totalVocab = studentInterval?.total_vocab_tasks ?? 20;
+    const totalSentences = studentInterval?.total_sentences_tasks ?? 20;
+    const totalVlog = studentInterval?.total_vlog_tasks ?? 4;
+    const totalReaction = studentInterval?.total_reaction_tasks ?? 4;
+    const totalHadithul = studentInterval?.total_hadithul_tasks ?? 4;
+
     const attendanceRecords = scores.filter(s => s.score_type === 'attendance');
     const totalAttendance = attendanceRecords.length;
     const onTimeCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('on time')).length;
     const lateCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('late')).length;
     const halfDayCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('half day')).length;
     const absentCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('absent')).length;
-    const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
+    
+    const presentDays = onTimeCount + lateCount + (halfDayCount * 0.5);
+    const attendanceRate = totalAttendance > 0 ? Math.round((presentDays / totalAttendance) * 100) : 0;
 
     const vocabCount = scores.filter(s => s.score_type === 'daily_vocab').length;
     const sentencesCount = scores.filter(s => s.score_type === 'daily_sentences').length;
@@ -1324,7 +1734,7 @@ const AdminDashboard = () => {
               <span class="label">Attendance Rate</span>
               <span class="value">${attendanceRate}%</span>
               <span class="label" style="font-size: 9px; margin-top: 5px; font-weight: normal; text-transform: none;">
-                On Time: ${onTimeCount} | Late: ${lateCount} | Half Day: ${halfDayCount} | Absent: ${absentCount}
+                On Time: ${onTimeCount} | Late: ${lateCount} | Half Day: ${halfDayCount} | Absent: ${absentCount} (Present: ${presentDays} / ${totalWorkingDays} Days)
               </span>
             </div>
             <div class="metric-card" style="${totalPenaltiesCount > 0 ? 'border-color: #fca5a5; background: #fffafb;' : ''}">
@@ -1354,11 +1764,11 @@ const AdminDashboard = () => {
             </thead>
             <tbody>
               <tr>
-                <td style="font-size: 16px; font-weight: bold;">${vocabCount}</td>
-                <td style="font-size: 16px; font-weight: bold;">${sentencesCount}</td>
-                <td style="font-size: 16px; font-weight: bold;">${vlogCount}</td>
-                <td style="font-size: 16px; font-weight: bold;">${videoReactionCount}</td>
-                <td style="font-size: 16px; font-weight: bold;">${hadithulArabiaCount}</td>
+                <td style="font-size: 16px; font-weight: bold;">${vocabCount} / ${totalVocab}</td>
+                <td style="font-size: 16px; font-weight: bold;">${sentencesCount} / ${totalSentences}</td>
+                <td style="font-size: 16px; font-weight: bold;">${vlogCount} / ${totalVlog}</td>
+                <td style="font-size: 16px; font-weight: bold;">${videoReactionCount} / ${totalReaction}</td>
+                <td style="font-size: 16px; font-weight: bold;">${hadithulArabiaCount} / ${totalHadithul}</td>
               </tr>
             </tbody>
           </table>
@@ -4005,6 +4415,107 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
+              {/* Active Period Target Configurations */}
+              {intervalsList.filter(i => i.is_active).length > 0 && (
+                <div style={{ marginTop: '2rem', marginBottom: '2rem', borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '1.5rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Settings size={16} className="text-primary" /> Active Period Target Configurations
+                  </h4>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '1rem' }}>Configure targets (total working days and task requirements) for active scoring intervals.</p>
+                  
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Select Active Period</label>
+                    <select 
+                      value={selectedConfigIntervalId}
+                      onChange={(e) => setSelectedConfigIntervalId(e.target.value)}
+                      className="form-input"
+                    >
+                      {intervalsList.filter(i => i.is_active).map(int => {
+                        const cName = courses.find(c => c.id === int.course_id)?.name || 'Course';
+                        return (
+                          <option key={int.id} value={int.id}>{int.name} - {cName} (Batch {int.batch_number})</option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <form onSubmit={handleSaveIntervalTargets} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Working Days Target</label>
+                        <input 
+                          type="number" 
+                          value={configWorkingDays} 
+                          onChange={(e) => setConfigWorkingDays(parseInt(e.target.value) || 0)} 
+                          className="form-input"
+                          min={1}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Vocab Tasks Target</label>
+                        <input 
+                          type="number" 
+                          value={configVocab} 
+                          onChange={(e) => setConfigVocab(parseInt(e.target.value) || 0)} 
+                          className="form-input"
+                          min={0}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Sentences Target</label>
+                        <input 
+                          type="number" 
+                          value={configSentences} 
+                          onChange={(e) => setConfigSentences(parseInt(e.target.value) || 0)} 
+                          className="form-input"
+                          min={0}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Vlogs Target</label>
+                        <input 
+                          type="number" 
+                          value={configVlog} 
+                          onChange={(e) => setConfigVlog(parseInt(e.target.value) || 0)} 
+                          className="form-input"
+                          min={0}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Reactions Target</label>
+                        <input 
+                          type="number" 
+                          value={configReaction} 
+                          onChange={(e) => setConfigReaction(parseInt(e.target.value) || 0)} 
+                          className="form-input"
+                          min={0}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Hadithul Arabia Target</label>
+                        <input 
+                          type="number" 
+                          value={configHadithul} 
+                          onChange={(e) => setConfigHadithul(parseInt(e.target.value) || 0)} 
+                          className="form-input"
+                          min={0}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-outline" style={{ marginTop: '0.4rem', justifyContent: 'center', borderColor: 'var(--primary)', color: 'var(--primary-dark)', fontWeight: 700 }}>
+                      Save Target Configurations
+                    </button>
+                  </form>
+                </div>
+              )}
+
             </div>
 
           </div>
@@ -4217,6 +4728,15 @@ const AdminDashboard = () => {
                 (() => {
                   const scores = studentReportData.scores;
 
+                  const studentInterval = intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number && i.is_active)
+                    || intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number);
+                  const totalWorkingDays = studentInterval?.total_working_days ?? 20;
+                  const totalVocab = studentInterval?.total_vocab_tasks ?? 20;
+                  const totalSentences = studentInterval?.total_sentences_tasks ?? 20;
+                  const totalVlog = studentInterval?.total_vlog_tasks ?? 4;
+                  const totalReaction = studentInterval?.total_reaction_tasks ?? 4;
+                  const totalHadithul = studentInterval?.total_hadithul_tasks ?? 4;
+
                   // 1. Attendance Metrics
                   const attendanceRecords = scores.filter(s => s.score_type === 'attendance');
                   const totalAttendance = attendanceRecords.length;
@@ -4224,7 +4744,9 @@ const AdminDashboard = () => {
                   const lateCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('late')).length;
                   const halfDayCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('half day')).length;
                   const absentCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('absent')).length;
-                  const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
+                  
+                  const presentDays = onTimeCount + lateCount + (halfDayCount * 0.5);
+                  const attendanceRate = totalAttendance > 0 ? Math.round((presentDays / totalAttendance) * 100) : 0;
 
                   // 2. Checklist Completions
                   const vocabCount = scores.filter(s => s.score_type === 'daily_vocab').length;
@@ -4261,8 +4783,8 @@ const AdminDashboard = () => {
                             <span style={{ fontSize: '2rem', fontWeight: 850, color: 'var(--primary-dark)' }}>{attendanceRate}%</span>
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                            <div>On Time: <strong style={{ color: 'var(--text-main)' }}>{onTimeCount}</strong></div>
-                            <div>Late: <strong style={{ color: 'var(--text-main)' }}>{lateCount}</strong> | Half Day: <strong style={{ color: 'var(--text-main)' }}>{halfDayCount}</strong> | Absent: <strong style={{ color: 'var(--text-main)' }}>{absentCount}</strong></div>
+                            <div>Present: <strong style={{ color: 'var(--text-main)' }}>{presentDays} / {totalWorkingDays} Days</strong></div>
+                            <div>On Time: <strong>{onTimeCount}</strong> | Late: <strong>{lateCount}</strong> | Half Day: <strong>{halfDayCount}</strong> | Absent: <strong>{absentCount}</strong></div>
                           </div>
                         </div>
 
@@ -4316,27 +4838,27 @@ const AdminDashboard = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vocab Tasks</span>
-                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vocabCount}</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vocabCount} / {totalVocab}</span>
                           </div>
                           <div style={{ width: '1px', height: '25px', background: 'rgba(201,156,51,0.2)' }} />
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Sentences Tasks</span>
-                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{sentencesCount}</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{sentencesCount} / {totalSentences}</span>
                           </div>
                           <div style={{ width: '1px', height: '25px', background: 'rgba(201,156,51,0.2)' }} />
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Weekly Vlogs</span>
-                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount}</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount} / {totalVlog}</span>
                           </div>
                           <div style={{ width: '1px', height: '25px', background: 'rgba(201,156,51,0.2)' }} />
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Video Reaction</span>
-                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{videoReactionCount}</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{videoReactionCount} / {totalReaction}</span>
                           </div>
                           <div style={{ width: '1px', height: '25px', background: 'rgba(201,156,51,0.2)' }} />
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hadithul Arabia</span>
-                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{hadithulArabiaCount}</span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{hadithulArabiaCount} / {totalHadithul}</span>
                           </div>
                         </div>
                       </div>
@@ -4393,51 +4915,109 @@ const AdminDashboard = () => {
                       {reportTab === 'attendance' && (() => {
                         const attRecords = scores.filter(s => s.score_type === 'attendance');
                         return (
-                          <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                              <thead>
-                                <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
-                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Status</th>
-                                  <th style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700 }}>Points</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {attRecords.length === 0 ? (
-                                  <tr>
-                                    <td colSpan={3} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                      No attendance records logged.
-                                    </td>
-                                  </tr>
-                                ) : (
-                                  attRecords.map(rec => {
-                                    const status = rec.activity_name.replace('Attendance: ', '');
-                                    let statusBg = 'rgba(0,0,0,0.04)';
-                                    let statusColor = 'var(--text-muted)';
-                                    if (status === 'On Time') { statusBg = 'rgba(34,197,94,0.08)'; statusColor = '#16a34a'; }
-                                    else if (status === 'Late') { statusBg = 'rgba(180,83,9,0.08)'; statusColor = '#b45309'; }
-                                    else if (status === 'Half Day') { statusBg = 'rgba(59,130,246,0.08)'; statusColor = '#3b82f6'; }
-                                    else if (status === 'Absent') { statusBg = 'rgba(239,68,68,0.08)'; statusColor = '#dc2626'; }
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {/* Log attendance form */}
+                            <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', padding: '0.8rem', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>➕ Log Attendance:</span>
+                              <input 
+                                type="date" 
+                                value={addLogDate} 
+                                onChange={(e) => setAddLogDate(e.target.value)} 
+                                style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none' }}
+                              />
+                              <select 
+                                value={addAttStatus} 
+                                onChange={(e) => setAddAttStatus(e.target.value)}
+                                style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', fontWeight: 600, outline: 'none' }}
+                              >
+                                <option value="On Time">On Time (10 XP)</option>
+                                <option value="Late">Late (7 XP)</option>
+                                <option value="Half Day">Half Day (5 XP)</option>
+                                <option value="Absent">Absent (0 XP)</option>
+                              </select>
+                              <button 
+                                onClick={handleAddAttendanceLog}
+                                className="btn btn-primary"
+                                style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', fontWeight: 700 }}
+                              >
+                                Log
+                              </button>
+                            </div>
 
-                                    return (
-                                      <tr key={rec.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                                        <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
-                                          {new Date(rec.logged_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                        </td>
-                                        <td style={{ padding: '0.6rem 1rem' }}>
-                                          <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', background: statusBg, color: statusColor, fontWeight: 700, fontSize: '0.75rem' }}>
-                                            {status}
-                                          </span>
-                                        </td>
-                                        <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700, color: rec.points > 0 ? '#16a34a' : 'var(--text-muted)' }}>
-                                          {rec.points > 0 ? `+${rec.points}` : rec.points} XP
-                                        </td>
-                                      </tr>
-                                    );
-                                  })
-                                )}
-                              </tbody>
-                            </table>
+                            <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                                <thead>
+                                  <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                                    <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
+                                    <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Status</th>
+                                    <th style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700 }}>Points</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {attRecords.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={3} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                        No attendance records logged.
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    attRecords.map(rec => {
+                                      const status = rec.activity_name.replace('Attendance: ', '');
+                                      let statusBg = 'rgba(0,0,0,0.04)';
+                                      let statusColor = 'var(--text-muted)';
+                                      if (status === 'On Time') { statusBg = 'rgba(34,197,94,0.08)'; statusColor = '#16a34a'; }
+                                      else if (status === 'Late') { statusBg = 'rgba(180,83,9,0.08)'; statusColor = '#b45309'; }
+                                      else if (status === 'Half Day') { statusBg = 'rgba(59,130,246,0.08)'; statusColor = '#3b82f6'; }
+                                      else if (status === 'Absent') { statusBg = 'rgba(239,68,68,0.08)'; statusColor = '#dc2626'; }
+
+                                      return (
+                                        <tr key={rec.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                          <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
+                                            {new Date(rec.logged_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                          </td>
+                                          <td style={{ padding: '0.6rem 1rem' }}>
+                                            <select
+                                              value={status}
+                                              onChange={(e) => handleUpdateAttendanceScore(rec.id, e.target.value)}
+                                              style={{
+                                                padding: '0.2rem 0.4rem',
+                                                borderRadius: '6px',
+                                                border: '1px solid rgba(0,0,0,0.1)',
+                                                background: statusBg,
+                                                color: statusColor,
+                                                fontWeight: 700,
+                                                fontSize: '0.75rem',
+                                                cursor: 'pointer',
+                                                outline: 'none'
+                                              }}
+                                            >
+                                              <option value="On Time" style={{ color: '#16a34a', fontWeight: 'bold' }}>On Time</option>
+                                              <option value="Late" style={{ color: '#b45309', fontWeight: 'bold' }}>Late</option>
+                                              <option value="Half Day" style={{ color: '#3b82f6', fontWeight: 'bold' }}>Half Day</option>
+                                              <option value="Absent" style={{ color: '#dc2626', fontWeight: 'bold' }}>Absent</option>
+                                            </select>
+                                          </td>
+                                          <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                              <span style={{ color: rec.points > 0 ? '#16a34a' : 'var(--text-muted)' }}>
+                                                {rec.points > 0 ? `+${rec.points}` : rec.points} XP
+                                              </span>
+                                              <button
+                                                onClick={() => handleDeleteScore(rec.id)}
+                                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.2rem', display: 'flex', alignItems: 'center' }}
+                                                title="Delete Log"
+                                              >
+                                                <Trash2 size={14} />
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         );
                       })()}
@@ -4459,54 +5039,103 @@ const AdminDashboard = () => {
                         const workDatesSorted = Object.keys(workGroupByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
                         return (
-                          <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                              <thead>
-                                <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
-                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Vocab</th>
-                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Sentences</th>
-                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Vlog</th>
-                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Reaction</th>
-                                  <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Hadithul A.</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {workDatesSorted.length === 0 ? (
-                                  <tr>
-                                    <td colSpan={6} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                      No task submissions logged.
-                                    </td>
-                                  </tr>
-                                ) : (
-                                  workDatesSorted.map(dateStr => {
-                                    const entry = workGroupByDate[dateStr];
-                                    const renderStatus = (done: boolean) => (
-                                      <span style={{ 
-                                        color: done ? '#16a34a' : 'rgba(0,0,0,0.2)', 
-                                        fontWeight: 800, 
-                                        fontSize: done ? '1.1rem' : '0.9rem' 
-                                      }}>
-                                        {done ? '✓' : '-'}
-                                      </span>
-                                    );
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {/* Log work checklist form */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0.8rem', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', marginBottom: '1rem' }}>
+                              <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>➕ Log Work Completions:</span>
+                                <input 
+                                  type="date" 
+                                  value={addLogDate} 
+                                  onChange={(e) => setAddLogDate(e.target.value)} 
+                                  style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none' }}
+                                />
+                              </div>
+                              <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                                  <input type="checkbox" checked={addWorkVocab} onChange={(e) => setAddWorkVocab(e.target.checked)} /> Vocab
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                                  <input type="checkbox" checked={addWorkSentences} onChange={(e) => setAddWorkSentences(e.target.checked)} /> Sentences
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                                  <input type="checkbox" checked={addWorkVlog} onChange={(e) => setAddWorkVlog(e.target.checked)} /> Vlog
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                                  <input type="checkbox" checked={addWorkReaction} onChange={(e) => setAddWorkReaction(e.target.checked)} /> Reaction
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                                  <input type="checkbox" checked={addWorkHadithul} onChange={(e) => setAddWorkHadithul(e.target.checked)} /> Hadithul A.
+                                </label>
+                                <button 
+                                  onClick={handleAddWorkLog}
+                                  className="btn btn-primary"
+                                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', fontWeight: 700, marginLeft: 'auto' }}
+                                >
+                                  Log Work
+                                </button>
+                              </div>
+                            </div>
 
-                                    return (
-                                      <tr key={dateStr} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                                        <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
-                                          {new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                        </td>
-                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.daily_vocab)}</td>
-                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.daily_sentences)}</td>
-                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.weekly_vlog)}</td>
-                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.video_reaction)}</td>
-                                        <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.hadithul_arabia)}</td>
-                                      </tr>
-                                    );
-                                  })
-                                )}
-                              </tbody>
-                            </table>
+                            <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                                <thead>
+                                  <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                                    <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
+                                    <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Vocab</th>
+                                    <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Sentences</th>
+                                    <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Vlog</th>
+                                    <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Reaction</th>
+                                    <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: 700 }}>Hadithul A.</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {workDatesSorted.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={6} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                        No task submissions logged.
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    workDatesSorted.map(dateStr => {
+                                      const entry = workGroupByDate[dateStr];
+                                      const renderStatus = (done: boolean, scoreType: string) => (
+                                        <button
+                                          onClick={() => handleToggleWorkCell(dateStr, scoreType)}
+                                          style={{ 
+                                            background: 'none',
+                                            border: 'none',
+                                            color: done ? '#16a34a' : 'rgba(0,0,0,0.2)', 
+                                            fontWeight: 800, 
+                                            fontSize: done ? '1.1rem' : '0.9rem',
+                                            cursor: 'pointer',
+                                            padding: '0.2rem 0.5rem',
+                                            borderRadius: '4px',
+                                            outline: 'none'
+                                          }}
+                                          title={`Click to ${done ? 'remove' : 'log'} submission`}
+                                        >
+                                          {done ? '✓' : '-'}
+                                        </button>
+                                      );
+
+                                      return (
+                                        <tr key={dateStr} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                          <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
+                                            {new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                          </td>
+                                          <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.daily_vocab, 'daily_vocab')}</td>
+                                          <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.daily_sentences, 'daily_sentences')}</td>
+                                          <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.weekly_vlog, 'weekly_vlog')}</td>
+                                          <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.video_reaction, 'video_reaction')}</td>
+                                          <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{renderStatus(entry.hadithul_arabia, 'hadithul_arabia')}</td>
+                                        </tr>
+                                      );
+                                    })
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         );
                       })()}
@@ -4517,60 +5146,168 @@ const AdminDashboard = () => {
                         const gradeRecords = scores.filter(s => gradeTypes.includes(s.score_type));
 
                         return (
-                          <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                              <thead>
-                                <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
-                                  <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Activity / Violation</th>
-                                  <th style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700 }}>Grade / Score</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {gradeRecords.length === 0 ? (
-                                  <tr>
-                                    <td colSpan={3} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                                      No grades or penalties logged.
-                                    </td>
-                                  </tr>
-                                ) : (
-                                  gradeRecords.map(rec => {
-                                    let displayTitle = rec.activity_name;
-                                    let displayScore = `${rec.points > 0 ? '+' : ''}${rec.points} XP`;
-                                    let scoreColor = rec.points >= 0 ? 'var(--text-main)' : '#dc2626';
-
-                                    if (rec.score_type === 'exam') {
-                                      const pct = Math.round((rec.points / rec.max_points) * 100);
-                                      displayTitle = `📝 Exam: ${rec.activity_name.replace(/^exam:\s*/i, '')}`;
-                                      displayScore = `${rec.points}/${rec.max_points} (${pct}%)`;
-                                      scoreColor = 'var(--primary-dark)';
-                                    } else if (rec.score_type === 'penalty') {
-                                      const count = Math.round(Math.abs(rec.points) / 2);
-                                      displayTitle = `⚠️ Malayalam Speaking violation`;
-                                      displayScore = `-${Math.abs(rec.points)} XP (${count} ${count === 1 ? 'penalty' : 'penalties'})`;
-                                      scoreColor = '#dc2626';
-                                    } else if (rec.score_type === 'custom' && rec.activity_name === 'One Minute Talk') {
-                                      displayTitle = `🎙️ One Minute Talk`;
-                                      displayScore = `${rec.points} / 10`;
-                                    }
-
-                                    return (
-                                      <tr key={rec.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                                        <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
-                                          {new Date(rec.logged_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                        </td>
-                                        <td style={{ padding: '0.6rem 1rem' }}>
-                                          <div style={{ fontWeight: 600 }}>{displayTitle}</div>
-                                        </td>
-                                        <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700, color: scoreColor }}>
-                                          {displayScore}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {/* Log grade/penalty form */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0.8rem', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', marginBottom: '1rem' }}>
+                              <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>➕ Log Grade / Penalty:</span>
+                                <input 
+                                  type="date" 
+                                  value={addLogDate} 
+                                  onChange={(e) => setAddLogDate(e.target.value)} 
+                                  style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none' }}
+                                />
+                                <select 
+                                  value={addGradeType} 
+                                  onChange={(e) => setAddGradeType(e.target.value as any)}
+                                  style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', fontWeight: 600, outline: 'none' }}
+                                >
+                                  <option value="exam">📝 Exam</option>
+                                  <option value="penalty">⚠️ Malayalam Violation</option>
+                                  <option value="custom">🎙️ One Minute Talk / Custom</option>
+                                </select>
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.2rem' }}>
+                                {addGradeType === 'exam' && (
+                                  <>
+                                    <input 
+                                      type="text" 
+                                      placeholder="Exam Title (e.g. Grammar Test 1)"
+                                      value={addGradeTitle}
+                                      onChange={(e) => setAddGradeTitle(e.target.value)}
+                                      style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', flex: 1, minWidth: '150px', outline: 'none' }}
+                                    />
+                                    <input 
+                                      type="number" 
+                                      placeholder="Score"
+                                      value={addGradePoints || ''}
+                                      onChange={(e) => setAddGradePoints(parseInt(e.target.value) || 0)}
+                                      style={{ padding: '0.3rem 0.5rem', width: '70px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none' }}
+                                    />
+                                    <span style={{ fontSize: '0.8rem' }}>/</span>
+                                    <input 
+                                      type="number" 
+                                      placeholder="Max"
+                                      value={addGradeMaxPoints || ''}
+                                      onChange={(e) => setAddGradeMaxPoints(parseInt(e.target.value) || 0)}
+                                      style={{ padding: '0.3rem 0.5rem', width: '70px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none' }}
+                                    />
+                                  </>
                                 )}
-                              </tbody>
-                            </table>
+                                {addGradeType === 'penalty' && (
+                                  <>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Malayalam Violations (each -2 XP). Count:</span>
+                                    <input 
+                                      type="number" 
+                                      placeholder="Penalties count"
+                                      value={Math.round(Math.abs(addGradePoints) / 2) || ''}
+                                      onChange={(e) => setAddGradePoints((parseInt(e.target.value) || 0) * 2)}
+                                      style={{ padding: '0.3rem 0.5rem', width: '120px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none' }}
+                                    />
+                                  </>
+                                )}
+                                {addGradeType === 'custom' && (
+                                  <>
+                                    <input 
+                                      type="text" 
+                                      placeholder="Activity Title (e.g. One Minute Talk)"
+                                      value={addGradeTitle}
+                                      onChange={(e) => setAddGradeTitle(e.target.value)}
+                                      style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', flex: 1, minWidth: '150px', outline: 'none' }}
+                                    />
+                                    <input 
+                                      type="number" 
+                                      placeholder="Score"
+                                      value={addGradePoints || ''}
+                                      onChange={(e) => setAddGradePoints(parseInt(e.target.value) || 0)}
+                                      style={{ padding: '0.3rem 0.5rem', width: '80px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none' }}
+                                    />
+                                    <span style={{ fontSize: '0.8rem' }}>/</span>
+                                    <input 
+                                      type="number" 
+                                      placeholder="Max"
+                                      value={addGradeMaxPoints || ''}
+                                      onChange={(e) => setAddGradeMaxPoints(parseInt(e.target.value) || 0)}
+                                      style={{ padding: '0.3rem 0.5rem', width: '80px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none' }}
+                                    />
+                                  </>
+                                )}
+                                <button 
+                                  onClick={handleAddGradeLog}
+                                  className="btn btn-primary"
+                                  style={{ padding: '0.3rem 0.8rem', fontSize: '0.8rem', fontWeight: 700, marginLeft: 'auto' }}
+                                >
+                                  Log Score
+                                </button>
+                              </div>
+                            </div>
+
+                            <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                                <thead>
+                                  <tr style={{ background: 'rgba(0,0,0,0.02)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                                    <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Date</th>
+                                    <th style={{ padding: '0.6rem 1rem', fontWeight: 700 }}>Activity / Violation</th>
+                                    <th style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700 }}>Grade / Score</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {gradeRecords.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={3} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                        No grades or penalties logged.
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    gradeRecords.map(rec => {
+                                      let displayTitle = rec.activity_name;
+                                      let displayScore = `${rec.points > 0 ? '+' : ''}${rec.points} XP`;
+                                      let scoreColor = rec.points >= 0 ? 'var(--text-main)' : '#dc2626';
+
+                                      if (rec.score_type === 'exam') {
+                                        const pct = Math.round((rec.points / rec.max_points) * 100);
+                                        displayTitle = `📝 Exam: ${rec.activity_name.replace(/^exam:\s*/i, '')}`;
+                                        displayScore = `${rec.points}/${rec.max_points} (${pct}%)`;
+                                        scoreColor = 'var(--primary-dark)';
+                                      } else if (rec.score_type === 'penalty') {
+                                        const count = Math.round(Math.abs(rec.points) / 2);
+                                        displayTitle = `⚠️ Malayalam Speaking violation`;
+                                        displayScore = `-${Math.abs(rec.points)} XP (${count} ${count === 1 ? 'penalty' : 'penalties'})`;
+                                        scoreColor = '#dc2626';
+                                      } else if (rec.score_type === 'custom' && rec.activity_name === 'One Minute Talk') {
+                                        displayTitle = `🎙️ One Minute Talk`;
+                                        displayScore = `${rec.points} / 10`;
+                                      }
+
+                                      return (
+                                        <tr key={rec.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                          <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
+                                            {new Date(rec.logged_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                          </td>
+                                          <td style={{ padding: '0.6rem 1rem' }}>
+                                            <div style={{ fontWeight: 600 }}>{displayTitle}</div>
+                                          </td>
+                                          <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: 700 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                                              <span style={{ color: scoreColor }}>
+                                                {displayScore}
+                                              </span>
+                                              <button
+                                                onClick={() => handleDeleteScore(rec.id)}
+                                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.2rem', display: 'flex', alignItems: 'center' }}
+                                                title="Delete Log"
+                                              >
+                                                <Trash2 size={14} />
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         );
                       })()}

@@ -32,6 +32,18 @@ interface StudentProfile {
   };
 }
 
+interface Interval {
+  id: string;
+  name: string;
+  is_active: boolean;
+  total_working_days: number;
+  total_vocab_tasks: number;
+  total_sentences_tasks: number;
+  total_vlog_tasks: number;
+  total_reaction_tasks: number;
+  total_hadithul_tasks: number;
+}
+
 interface LeaderboardEntry {
   student_id: string;
   name: string;
@@ -117,13 +129,23 @@ const StudentDashboard = () => {
     const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     // Calculate metrics
+    const currentIntervalObj = intervals.find(i => i.id === selectedInterval);
+    const totalWorkingDays = currentIntervalObj?.total_working_days ?? 20;
+    const totalVocab = currentIntervalObj?.total_vocab_tasks ?? 20;
+    const totalSentences = currentIntervalObj?.total_sentences_tasks ?? 20;
+    const totalVlog = currentIntervalObj?.total_vlog_tasks ?? 4;
+    const totalReaction = currentIntervalObj?.total_reaction_tasks ?? 4;
+    const totalHadithul = currentIntervalObj?.total_hadithul_tasks ?? 4;
+
     const attendanceRecords = scores.filter(s => s.score_type === 'attendance');
     const totalAttendance = attendanceRecords.length;
     const onTimeCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('on time')).length;
     const lateCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('late')).length;
     const halfDayCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('half day')).length;
     const absentCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('absent')).length;
-    const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
+    
+    const presentDays = onTimeCount + lateCount + (halfDayCount * 0.5);
+    const attendanceRate = totalAttendance > 0 ? Math.round((presentDays / totalAttendance) * 100) : 0;
 
     const vocabCount = scores.filter(s => s.score_type === 'daily_vocab').length;
     const sentencesCount = scores.filter(s => s.score_type === 'daily_sentences').length;
@@ -449,7 +471,7 @@ const StudentDashboard = () => {
               <span class="label">Attendance Rate</span>
               <span class="value">${attendanceRate}%</span>
               <span class="label" style="font-size: 9px; margin-top: 5px; font-weight: normal; text-transform: none;">
-                On Time: ${onTimeCount} | Late: ${lateCount} | Half Day: ${halfDayCount} | Absent: ${absentCount}
+                On Time: ${onTimeCount} | Late: ${lateCount} | Half Day: ${halfDayCount} | Absent: ${absentCount} (Present: ${presentDays} / ${totalWorkingDays} Working Days)
               </span>
             </div>
             <div class="metric-card" style="${totalPenaltiesCount > 0 ? 'border-color: #fca5a5; background: #fffafb;' : ''}">
@@ -479,11 +501,11 @@ const StudentDashboard = () => {
             </thead>
             <tbody>
               <tr>
-                <td style="font-size: 16px; font-weight: bold;">${vocabCount}</td>
-                <td style="font-size: 16px; font-weight: bold;">${sentencesCount}</td>
-                <td style="font-size: 16px; font-weight: bold;">${vlogCount}</td>
-                <td style="font-size: 16px; font-weight: bold;">${videoReactionCount}</td>
-                <td style="font-size: 16px; font-weight: bold;">${hadithulArabiaCount}</td>
+                <td style="font-size: 16px; font-weight: bold;">${vocabCount} / ${totalVocab}</td>
+                <td style="font-size: 16px; font-weight: bold;">${sentencesCount} / ${totalSentences}</td>
+                <td style="font-size: 16px; font-weight: bold;">${vlogCount} / ${totalVlog}</td>
+                <td style="font-size: 16px; font-weight: bold;">${videoReactionCount} / ${totalReaction}</td>
+                <td style="font-size: 16px; font-weight: bold;">${hadithulArabiaCount} / ${totalHadithul}</td>
               </tr>
             </tbody>
           </table>
@@ -817,13 +839,23 @@ const StudentDashboard = () => {
   const myBadge = getBadgeStyle(myRank);
 
   // Performance Report Calculations
+  const currentIntervalObj = intervals.find(i => i.id === selectedInterval);
+  const totalWorkingDays = currentIntervalObj?.total_working_days ?? 20;
+  const totalVocab = currentIntervalObj?.total_vocab_tasks ?? 20;
+  const totalSentences = currentIntervalObj?.total_sentences_tasks ?? 20;
+  const totalVlog = currentIntervalObj?.total_vlog_tasks ?? 4;
+  const totalReaction = currentIntervalObj?.total_reaction_tasks ?? 4;
+  const totalHadithul = currentIntervalObj?.total_hadithul_tasks ?? 4;
+
   const attendanceLogs = recentLogs.filter(log => log.score_type === 'attendance');
   const totalAttendance = attendanceLogs.length;
   const onTimeCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('on time')).length;
   const lateCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('late')).length;
   const halfDayCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('half day')).length;
   const absentCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('absent')).length;
-  const attendanceRate = totalAttendance > 0 ? Math.round((onTimeCount / totalAttendance) * 100) : 0;
+  
+  const presentDays = onTimeCount + lateCount + (halfDayCount * 0.5);
+  const attendanceRate = totalAttendance > 0 ? Math.round((presentDays / totalAttendance) * 100) : 0;
 
   const vocabCount = recentLogs.filter(log => log.score_type === 'daily_vocab').length;
   const sentencesCount = recentLogs.filter(log => log.score_type === 'daily_sentences').length;
@@ -1295,7 +1327,7 @@ const StudentDashboard = () => {
                     <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--primary-dark)' }}>{attendanceRate}%</span>
                   </div>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    On Time: {onTimeCount}/{totalAttendance} Days (Late: {lateCount}, Half Day: {halfDayCount}, Absent: {absentCount})
+                    On Time: {onTimeCount} | Late: {lateCount} | Half Day: {halfDayCount} | Absent: {absentCount} (Present: {presentDays} / {totalWorkingDays} Days)
                   </span>
                 </div>
 
@@ -1342,27 +1374,27 @@ const StudentDashboard = () => {
               <div style={{ background: 'rgba(201,156,51,0.03)', padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid rgba(201,156,51,0.1)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', marginBottom: '1.2rem', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vocabulary</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vocabCount}</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vocabCount} / {totalVocab}</span>
                 </div>
                 <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Sentences</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{sentencesCount}</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{sentencesCount} / {totalSentences}</span>
                 </div>
                 <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vlogs</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount}</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount} / {totalVlog}</span>
                 </div>
                 <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Reactions</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{videoReactionCount}</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{videoReactionCount} / {totalReaction}</span>
                 </div>
                 <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hadithul A.</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{hadithulArabiaCount}</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{hadithulArabiaCount} / {totalHadithul}</span>
                 </div>
               </div>
 

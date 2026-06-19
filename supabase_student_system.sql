@@ -287,3 +287,28 @@ USING (
         WHERE id = auth.uid() AND status = 'active'
     )
 );
+
+-- 10. Add target column configurations to scoring_intervals
+ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS total_working_days INTEGER DEFAULT 20 NOT NULL;
+ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS total_vocab_tasks INTEGER DEFAULT 20 NOT NULL;
+ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS total_sentences_tasks INTEGER DEFAULT 20 NOT NULL;
+ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS total_vlog_tasks INTEGER DEFAULT 4 NOT NULL;
+ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS total_reaction_tasks INTEGER DEFAULT 4 NOT NULL;
+ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS total_hadithul_tasks INTEGER DEFAULT 4 NOT NULL;
+
+-- 11. Add UPDATE policy to scores table
+CREATE POLICY "Enable update for staff and leadership" 
+ON public.scores FOR UPDATE 
+TO authenticated 
+USING (
+    EXISTS (
+        SELECT 1 FROM public.staff_profiles 
+        WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM public.staff_profiles 
+        WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
+    )
+);
