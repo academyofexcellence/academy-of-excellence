@@ -83,6 +83,7 @@ interface ScoringInterval {
   total_vlog_tasks?: number;
   total_reaction_tasks?: number;
   total_hadithul_tasks?: number;
+  created_at?: string;
 }
 
 interface LeaderboardEntry {
@@ -5015,7 +5016,32 @@ const AdminDashboard = () => {
                           return acc;
                         }, {} as { [date: string]: { daily_vocab: boolean, daily_sentences: boolean, weekly_vlog: boolean, video_reaction: boolean, hadithul_arabia: boolean } });
 
-                        const workDatesSorted = Object.keys(workGroupByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+                        const studentInterval = intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number && i.is_active)
+                          || intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number);
+
+                        const getDatesRange = (startDateStr: string) => {
+                          const dates: string[] = [];
+                          const start = new Date(startDateStr);
+                          start.setHours(0, 0, 0, 0);
+                          
+                          const end = new Date();
+                          end.setHours(0, 0, 0, 0);
+                          
+                          let limit = 0;
+                          const current = new Date(end);
+                          while (current >= start && limit < 90) {
+                            dates.push(current.toISOString().split('T')[0]);
+                            current.setDate(current.getDate() - 1);
+                            limit++;
+                          }
+                          return dates;
+                        };
+
+                        const intervalStartDate = (studentInterval && studentInterval.created_at) ? studentInterval.created_at : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                        const generatedDates = getDatesRange(intervalStartDate);
+                        const loggedDates = Object.keys(workGroupByDate);
+                        const allDatesSet = new Set([...generatedDates, ...loggedDates]);
+                        const workDatesSorted = Array.from(allDatesSet).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
                         return (
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -5077,7 +5103,7 @@ const AdminDashboard = () => {
                                     </tr>
                                   ) : (
                                     workDatesSorted.map(dateStr => {
-                                      const entry = workGroupByDate[dateStr];
+                                      const entry = workGroupByDate[dateStr] || { daily_vocab: false, daily_sentences: false, weekly_vlog: false, video_reaction: false, hadithul_arabia: false };
                                       const renderStatus = (done: boolean, scoreType: string) => (
                                         <button
                                           onClick={() => handleToggleWorkCell(dateStr, scoreType)}
