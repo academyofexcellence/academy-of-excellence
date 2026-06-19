@@ -313,3 +313,10 @@ WITH CHECK (
         WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
     )
 );
+
+-- 12. Add start_date column to scoring_intervals
+ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS start_date DATE;
+UPDATE public.scoring_intervals SET start_date = created_at::date WHERE start_date IS NULL;
+ALTER TABLE public.scoring_intervals ALTER COLUMN start_date SET NOT NULL;
+ALTER TABLE public.scoring_intervals ALTER COLUMN start_date SET DEFAULT CURRENT_DATE;
+

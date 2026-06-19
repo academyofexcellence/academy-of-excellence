@@ -84,6 +84,7 @@ interface ScoringInterval {
   total_reaction_tasks?: number;
   total_hadithul_tasks?: number;
   created_at?: string;
+  start_date?: string;
 }
 
 interface LeaderboardEntry {
@@ -162,6 +163,7 @@ const AdminDashboard = () => {
   const [configVlog, setConfigVlog] = useState(4);
   const [configReaction, setConfigReaction] = useState(4);
   const [configHadithul, setConfigHadithul] = useState(4);
+  const [configStartDate, setConfigStartDate] = useState('');
   
   // Synchronous lock to prevent penalty double-clicks
   const penaltyLockRef = useRef<Record<string, boolean>>({});
@@ -474,6 +476,7 @@ const AdminDashboard = () => {
         setConfigVlog(selected.total_vlog_tasks ?? 4);
         setConfigReaction(selected.total_reaction_tasks ?? 4);
         setConfigHadithul(selected.total_hadithul_tasks ?? 4);
+        setConfigStartDate(selected.start_date ?? (selected.created_at ? selected.created_at.split('T')[0] : ''));
       }
     }
   }, [selectedConfigIntervalId, intervalsList]);
@@ -1366,7 +1369,8 @@ const AdminDashboard = () => {
           total_sentences_tasks: configSentences,
           total_vlog_tasks: configVlog,
           total_reaction_tasks: configReaction,
-          total_hadithul_tasks: configHadithul
+          total_hadithul_tasks: configHadithul,
+          start_date: configStartDate || null
         })
         .eq('id', selectedConfigIntervalId);
 
@@ -1379,7 +1383,8 @@ const AdminDashboard = () => {
         total_sentences_tasks: configSentences,
         total_vlog_tasks: configVlog,
         total_reaction_tasks: configReaction,
-        total_hadithul_tasks: configHadithul
+        total_hadithul_tasks: configHadithul,
+        start_date: configStartDate
       } : int));
 
       setMessage('⚙️ Period targets updated successfully.');
@@ -4421,6 +4426,16 @@ const AdminDashboard = () => {
 
                   <form onSubmit={handleSaveIntervalTargets} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Start Date (Course Commencement)</label>
+                        <input 
+                          type="date" 
+                          value={configStartDate} 
+                          onChange={(e) => setConfigStartDate(e.target.value)} 
+                          className="form-input"
+                          required
+                        />
+                      </div>
                       <div className="form-group">
                         <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Working Days Target</label>
                         <input 
@@ -5030,14 +5045,21 @@ const AdminDashboard = () => {
                           let limit = 0;
                           const current = new Date(end);
                           while (current >= start && limit < 90) {
-                            dates.push(current.toISOString().split('T')[0]);
+                            const yyyy = current.getFullYear();
+                            const mm = String(current.getMonth() + 1).padStart(2, '0');
+                            const dd = String(current.getDate()).padStart(2, '0');
+                            dates.push(`${yyyy}-${mm}-${dd}`);
                             current.setDate(current.getDate() - 1);
                             limit++;
                           }
                           return dates;
                         };
 
-                        const intervalStartDate = (studentInterval && studentInterval.created_at) ? studentInterval.created_at : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+                        const intervalStartDate = (studentInterval && studentInterval.start_date) 
+                          ? studentInterval.start_date 
+                          : (studentInterval && studentInterval.created_at) 
+                            ? studentInterval.created_at 
+                            : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
                         const generatedDates = getDatesRange(intervalStartDate);
                         const loggedDates = Object.keys(workGroupByDate);
                         const allDatesSet = new Set([...generatedDates, ...loggedDates]);
