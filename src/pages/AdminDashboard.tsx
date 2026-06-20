@@ -1872,6 +1872,297 @@ const AdminDashboard = () => {
     setTimeout(() => setMessage(''), 4000);
   };
 
+  const handlePrintRankList = () => {
+    if (!activeInterval) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to print the rank list.');
+      return;
+    }
+
+    const courseName = courses.find(c => c.id === activeInterval.course_id)?.name || '';
+    const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const rows = classroomLeaderboard.map((entry) => `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 10px; font-weight: bold; text-align: center;">${entry.rank}</td>
+        <td style="padding: 10px; font-weight: 600;">${entry.name}</td>
+        <td style="padding: 10px; text-align: center;">Level ${entry.level}</td>
+        <td style="padding: 10px; text-align: right; font-weight: bold; color: #c99c33;">${entry.total_score} XP</td>
+      </tr>
+    `).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Class Standing Leaderboard - ${activeInterval.name}</title>
+          <style>
+            body {
+              font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              color: #1e293b;
+              margin: 0;
+              padding: 40px;
+              background: white;
+            }
+            .header {
+              border-bottom: 3px solid #c99c33;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+            }
+            .title-section h1 {
+              margin: 0 0 5px 0;
+              font-size: 22px;
+              font-weight: 800;
+            }
+            .title-section p {
+              margin: 0;
+              color: #64748b;
+              font-size: 13px;
+            }
+            .academy-info h2 {
+              margin: 0;
+              font-size: 16px;
+              font-weight: 800;
+              color: #c99c33;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+              font-size: 14px;
+            }
+            th {
+              background: #f8fafc;
+              border-bottom: 2px solid #cbd5e1;
+              padding: 12px 10px;
+              font-weight: 700;
+            }
+            td {
+              padding: 12px 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title-section">
+              <h1>Class Standing Leaderboard</h1>
+              <p>${courseName} • Batch ${activeInterval.batch_number} • ${activeInterval.name}</p>
+              <p style="margin-top: 5px;">Report Generated: ${printDate}</p>
+            </div>
+            <div class="academy-info">
+              <h2>ACADEMY OF EXCELLENCE</h2>
+              <p style="margin: 0; font-size: 10px; color: #64748b; text-align: right;">Elegance in Arabic Education</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr style="background: #f8fafc;">
+                <th style="width: 15%; text-align: center;">Rank</th>
+                <th style="width: 45%; text-align: left;">Student Name</th>
+                <th style="width: 20%; text-align: center;">Scholar Level</th>
+                <th style="width: 20%; text-align: right;">Total Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handlePrintMatrix = (studentsListToPrint: StudentProfile[]) => {
+    if (!activeInterval) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to print the matrix sheet.');
+      return;
+    }
+
+    const courseName = courses.find(c => c.id === activeInterval.course_id)?.name || '';
+    const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    
+    const batchStartDate = activeInterval.start_date || activeInterval.created_at || new Date().toISOString();
+    const matrixDates = getDatesRange(batchStartDate);
+
+    const activityNameMap = { 
+      attendance: '📅 Attendance Status', 
+      daily_vocab: '📚 WhatsApp Vocab (+5 XP)', 
+      daily_sentences: '✍️ Daily Sentences (+5 XP)', 
+      weekly_vlog: '📹 Weekly Vlog (+15 XP)', 
+      video_reaction: '💬 Video Reaction (+15 XP)', 
+      hadithul_arabia: '🕌 Hadithul Arabia Attendance (+10 XP)'
+    } as any;
+
+    const currentActivityName = activityNameMap[matrixActivity] || 'Matrix View';
+
+    const ths = matrixDates.map(dateStr => `
+      <th style="padding: 6px 4px; font-weight: 700; text-align: center; border: 1px solid #cbd5e1; font-size: 10px; white-space: nowrap;">
+        ${new Date(dateStr).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
+      </th>
+    `).join('');
+
+    const rows = studentsListToPrint.map(student => {
+      const tds = matrixDates.map(dateStr => {
+        if (matrixActivity === 'attendance') {
+          const attObj = batchScores.find(s => s.student_id === student.id && s.logged_date === dateStr && s.score_type === 'attendance');
+          const val = attObj ? attObj.activity_name.replace('Attendance: ', '') : '';
+          
+          let displayVal = '-';
+          let color = '#64748b';
+          if (val === 'On Time') { displayVal = 'OT'; color = '#16a34a'; }
+          else if (val === 'Late') { displayVal = 'L'; color = '#b45309'; }
+          else if (val === 'Half Day') { displayVal = 'HD'; color = '#3b82f6'; }
+          else if (val === 'Absent') { displayVal = 'A'; color = '#dc2626'; }
+
+          return `<td style="padding: 6px 4px; text-align: center; border: 1px solid #e2e8f0; font-size: 9px; font-weight: bold; color: ${color};">${displayVal}</td>`;
+        } else {
+          const existing = batchScores.find(s => s.student_id === student.id && s.logged_date === dateStr && s.score_type === matrixActivity);
+          const displayVal = existing ? '✓' : '-';
+          const color = existing ? '#16a34a' : '#94a3b8';
+          return `<td style="padding: 6px 4px; text-align: center; border: 1px solid #e2e8f0; font-size: 10px; font-weight: bold; color: ${color};">${displayVal}</td>`;
+        }
+      }).join('');
+
+      return `
+        <tr style="border-bottom: 1px solid #cbd5e1;">
+          <td style="padding: 6px 8px; font-weight: 600; border: 1px solid #cbd5e1; white-space: nowrap; font-size: 11px;">
+            ${student.roll_number ? `#${student.roll_number} ` : ''}${student.name}
+          </td>
+          ${tds}
+        </tr>
+      `;
+    }).join('');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Batch Sheet Matrix - ${activeInterval.name}</title>
+          <style>
+            @page {
+              size: landscape;
+              margin: 15mm;
+            }
+            body {
+              font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              color: #1e293b;
+              margin: 0;
+              padding: 0;
+              background: white;
+            }
+            .header {
+              border-bottom: 3px solid #c99c33;
+              padding-bottom: 15px;
+              margin-bottom: 20px;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+            }
+            .title-section h1 {
+              margin: 0 0 5px 0;
+              font-size: 20px;
+              font-weight: 800;
+            }
+            .title-section p {
+              margin: 0;
+              color: #64748b;
+              font-size: 12px;
+            }
+            .academy-info h2 {
+              margin: 0;
+              font-size: 15px;
+              font-weight: 800;
+              color: #c99c33;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 15px;
+            }
+            th {
+              background: #f8fafc;
+              border: 1px solid #cbd5e1;
+            }
+            .legend {
+              display: flex;
+              gap: 15px;
+              font-size: 11px;
+              margin-top: 15px;
+              color: #64748b;
+            }
+            .legend-item {
+              display: flex;
+              align-items: center;
+              gap: 5px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title-section">
+              <h1>Batch Sheet (Matrix Grid)</h1>
+              <p>${courseName} • Batch ${activeInterval.batch_number} • ${activeInterval.name}</p>
+              <p style="margin-top: 3px; font-weight: 600; color: #0f172a;">Metric: ${currentActivityName}</p>
+              <p style="margin-top: 3px;">Report Generated: ${printDate}</p>
+            </div>
+            <div class="academy-info">
+              <h2>ACADEMY OF EXCELLENCE</h2>
+              <p style="margin: 0; font-size: 9px; color: #64748b; text-align: right;">Elegance in Arabic Education</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr style="background: #f8fafc;">
+                <th style="padding: 6px 8px; text-align: left; border: 1px solid #cbd5e1; font-size: 11px; font-weight: 700;">Student Name</th>
+                ${ths}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+
+          ${matrixActivity === 'attendance' ? `
+            <div class="legend">
+              <strong>Legend:</strong>
+              <div class="legend-item"><span style="color: #16a34a; font-weight: bold;">OT:</span> On Time</div>
+              <div class="legend-item"><span style="color: #b45309; font-weight: bold;">L:</span> Late</div>
+              <div class="legend-item"><span style="color: #3b82f6; font-weight: bold;">HD:</span> Half Day</div>
+              <div class="legend-item"><span style="color: #dc2626; font-weight: bold;">A:</span> Absent</div>
+            </div>
+          ` : `
+            <div class="legend">
+              <strong>Legend:</strong>
+              <div class="legend-item"><span style="color: #16a34a; font-weight: bold;">✓:</span> Task Completed / Logged</div>
+              <div class="legend-item"><span style="color: #94a3b8; font-weight: bold;">-:</span> Task Pending</div>
+            </div>
+          `}
+
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handlePrintReport = (student: StudentProfile, scores: any[]) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -3941,6 +4232,26 @@ const AdminDashboard = () => {
                             <option value="video_reaction">💬 Video Reaction (+15 XP)</option>
                             <option value="hadithul_arabia">🕌 Hadithul Arabia (+10 XP)</option>
                           </select>
+                          
+                          {sortedFilteredActiveStudents.length > 0 && (
+                            <button
+                              onClick={() => handlePrintMatrix(sortedFilteredActiveStudents)}
+                              className="btn btn-outline"
+                              style={{
+                                padding: '0.4rem 0.8rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                borderColor: 'var(--primary)',
+                                color: 'var(--primary-dark)',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Printer size={14} /> Print Matrix
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -4543,8 +4854,31 @@ const AdminDashboard = () => {
                 {/* Sub Mode: Classroom Leaderboard */}
                 {gradingMode === 'leaderboard' && (
                   <div>
-                    <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Class Standing Scoreboard</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '2rem' }}>Standings computed in-memory based on all points accrued in the current term. Click any card to view detailed reports.</p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: '1rem' }}>
+                      <div>
+                        <h3 style={{ fontSize: '1.2rem', margin: 0 }}>Class Standing Scoreboard</h3>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>Standings computed in-memory based on all points accrued in the current term. Click any card to view detailed reports.</p>
+                      </div>
+                      {classroomLeaderboard.length > 0 && (
+                        <button
+                          onClick={handlePrintRankList}
+                          className="btn btn-outline"
+                          style={{
+                            padding: '0.4rem 0.8rem',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            borderColor: 'var(--primary)',
+                            color: 'var(--primary-dark)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Printer size={14} /> Print Rank List
+                        </button>
+                      )}
+                    </div>
                     
                     {filteredActiveStudents.length === 0 ? (
                       <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active students in this batch.</p>
