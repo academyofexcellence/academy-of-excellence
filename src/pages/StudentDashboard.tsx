@@ -18,7 +18,8 @@ import {
   Compass,
   Printer,
   HelpCircle,
-  Plus
+  Plus,
+  Grid
 } from 'lucide-react';
 
 interface StudentProfile {
@@ -44,6 +45,8 @@ interface Interval {
   total_vlog_tasks: number;
   total_reaction_tasks: number;
   total_hadithul_tasks: number;
+  start_date?: string;
+  created_at?: string;
 }
 
 interface LeaderboardEntry {
@@ -201,6 +204,48 @@ const StudentDashboard = () => {
     } catch (err) {
       console.error('Error fetching student remarks:', err);
     }
+  };
+
+  const getDatesRange = (startDateStr: string) => {
+    const dates: string[] = [];
+    const start = new Date(startDateStr);
+    if (isNaN(start.getTime())) return dates;
+    const current = new Date(start);
+    current.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    while (current <= today) {
+      // Mon-Fri only
+      const day = current.getDay();
+      if (day !== 0 && day !== 6) {
+        dates.push(current.toISOString().split('T')[0]);
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    return dates.reverse(); // Show newest first
+  };
+
+  const handleOpenAppealForDate = (dateStr: string, type: 'attendance' | 'checklist' | 'scoring', activity?: string, currentVal?: string) => {
+    setAppealDate(dateStr);
+    setAppealType(type);
+    
+    if (type === 'attendance') {
+      setAppealActivity('Attendance');
+      setAppealCurrentValue(currentVal || 'Absent');
+      setAppealExpectedValue('On Time');
+    } else if (type === 'checklist') {
+      setAppealActivity(activity || 'Daily Vocab');
+      setAppealCurrentValue(currentVal || 'Incomplete');
+      setAppealExpectedValue('Completed');
+    } else {
+      setAppealActivity(activity || '');
+      setAppealCurrentValue(currentVal || '');
+      setAppealExpectedValue('');
+    }
+    
+    setAppealReason('');
+    setShowAppealModal(true);
   };
 
   const handlePrintReport = (student: StudentProfile, scores: any[]) => {
@@ -1570,11 +1615,161 @@ const StudentDashboard = () => {
               </div>
             </div>
 
-          </div>
-
         </div>
 
-        {/* --- INSTRUCTOR REMARKS & COUNSELING --- */}
+      </div>
+
+      {/* --- MY DAILY MARKS MATRIX --- */}
+      {(() => {
+        const currentIntervalObj = intervals.find(i => i.id === selectedInterval);
+        const intervalStartDate = currentIntervalObj?.start_date || currentIntervalObj?.created_at || new Date().toISOString();
+        const matrixDates = getDatesRange(intervalStartDate);
+        
+        return (
+          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginTop: '1.5rem' }}>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
+              <Grid size={20} className="text-primary" /> My Daily Marks Matrix
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
+              Your comprehensive day-by-day record of attendance, daily tasks, and XP allocations starting from the first day of this period. Click the <strong>"Appeal"</strong> button next to any date to submit a correction request.
+            </p>
+
+            <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left', minWidth: '850px' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1' }}>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>Date</th>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Attendance</th>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Vocab</th>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Sentences</th>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Weekly Vlog</th>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Video Reaction</th>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Hadithul Arabia</th>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Daily XP</th>
+                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrixDates.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        No dates available for this interval.
+                      </td>
+                    </tr>
+                  ) : (
+                    matrixDates.map(dateStr => {
+                      const attObj = recentLogs.find(s => s.logged_date === dateStr && s.score_type === 'attendance');
+                      const attVal = attObj ? attObj.activity_name.replace('Attendance: ', '') : '';
+                      
+                      let attDisplay = '-';
+                      let attColor = '#64748b';
+                      if (attVal === 'On Time') { attDisplay = 'OT'; attColor = '#16a34a'; }
+                      else if (attVal === 'Late') { attDisplay = 'L'; attColor = '#b45309'; }
+                      else if (attVal === 'Half Day') { attDisplay = 'HD'; attColor = '#3b82f6'; }
+                      else if (attVal === 'Absent') { attDisplay = 'A'; attColor = '#dc2626'; }
+
+                      const checkItem = (scoreType: string) => {
+                        const exists = recentLogs.some(s => s.logged_date === dateStr && s.score_type === scoreType);
+                        return exists ? (
+                          <span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓</span>
+                        ) : (
+                          <span style={{ color: '#cbd5e1' }}>-</span>
+                        );
+                      };
+
+                      const dayLogs = recentLogs.filter(s => s.logged_date === dateStr);
+                      const dayXP = dayLogs.reduce((sum, s) => sum + s.points, 0);
+
+                      return (
+                        <tr key={dateStr} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', background: 'white' }}>
+                          <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
+                            {new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 'bold', color: attColor }}>
+                            {attDisplay}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            {checkItem('daily_vocab')}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            {checkItem('daily_sentences')}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            {checkItem('weekly_vlog')}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            {checkItem('video_reaction')}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            {checkItem('hadithul_arabia')}
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 'bold', color: dayXP > 0 ? '#16a34a' : dayXP < 0 ? '#dc2626' : 'inherit' }}>
+                            {dayXP > 0 ? `+${dayXP}` : dayXP} XP
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                            <button
+                              onClick={() => {
+                                let prefillType: 'attendance' | 'checklist' | 'scoring' = 'attendance';
+                                let prefillActivity = 'Attendance';
+                                let prefillCurrent = 'Absent';
+                                if (!attObj || attVal === 'Absent') {
+                                  prefillType = 'attendance';
+                                  prefillActivity = 'Attendance';
+                                  prefillCurrent = attVal || 'Absent';
+                                } else {
+                                  const hasVocab = recentLogs.some(s => s.logged_date === dateStr && s.score_type === 'daily_vocab');
+                                  const hasSentences = recentLogs.some(s => s.logged_date === dateStr && s.score_type === 'daily_sentences');
+                                  if (!hasVocab) {
+                                    prefillType = 'checklist';
+                                    prefillActivity = 'Daily Vocab';
+                                    prefillCurrent = 'Incomplete';
+                                  } else if (!hasSentences) {
+                                    prefillType = 'checklist';
+                                    prefillActivity = 'Daily Sentences';
+                                    prefillCurrent = 'Incomplete';
+                                  } else {
+                                    prefillType = 'checklist';
+                                    prefillActivity = 'Daily Vocab';
+                                    prefillCurrent = 'Incomplete';
+                                  }
+                                }
+                                handleOpenAppealForDate(dateStr, prefillType, prefillActivity, prefillCurrent);
+                              }}
+                              className="btn btn-outline"
+                              style={{
+                                padding: '0.2rem 0.5rem',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                borderColor: 'var(--primary)',
+                                color: 'var(--primary-dark)',
+                                borderRadius: '6px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Appeal
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', gap: '15px', fontSize: '0.75rem', marginTop: '1rem', color: '#64748b', flexWrap: 'wrap' }}>
+              <strong>Attendance Legend:</strong>
+              <div><span style={{ color: '#16a34a', fontWeight: 'bold' }}>OT:</span> On Time</div>
+              <div><span style={{ color: '#b45309', fontWeight: 'bold' }}>L:</span> Late</div>
+              <div><span style={{ color: '#3b82f6', fontWeight: 'bold' }}>HD:</span> Half Day</div>
+              <div><span style={{ color: '#dc2626', fontWeight: 'bold' }}>A:</span> Absent</div>
+              <div style={{ marginLeft: '10px' }}>• <strong>Checklist Legend:</strong> <span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓</span> Completed / Approved | <span style={{ color: '#cbd5e1' }}>-</span> Pending / Incomplete</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* --- INSTRUCTOR REMARKS & COUNSELING --- */}
         <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginTop: '1.5rem' }}>
           <h3 style={{ fontSize: '1.25rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
             <MessageSquare size={20} className="text-primary" /> Instructor Remarks & Counseling
