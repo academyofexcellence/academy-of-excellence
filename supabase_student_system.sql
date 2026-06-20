@@ -326,3 +326,59 @@ ALTER TABLE public.student_remarks ADD COLUMN IF NOT EXISTS mock_interview_remar
 ALTER TABLE public.student_remarks ADD COLUMN IF NOT EXISTS industrial_visit_mark NUMERIC;
 ALTER TABLE public.student_remarks ADD COLUMN IF NOT EXISTS industrial_visit_remark TEXT;
 
+-- 14. Create correction_requests table
+CREATE TABLE IF NOT EXISTS public.correction_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    student_id UUID REFERENCES public.student_profiles(id) ON DELETE CASCADE NOT NULL,
+    request_type TEXT NOT NULL CHECK (request_type IN ('attendance', 'scoring', 'checklist')),
+    logged_date DATE NOT NULL,
+    activity_name TEXT NOT NULL,
+    current_value TEXT NOT NULL,
+    expected_value TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    admin_remark TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable Row Level Security
+ALTER TABLE public.correction_requests ENABLE ROW LEVEL SECURITY;
+
+-- Select policy
+DROP POLICY IF EXISTS "Enable select for authorized users" ON public.correction_requests;
+CREATE POLICY "Enable select for authorized users"
+ON public.correction_requests FOR SELECT
+TO authenticated
+USING (
+    student_id = auth.uid() OR
+    EXISTS (
+        SELECT 1 FROM public.staff_profiles 
+        WHERE id = auth.uid() AND status = 'active'
+    )
+);
+
+-- Insert policy (Students only)
+DROP POLICY IF EXISTS "Enable insert for students" ON public.correction_requests;
+CREATE POLICY "Enable insert for students"
+ON public.correction_requests FOR INSERT
+TO authenticated
+WITH CHECK (
+    student_id = auth.uid() AND
+    NOT EXISTS (
+        SELECT 1 FROM public.staff_profiles
+        WHERE id = auth.uid()
+    )
+);
+
+-- Update policy (Staff/Admins only)
+DROP POLICY IF EXISTS "Enable update for staff and leadership" ON public.correction_requests;
+CREATE POLICY "Enable update for staff and leadership"
+ON public.correction_requests FOR UPDATE
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1 FROM public.staff_profiles 
+        WHERE id = auth.uid() AND status = 'active'
+    )
+);
+

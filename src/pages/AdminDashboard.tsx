@@ -22,7 +22,8 @@ import {
   Volume2,
   AlertTriangle,
   Award,
-  Printer
+  Printer,
+  HelpCircle
 } from 'lucide-react';
 
 interface StaffProfile {
@@ -123,7 +124,7 @@ const AdminDashboard = () => {
 
   // Tab navigation states
   const [staffTab, setStaffTab] = useState<'checklist' | 'one_off' | 'history'>('checklist');
-  const [adminTab, setAdminTab] = useState<'kpis' | 'tasks' | 'students' | 'roster' | 'student_roster' | 'logs' | 'website' | 'settings'>('kpis');
+  const [adminTab, setAdminTab] = useState<'kpis' | 'tasks' | 'students' | 'roster' | 'student_roster' | 'logs' | 'website' | 'settings' | 'appeals'>('kpis');
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
 
   // UI State Messages
@@ -207,6 +208,16 @@ const AdminDashboard = () => {
   const [batchScores, setBatchScores] = useState<any[]>([]);
   const [loadingBatchScores, setLoadingBatchScores] = useState(false);
   const [updatingMatrix, setUpdatingMatrix] = useState<string[]>([]);
+
+  // Correction Requests (Appeals) States
+  const [adminAppeals, setAdminAppeals] = useState<any[]>([]);
+  const [loadingAdminAppeals, setLoadingAdminAppeals] = useState(false);
+  const [appealsFilter, setAppealsFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [selectedAppeal, setSelectedAppeal] = useState<any | null>(null);
+  const [showAppealActionModal, setShowAppealActionModal] = useState(false);
+  const [appealActionRemark, setAppealActionRemark] = useState('');
+  const [processingAppealAction, setProcessingAppealAction] = useState(false);
+  const [pendingAppealsCount, setPendingAppealsCount] = useState(0);
   
   const [selectedGradingDate, setSelectedGradingDate] = useState(new Date().toISOString().split('T')[0]);
   const [examName, setExamName] = useState('');
@@ -250,6 +261,12 @@ const AdminDashboard = () => {
   useEffect(() => {
     checkSession();
   }, []);
+
+  useEffect(() => {
+    if (adminTab === 'appeals') {
+      fetchAdminAppeals();
+    }
+  }, [adminTab]);
 
   const checkSession = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -412,8 +429,259 @@ const AdminDashboard = () => {
 
       // 6. Fetch Website Content
       fetchWebsiteContent();
+
+      // 7. Fetch Correction Requests (Appeals)
+      await fetchAdminAppeals();
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
+    }
+  };
+
+  const fetchAdminAppeals = async () => {
+    try {
+      setLoadingAdminAppeals(true);
+      const { data, error } = await supabase
+        .from('correction_requests')
+        .select(`
+          *,
+          student:student_id (
+            name,
+            batch_number,
+            courses:course_id (name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAdminAppeals(data || []);
+      
+      // Calculate pending count
+      const pending = (data || []).filter((a: any) => a.status === 'pending').length;
+      setPendingAppealsCount(pending);
+    } catch (err) {
+      console.error('Error fetching admin appeals:', err);
+    } finally {
+      setLoadingAdminAppeals(false);
+    }
+  };
+
+  const handleApproveAppeal = async (appeal: any) => {
+    setSelectedAppeal(appeal);
+    setAppealActionRemark('');
+    setShowAppealActionModal(true);
+  };
+
+  const handleConfirmAppealAction = async (approved: boolean) => {
+    if (!selectedAppeal || !currentUser) return;
+    try {
+      setProcessingAppealAction(true);
+      
+      const newStatus = approved ? 'approved' : 'rejected';
+      
+      // 1. Update the correction request status in Supabase
+      const { error: updateRequestError } = await supabase
+        .from('correction_requests')
+        .update({
+          status: newStatus,
+          admin_remark: appealActionRemark
+        })
+        .eq('id', selectedAppeal.id);
+
+      if (updateRequestError) throw updateRequestError;
+
+      // 2. If approved, perform the automatic database correction!
+      if (approved) {
+        const studentId = selectedAppeal.student_id;
+        const loggedDate = selectedAppeal.logged_date;
+        const reqType = selectedAppeal.request_type;
+        const activityName = selectedAppeal.activity_name;
+        const expectedVal = selectedAppeal.expected_value;
+
+        // Find the active scoring interval for the student
+        const studentProfile = studentList.find(s => s.id === studentId);
+        if (studentProfile) {
+          const studentCourseId = studentProfile.course_id;
+          const studentBatchNum = studentProfile.batch_number;
+          const matchedInterval = intervalsList.find(
+            int => int.course_id === studentCourseId && int.batch_number === studentBatchNum && int.is_active
+          );
+
+          if (matchedInterval) {
+            if (reqType === 'attendance') {
+              const statusValue = expectedVal; // expected e.g. 'On Time', 'Late', 'Half Day', 'Absent'
+              const points = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
+              const dbActivityName = `Attendance: ${statusValue}`;
+
+              const { data: existingScores, error: findError } = await supabase
+                .from('scores')
+                .select('*')
+                .eq('student_id', studentId)
+                .eq('logged_date', loggedDate)
+                .eq('score_type', 'attendance');
+
+              if (findError) throw findError;
+
+              if (existingScores && existingScores.length > 0) {
+                const { error: updError } = await supabase
+                  .from('scores')
+                  .update({
+                    points: points,
+                    max_points: points,
+                    activity_name: dbActivityName,
+                    logged_by: currentUser.id
+                  })
+                  .eq('id', existingScores[0].id);
+                if (updError) throw updError;
+              } else {
+                const { error: insError } = await supabase
+                  .from('scores')
+                  .insert([{
+                    student_id: studentId,
+                    interval_id: matchedInterval.id,
+                    score_type: 'attendance',
+                    points: points,
+                    max_points: points,
+                    activity_name: dbActivityName,
+                    logged_by: currentUser.id,
+                    logged_date: loggedDate
+                  }]);
+                if (insError) throw insError;
+              }
+            } else if (reqType === 'checklist') {
+              const pointsMap = { 
+                'daily_vocab': 5, 
+                'daily_sentences': 5, 
+                'weekly_vlog': 15, 
+                'video_reaction': 15, 
+                'hadithul_arabia': 10 
+              } as any;
+              
+              const activityNameMap = { 
+                'daily_vocab': 'Daily Vocabulary', 
+                'daily_sentences': 'Daily Sentences', 
+                'weekly_vlog': 'Weekly Vlog',
+                'video_reaction': 'Video Reaction Task',
+                'hadithul_arabia': 'Hadithul Arabia Attendance'
+              } as any;
+
+              let scoreType = 'daily_vocab';
+              const lowerActivity = activityName.toLowerCase();
+              if (lowerActivity.includes('vocab')) scoreType = 'daily_vocab';
+              else if (lowerActivity.includes('sentence')) scoreType = 'daily_sentences';
+              else if (lowerActivity.includes('vlog')) scoreType = 'weekly_vlog';
+              else if (lowerActivity.includes('reaction')) scoreType = 'video_reaction';
+              else if (lowerActivity.includes('hadithul')) scoreType = 'hadithul_arabia';
+
+              const targetPoints = pointsMap[scoreType] || 5;
+              const targetName = activityNameMap[scoreType] || activityName;
+
+              const { data: existingChecklist, error: findChecklistError } = await supabase
+                .from('scores')
+                .select('*')
+                .eq('student_id', studentId)
+                .eq('logged_date', loggedDate)
+                .eq('score_type', scoreType);
+
+              if (findChecklistError) throw findChecklistError;
+
+              if (existingChecklist && existingChecklist.length > 0) {
+                const { error: updError } = await supabase
+                  .from('scores')
+                  .update({
+                    points: targetPoints,
+                    max_points: targetPoints,
+                    activity_name: targetName,
+                    logged_by: currentUser.id
+                  })
+                  .eq('id', existingChecklist[0].id);
+                if (updError) throw updError;
+              } else {
+                const { error: insError } = await supabase
+                  .from('scores')
+                  .insert([{
+                    student_id: studentId,
+                    interval_id: matchedInterval.id,
+                    score_type: scoreType,
+                    points: targetPoints,
+                    max_points: targetPoints,
+                    activity_name: targetName,
+                    logged_by: currentUser.id,
+                    logged_date: loggedDate
+                  }]);
+                if (insError) throw insError;
+              }
+            } else if (reqType === 'scoring') {
+              const { data: existingScoring, error: findScoringError } = await supabase
+                .from('scores')
+                .select('*')
+                .eq('student_id', studentId)
+                .eq('logged_date', loggedDate)
+                .eq('activity_name', activityName);
+
+              if (findScoringError) throw findScoringError;
+
+              let points = parseInt(expectedVal.split('/')[0].trim());
+              let maxPoints = 100;
+              if (expectedVal.includes('/')) {
+                maxPoints = parseInt(expectedVal.split('/')[1].trim());
+              }
+              if (isNaN(points)) points = 0;
+              if (isNaN(maxPoints)) maxPoints = 100;
+
+              let scoreType = 'custom';
+              if (activityName.toLowerCase().includes('exam')) {
+                scoreType = 'exam';
+              } else if (activityName.toLowerCase().includes('violation') || activityName.toLowerCase().includes('penalty')) {
+                scoreType = 'penalty';
+              } else if (activityName.toLowerCase().includes('one minute talk')) {
+                scoreType = 'custom';
+              }
+
+              if (existingScoring && existingScoring.length > 0) {
+                const { error: updError } = await supabase
+                  .from('scores')
+                  .update({
+                    points: points,
+                    max_points: maxPoints,
+                    logged_by: currentUser.id
+                  })
+                  .eq('id', existingScoring[0].id);
+                if (updError) throw updError;
+              } else {
+                const { error: insError } = await supabase
+                  .from('scores')
+                  .insert([{
+                    student_id: studentId,
+                    interval_id: matchedInterval.id,
+                    score_type: scoreType,
+                    points: points,
+                    max_points: maxPoints,
+                    activity_name: activityName,
+                    logged_by: currentUser.id,
+                    logged_date: loggedDate
+                  }]);
+                if (insError) throw insError;
+              }
+            }
+
+            await fetchClassroomLeaderboard(matchedInterval.id);
+          }
+        }
+      }
+
+      await logActivity('student_appeal_resolved', `Resolved appeal correction request as ${newStatus} for student ID: ${selectedAppeal.student_id}`);
+      
+      setMessage(`✅ Appeal request ${newStatus} successfully!`);
+      setTimeout(() => setMessage(''), 4000);
+      
+      setShowAppealActionModal(false);
+      setSelectedAppeal(null);
+      await fetchAdminAppeals();
+    } catch (err: any) {
+      console.error('Error resolving appeal:', err);
+      alert(`Error resolving appeal: ${err.message}`);
+    } finally {
+      setProcessingAppealAction(false);
     }
   };
 
@@ -2807,6 +3075,30 @@ const AdminDashboard = () => {
             <GraduationCap size={16} /> Student Classrooms
           </button>
 
+          {/* Both standard Staff and leadership can manage appeals! */}
+          <button 
+            onClick={() => setAdminTab('appeals')}
+            style={{
+              padding: '0.8rem 1.2rem', background: 'none', border: 'none',
+              borderBottom: adminTab === 'appeals' ? '3px solid var(--primary)' : '3px solid transparent',
+              color: adminTab === 'appeals' ? 'var(--primary-dark)' : 'var(--text-muted)',
+              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem',
+              position: 'relative'
+            }}
+          >
+            <HelpCircle size={16} /> Correction Requests
+            {pendingAppealsCount > 0 && (
+              <span style={{
+                position: 'absolute', top: '0.2rem', right: '0.2rem',
+                background: '#dc2626', color: 'white', fontSize: '0.65rem',
+                fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '50px',
+                lineHeight: 1
+              }}>
+                {pendingAppealsCount}
+              </span>
+            )}
+          </button>
+
           {isLeadership && (
             <>
               <button 
@@ -5032,6 +5324,198 @@ const AdminDashboard = () => {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB: Correction Requests / Appeals Manager */}
+        {adminTab === 'appeals' && (
+          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: '1rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.4rem', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <HelpCircle size={22} className="text-primary" /> Correction Requests & Appeals
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>
+                  Review and resolve student appeals regarding checklist tasks, attendance, and exam scores.
+                </p>
+              </div>
+
+              {/* Status Filter Tab Buttons */}
+              <div style={{ display: 'flex', background: 'rgba(0,0,0,0.04)', padding: '0.3rem', borderRadius: '10px', gap: '0.2rem' }}>
+                {(['pending', 'approved', 'rejected'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setAppealsFilter(filter)}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      textTransform: 'capitalize',
+                      cursor: 'pointer',
+                      background: appealsFilter === filter ? 'white' : 'transparent',
+                      color: appealsFilter === filter ? 'var(--primary-dark)' : 'var(--text-muted)',
+                      boxShadow: appealsFilter === filter ? '0 2px 5px rgba(0,0,0,0.05)' : 'none',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {loadingAdminAppeals ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading correction requests...</div>
+            ) : (() => {
+              const filteredAppeals = adminAppeals.filter(a => a.status === appealsFilter);
+              if (filteredAppeals.length === 0) {
+                return (
+                  <div style={{ textAlign: 'center', padding: '4rem 1.5rem', background: 'rgba(0,0,0,0.01)', border: '1px dashed rgba(0,0,0,0.08)', borderRadius: '16px', color: 'var(--text-muted)' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(0,0,0,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem auto' }}>
+                      <HelpCircle size={24} style={{ color: '#94a3b8' }} />
+                    </div>
+                    <h4 style={{ fontWeight: 700, margin: '0 0 0.2rem 0', color: 'var(--text-main)' }}>No requests found</h4>
+                    <p style={{ fontSize: '0.85rem', margin: 0 }}>There are no {appealsFilter} correction requests currently.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ overflowX: 'auto', background: 'white', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.05)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-light)', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                        <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 700 }}>Student Name</th>
+                        <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 700 }}>Course & Batch</th>
+                        <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 700 }}>Activity Date</th>
+                        <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 700 }}>Category</th>
+                        <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 700 }}>Activity Name</th>
+                        <th style={{ padding: '1rem', textAlign: 'center', fontWeight: 700 }}>Current</th>
+                        <th style={{ padding: '1rem', textAlign: 'center', fontWeight: 700 }}>Expected</th>
+                        <th style={{ padding: '1rem', textAlign: 'left', fontWeight: 700 }}>Student's Reason</th>
+                        <th style={{ padding: '1rem', textAlign: 'center', fontWeight: 700 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAppeals.map((app) => (
+                        <tr key={app.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                          <td style={{ padding: '1rem', fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>{app.student?.name || 'Unknown Student'}</td>
+                          <td style={{ padding: '1rem', color: '#475569' }}>
+                            <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 650 }}>{app.student?.courses?.name}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Batch {app.student?.batch_number}</span>
+                          </td>
+                          <td style={{ padding: '1rem', whiteSpace: 'nowrap' }}>{new Date(app.logged_date).toLocaleDateString()}</td>
+                          <td style={{ padding: '1rem', textTransform: 'capitalize', fontWeight: 600 }}>{app.request_type}</td>
+                          <td style={{ padding: '1rem' }}>{app.activity_name}</td>
+                          <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b' }}>{app.current_value}</td>
+                          <td style={{ padding: '1rem', textAlign: 'center', fontWeight: 700, color: 'var(--primary-dark)' }}>{app.expected_value}</td>
+                          <td style={{ padding: '1rem', color: '#475569', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={app.reason}>{app.reason}</td>
+                          <td style={{ padding: '1rem', textAlign: 'center' }}>
+                            {app.status === 'pending' ? (
+                              <button
+                                onClick={() => handleApproveAppeal(app)}
+                                className="btn btn-outline"
+                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary-dark)', borderColor: 'var(--primary)', cursor: 'pointer' }}
+                              >
+                                Review Request
+                              </button>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', alignItems: 'flex-start', minWidth: '120px' }}>
+                                <span style={{
+                                  display: 'inline-block', padding: '0.15rem 0.4rem', borderRadius: '4px',
+                                  fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase',
+                                  color: app.status === 'approved' ? '#16a34a' : '#dc2626',
+                                  background: app.status === 'approved' ? 'rgba(22, 163, 74, 0.1)' : 'rgba(220, 38, 38, 0.1)'
+                                }}>
+                                  {app.status}
+                                </span>
+                                {app.admin_remark && (
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic', display: 'block' }}>
+                                    "{app.admin_remark}"
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* --- ADMIN APPEAL RESOLUTION MODAL --- */}
+        {showAppealActionModal && selectedAppeal && (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(10,10,10,0.45)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+            <div className="glass-card" style={{ width: '100%', maxWidth: '520px', padding: '2.5rem', position: 'relative', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 25px 50px rgba(0,0,0,0.15)', background: 'white' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: '0.8rem', marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <HelpCircle className="text-primary" /> Review Student Appeal
+              </h3>
+
+              <div style={{ background: 'var(--bg-light)', padding: '1rem', borderRadius: '12px', marginBottom: '1.2rem', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div><strong>Student:</strong> {selectedAppeal.student?.name}</div>
+                <div><strong>Course & Batch:</strong> {selectedAppeal.student?.courses?.name} • Batch {selectedAppeal.student?.batch_number}</div>
+                <div><strong>Category / Type:</strong> <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{selectedAppeal.request_type}</span></div>
+                <div><strong>Activity Name:</strong> {selectedAppeal.activity_name} ({new Date(selectedAppeal.logged_date).toLocaleDateString()})</div>
+                <div><strong>Recorded Status:</strong> <span style={{ color: '#ef4444', fontWeight: 700 }}>{selectedAppeal.current_value}</span></div>
+                <div><strong>Correct Expected:</strong> <span style={{ color: '#16a34a', fontWeight: 700 }}>{selectedAppeal.expected_value}</span></div>
+                <div style={{ borderTop: '1px dashed rgba(0,0,0,0.1)', marginTop: '0.5rem', paddingTop: '0.5rem' }}>
+                  <strong>Reason:</strong> <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>"{selectedAppeal.reason}"</span>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Feedback / Admin Remark</label>
+                <textarea 
+                  placeholder="Add a remark explaining your decision (e.g. 'Attendance corrected' or 'Vlog was checked and marked')" 
+                  value={appealActionRemark} 
+                  onChange={(e) => setAppealActionRemark(e.target.value)} 
+                  rows={3} 
+                  className="form-input"
+                  style={{ width: '100%', outline: 'none', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: '1.2rem' }}>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setShowAppealActionModal(false);
+                    setSelectedAppeal(null);
+                  }} 
+                  className="btn btn-outline" 
+                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', color: '#64748b', borderColor: '#cbd5e1', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => handleConfirmAppealAction(false)} // Reject
+                    disabled={processingAppealAction} 
+                    className="btn btn-outline" 
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', color: '#dc2626', borderColor: '#fca5a5', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    Reject Request
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => handleConfirmAppealAction(true)} // Approve
+                    disabled={processingAppealAction} 
+                    className="btn btn-primary" 
+                    style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {processingAppealAction ? 'Processing...' : 'Approve & Correct'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
