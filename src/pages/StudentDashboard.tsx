@@ -248,12 +248,42 @@ const StudentDashboard = () => {
     setShowAppealModal(true);
   };
 
+  const printHtml = (htmlContent: string) => {
+    const printDiv = document.createElement('div');
+    printDiv.id = 'print-section';
+    printDiv.innerHTML = htmlContent;
+
+    const style = document.createElement('style');
+    style.id = 'print-style';
+    style.innerHTML = `
+      @media print {
+        body > *:not(#print-section) {
+          display: none !important;
+        }
+        #print-section {
+          display: block !important;
+          width: 100% !important;
+        }
+      }
+    `;
+
+    document.head.appendChild(style);
+    document.body.appendChild(printDiv);
+
+    window.print();
+
+    const cleanup = () => {
+      const el = document.getElementById('print-section');
+      if (el) el.remove();
+      const st = document.getElementById('print-style');
+      if (st) st.remove();
+    };
+
+    window.onafterprint = cleanup;
+    setTimeout(cleanup, 1000);
+  };
+
   const handlePrintReport = (student: StudentProfile, scores: any[]) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow popups to print the report.');
-      return;
-    }
     
     // Format the date
     const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -389,7 +419,7 @@ const StudentDashboard = () => {
     const rIndustrialVisitRemark = remarks?.industrial_visit_remark || 'No feedback recorded yet.';
 
     // Construct print template
-    printWindow.document.write(`
+    const htmlContent = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -725,16 +755,9 @@ const StudentDashboard = () => {
           </div>
         </body>
       </html>
-    `);
+    `;
 
-    printWindow.document.close();
-    printWindow.focus();
-    
-    // Allow styles to load before printing
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 500);
+    printHtml(htmlContent);
   };
 
   useEffect(() => {
