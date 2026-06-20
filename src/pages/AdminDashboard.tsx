@@ -95,6 +95,27 @@ interface LeaderboardEntry {
   rank: number;
 }
 
+const getDatesRange = (startDateStr: string) => {
+  const dates: string[] = [];
+  const start = new Date(startDateStr);
+  start.setHours(0, 0, 0, 0);
+  
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  
+  let limit = 0;
+  const current = new Date(end);
+  while (current >= start && limit < 90) {
+    const yyyy = current.getFullYear();
+    const mm = String(current.getMonth() + 1).padStart(2, '0');
+    const dd = String(current.getDate()).padStart(2, '0');
+    dates.push(`${yyyy}-${mm}-${dd}`);
+    current.setDate(current.getDate() - 1);
+    limit++;
+  }
+  return dates;
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [authLoading, setAuthLoading] = useState(true);
@@ -139,6 +160,10 @@ const AdminDashboard = () => {
   const [remarksWeaknesses, setRemarksWeaknesses] = useState('');
   const [remarksCareerPath, setRemarksCareerPath] = useState('');
   const [remarksGeneral, setRemarksGeneral] = useState('');
+  const [remarksMockInterviewMark, setRemarksMockInterviewMark] = useState<number | ''>('');
+  const [remarksMockInterviewRemark, setRemarksMockInterviewRemark] = useState('');
+  const [remarksIndustrialVisitMark, setRemarksIndustrialVisitMark] = useState<number | ''>('');
+  const [remarksIndustrialVisitRemark, setRemarksIndustrialVisitRemark] = useState('');
   const [savingRemarks, setSavingRemarks] = useState(false);
   
   // Report Edit Form States
@@ -175,7 +200,14 @@ const AdminDashboard = () => {
   const [showArchivedFilter, setShowArchivedFilter] = useState(false);
 
   // Form States - Exam/Custom Grading
-  const [gradingMode, setGradingMode] = useState<'vocab_sentences' | 'exam' | 'custom' | 'leaderboard' | 'manage'>('vocab_sentences');
+  const [gradingMode, setGradingMode] = useState<'vocab_sentences' | 'exam' | 'custom' | 'leaderboard' | 'manage' | 'batch_sheet'>('vocab_sentences');
+  
+  // Batch Sheet Matrix View States
+  const [matrixActivity, setMatrixActivity] = useState<'attendance' | 'daily_vocab' | 'daily_sentences' | 'weekly_vlog' | 'video_reaction' | 'hadithul_arabia'>('attendance');
+  const [batchScores, setBatchScores] = useState<any[]>([]);
+  const [loadingBatchScores, setLoadingBatchScores] = useState(false);
+  const [updatingMatrix, setUpdatingMatrix] = useState<string[]>([]);
+  
   const [selectedGradingDate, setSelectedGradingDate] = useState(new Date().toISOString().split('T')[0]);
   const [examName, setExamName] = useState('');
   const [examMaxPoints, setExamMaxPoints] = useState('100');
@@ -448,6 +480,13 @@ const AdminDashboard = () => {
     }
   }, [activeInterval, selectedGradingDate]);
 
+  // Load batch scores when Matrix view is activated
+  useEffect(() => {
+    if (activeInterval && gradingMode === 'batch_sheet') {
+      fetchBatchScores(activeInterval.id);
+    }
+  }, [activeInterval, gradingMode]);
+
   // Fetch overview leaderboard when selected overview interval changes
   useEffect(() => {
     if (overviewSelectedInterval && intervalsList.length > 0) {
@@ -648,6 +687,164 @@ const AdminDashboard = () => {
       setTimeout(() => setMessage(''), 4000);
     } finally {
       setUpdatingScores(prev => prev.filter(k => k !== lockKey));
+    }
+  };
+
+  const fetchBatchScores = async (intervalId: string) => {
+    setLoadingBatchScores(true);
+    try {
+      const { data, error } = await supabase
+        .from('scores')
+        .select('*')
+        .eq('interval_id', intervalId);
+      if (error) throw error;
+      setBatchScores(data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingBatchScores(false);
+    }
+  };
+
+  const handleToggleMatrixCell = async (studentId: string, dateStr: string, scoreType: string, existingRecord: any) => {
+    if (!activeInterval || !currentUser) return;
+    const lockKey = `${studentId}-${dateStr}-${scoreType}`;
+    if (updatingMatrix.includes(lockKey)) return;
+
+    setUpdatingMatrix(prev => [...prev, lockKey]);
+
+    try {
+      if (existingRecord) {
+        const { error } = await supabase
+          .from('scores')
+          .delete()
+          .eq('id', existingRecord.id);
+        if (error) throw error;
+        setBatchScores(prev => prev.filter(s => s.id !== existingRecord.id));
+        
+        const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
+        await logActivity('student_score_deleted', `Removed ${scoreType.replace('daily_', '').replace('_', ' ')} points for ${studName} on ${dateStr} (Matrix View)`);
+      } else {
+        const pointsMap = { daily_vocab: 5, daily_sentences: 5, weekly_vlog: 15, video_reaction: 15, hadithul_arabia: 10 };
+        const activityNameMap = { 
+          daily_vocab: 'Daily Vocabulary', 
+          daily_sentences: 'Daily Sentences', 
+          weekly_vlog: 'Weekly Vlog',
+          video_reaction: 'Video Reaction Task',
+          hadithul_arabia: 'Hadithul Arabia Attendance'
+        } as any;
+
+        const { data, error } = await supabase
+          .from('scores')
+          .insert([
+            {
+              student_id: studentId,
+              interval_id: activeInterval.id,
+              score_type: scoreType,
+              points: pointsMap[scoreType as 'daily_vocab'],
+              max_points: pointsMap[scoreType as 'daily_vocab'],
+              activity_name: activityNameMap[scoreType],
+              logged_by: currentUser.id,
+              logged_date: dateStr
+            }
+          ])
+          .select();
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setBatchScores(prev => [...prev, data[0]]);
+        }
+
+        const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
+        await logActivity('student_score_logged', `Logged +${pointsMap[scoreType as 'daily_vocab']} points for ${studName} (${activityNameMap[scoreType]}) on ${dateStr} (Matrix View)`);
+      }
+      // Keep scoreboard updated in background
+      await fetchClassroomLeaderboard(activeInterval.id);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed updating matrix cell: ${err.message}`);
+      setTimeout(() => setMessage(''), 4000);
+    } finally {
+      setUpdatingMatrix(prev => prev.filter(k => k !== lockKey));
+    }
+  };
+
+  const handleToggleMatrixAttendance = async (studentId: string, dateStr: string, statusValue: string) => {
+    if (!activeInterval || !currentUser) return;
+    const lockKey = `${studentId}-${dateStr}-attendance`;
+    if (updatingMatrix.includes(lockKey)) return;
+
+    setUpdatingMatrix(prev => [...prev, lockKey]);
+
+    try {
+      const existingRecord = batchScores.find(
+        s => s.student_id === studentId && s.logged_date === dateStr && s.score_type === 'attendance'
+      );
+
+      if (!statusValue) {
+        if (existingRecord) {
+          const { error } = await supabase
+            .from('scores')
+            .delete()
+            .eq('id', existingRecord.id);
+          if (error) throw error;
+          setBatchScores(prev => prev.filter(s => s.id !== existingRecord.id));
+          
+          const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
+          await logActivity('student_score_deleted', `Removed Attendance for ${studName} on ${dateStr} (Matrix View)`);
+        }
+      } else {
+        const points = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
+        const dbActivityName = `Attendance: ${statusValue}`;
+
+        if (existingRecord) {
+          const { data, error } = await supabase
+            .from('scores')
+            .update({
+              points: points,
+              max_points: points,
+              activity_name: dbActivityName,
+              logged_by: currentUser.id
+            })
+            .eq('id', existingRecord.id)
+            .select();
+          if (error) throw error;
+          if (data && data.length > 0) {
+            setBatchScores(prev => prev.map(s => s.id === existingRecord.id ? data[0] : s));
+          }
+          const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
+          await logActivity('student_score_logged', `Updated Attendance to ${statusValue} for ${studName} on ${dateStr} (Matrix View)`);
+        } else {
+          const { data, error } = await supabase
+            .from('scores')
+            .insert([
+              {
+                student_id: studentId,
+                interval_id: activeInterval.id,
+                score_type: 'attendance',
+                points: points,
+                max_points: points,
+                activity_name: dbActivityName,
+                logged_by: currentUser.id,
+                logged_date: dateStr
+              }
+            ])
+            .select();
+          if (error) throw error;
+          if (data && data.length > 0) {
+            setBatchScores(prev => [...prev, data[0]]);
+          }
+          const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
+          await logActivity('student_score_logged', `Logged Attendance (${statusValue}) for ${studName} on ${dateStr} (Matrix View)`);
+        }
+      }
+      // Keep scoreboard updated in background
+      await fetchClassroomLeaderboard(activeInterval.id);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed updating attendance: ${err.message}`);
+      setTimeout(() => setMessage(''), 4000);
+    } finally {
+      setUpdatingMatrix(prev => prev.filter(k => k !== lockKey));
     }
   };
 
@@ -974,6 +1171,10 @@ const AdminDashboard = () => {
     setRemarksWeaknesses('');
     setRemarksCareerPath('');
     setRemarksGeneral('');
+    setRemarksMockInterviewMark('');
+    setRemarksMockInterviewRemark('');
+    setRemarksIndustrialVisitMark('');
+    setRemarksIndustrialVisitRemark('');
 
     // Fetch remarks from Supabase student_remarks table
     try {
@@ -989,6 +1190,10 @@ const AdminDashboard = () => {
         setRemarksWeaknesses(remarksData.weaknesses || '');
         setRemarksCareerPath(remarksData.career_path || '');
         setRemarksGeneral(remarksData.general_remarks || '');
+        setRemarksMockInterviewMark(remarksData.mock_interview_mark !== null && remarksData.mock_interview_mark !== undefined ? remarksData.mock_interview_mark : '');
+        setRemarksMockInterviewRemark(remarksData.mock_interview_remark || '');
+        setRemarksIndustrialVisitMark(remarksData.industrial_visit_mark !== null && remarksData.industrial_visit_mark !== undefined ? remarksData.industrial_visit_mark : '');
+        setRemarksIndustrialVisitRemark(remarksData.industrial_visit_remark || '');
       }
     } catch (err) {
       console.error('Failed to fetch student remarks:', err);
@@ -1022,6 +1227,10 @@ const AdminDashboard = () => {
           weaknesses: remarksWeaknesses,
           career_path: remarksCareerPath,
           general_remarks: remarksGeneral,
+          mock_interview_mark: remarksMockInterviewMark === '' ? null : remarksMockInterviewMark,
+          mock_interview_remark: remarksMockInterviewRemark,
+          industrial_visit_mark: remarksIndustrialVisitMark === '' ? null : remarksIndustrialVisitMark,
+          industrial_visit_remark: remarksIndustrialVisitRemark,
           updated_by: currentUser.id,
           updated_at: new Date().toISOString()
         }, { onConflict: 'student_id' });
@@ -1531,6 +1740,10 @@ const AdminDashboard = () => {
     const rWeaknesses = remarksWeaknesses || 'No improvement areas recorded yet.';
     const rCareerPath = remarksCareerPath || 'No career path recommendations recorded yet.';
     const rGeneral = remarksGeneral || 'No general remarks recorded yet.';
+    const rMockInterviewMark = remarksMockInterviewMark !== '' ? `${remarksMockInterviewMark}` : 'N/A';
+    const rMockInterviewRemark = remarksMockInterviewRemark || 'No feedback recorded yet.';
+    const rIndustrialVisitMark = remarksIndustrialVisitMark !== '' ? `${remarksIndustrialVisitMark}` : 'N/A';
+    const rIndustrialVisitRemark = remarksIndustrialVisitRemark || 'No feedback recorded yet.';
 
     // Construct print template
     printWindow.document.write(`
@@ -1805,6 +2018,14 @@ const AdminDashboard = () => {
             <div class="remarks-card" style="border-left: 4px solid #c99c33;">
               <h4 style="color: #c99c33;">📝 General Remarks</h4>
               <p>${rGeneral}</p>
+            </div>
+            <div class="remarks-card" style="border-left: 4px solid #c99c33;">
+              <h4 style="color: #c99c33;">👔 Mock Interview (Score: ${rMockInterviewMark})</h4>
+              <p>${rMockInterviewRemark}</p>
+            </div>
+            <div class="remarks-card" style="border-left: 4px solid #c99c33;">
+              <h4 style="color: #c99c33;">🚌 Industrial Visit (Score: ${rIndustrialVisitMark})</h4>
+              <p>${rIndustrialVisitRemark}</p>
             </div>
           </div>
 
@@ -3339,6 +3560,21 @@ const AdminDashboard = () => {
                   </button>
                   <button 
                     onClick={() => {
+                      setGradingMode('batch_sheet');
+                      if (activeInterval) fetchBatchScores(activeInterval.id);
+                    }}
+                    style={{
+                      padding: '0.5rem 0.5rem 0.8rem 0.5rem', background: 'none', border: 'none',
+                      borderBottom: gradingMode === 'batch_sheet' ? '3px solid var(--primary)' : '3px solid transparent',
+                      color: gradingMode === 'batch_sheet' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                      fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem',
+                      whiteSpace: 'nowrap', flexShrink: 0
+                    }}
+                  >
+                    📊 Batch Sheet (Matrix View)
+                  </button>
+                  <button 
+                    onClick={() => {
                       setGradingMode('leaderboard');
                       if (activeInterval) fetchClassroomLeaderboard(activeInterval.id);
                     }}
@@ -3367,6 +3603,194 @@ const AdminDashboard = () => {
                     </button>
                   )}
                 </div>
+
+                {/* Sub Mode: Batch Sheet (Matrix View) */}
+                {gradingMode === 'batch_sheet' && (() => {
+                  const batchStartDate = (activeInterval && activeInterval.start_date)
+                    ? activeInterval.start_date
+                    : (activeInterval && activeInterval.created_at)
+                      ? activeInterval.created_at
+                      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+                  const matrixDates = getDatesRange(batchStartDate);
+
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div>
+                          <h3 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700 }}>
+                            📊 Batch Sheet (Matrix View)
+                          </h3>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0.2rem 0 0 0' }}>
+                            View and edit completions for all students and all dates since batch commencement in a single grid.
+                          </p>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 750, color: 'var(--text-muted)' }}>Select Activity / Metric:</label>
+                          <select
+                            value={matrixActivity}
+                            onChange={(e) => setMatrixActivity(e.target.value as any)}
+                            style={{
+                              padding: '0.4rem 0.6rem',
+                              borderRadius: '8px',
+                              border: '1px solid rgba(201,156,51,0.3)',
+                              outline: 'none',
+                              background: 'white',
+                              fontWeight: 700,
+                              fontSize: '0.85rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value="attendance">📅 Attendance Status</option>
+                            <option value="daily_vocab">📚 WhatsApp Vocab (+5 XP)</option>
+                            <option value="daily_sentences">✍️ Daily Sentences (+5 XP)</option>
+                            <option value="weekly_vlog">📹 Weekly Vlog (+15 XP)</option>
+                            <option value="video_reaction">💬 Video Reaction (+15 XP)</option>
+                            <option value="hadithul_arabia">🕌 Hadithul Arabia (+10 XP)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {loadingBatchScores ? (
+                        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          <div style={{ width: '30px', height: '30px', border: '3px solid rgba(201,156,51,0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 1rem auto' }}></div>
+                          <span>Loading batch logs...</span>
+                        </div>
+                      ) : sortedFilteredActiveStudents.length === 0 ? (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active students registered for this batch/course.</p>
+                      ) : (
+                        <div className="matrix-table-container" style={{ overflowX: 'auto', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '12px', background: 'white', maxHeight: '550px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.82rem', textAlign: 'left' }}>
+                            <thead>
+                              <tr style={{ background: '#f8fafc', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+                                <th style={{
+                                  padding: '0.8rem 1rem',
+                                  fontWeight: 800,
+                                  position: 'sticky',
+                                  left: 0,
+                                  top: 0,
+                                  zIndex: 20,
+                                  background: '#f1f5f9',
+                                  borderRight: '2px solid rgba(0,0,0,0.08)',
+                                  borderBottom: '2px solid rgba(0,0,0,0.08)',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  Student Name
+                                </th>
+                                {matrixDates.map(dateStr => (
+                                  <th key={dateStr} style={{
+                                    padding: '0.8rem 0.5rem',
+                                    fontWeight: 700,
+                                    textAlign: 'center',
+                                    position: 'sticky',
+                                    top: 0,
+                                    zIndex: 10,
+                                    background: '#f8fafc',
+                                    borderBottom: '2px solid rgba(0,0,0,0.08)',
+                                    borderRight: '1px solid rgba(0,0,0,0.04)',
+                                    whiteSpace: 'nowrap',
+                                    minWidth: '80px'
+                                  }}>
+                                    {new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sortedFilteredActiveStudents.map(student => (
+                                <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                                  <td style={{
+                                    padding: '0.8rem 1rem',
+                                    fontWeight: 650,
+                                    position: 'sticky',
+                                    left: 0,
+                                    zIndex: 5,
+                                    background: 'white',
+                                    borderRight: '2px solid rgba(0,0,0,0.08)',
+                                    borderBottom: '1px solid rgba(0,0,0,0.04)',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    {student.roll_number && <span style={{ color: 'var(--primary)', marginRight: '0.3rem', fontWeight: 800 }}>#{student.roll_number}</span>}
+                                    {student.name}
+                                  </td>
+                                  {matrixDates.map(dateStr => {
+                                    const lockKey = `${student.id}-${dateStr}-${matrixActivity}`;
+                                    const isLocked = updatingMatrix.includes(lockKey) || updatingMatrix.includes(`${student.id}-${dateStr}-attendance`);
+                                    
+                                    if (matrixActivity === 'attendance') {
+                                      const attObj = batchScores.find(s => s.student_id === student.id && s.logged_date === dateStr && s.score_type === 'attendance');
+                                      const currentValue = attObj ? attObj.activity_name.replace('Attendance: ', '') : '';
+
+                                      return (
+                                        <td key={dateStr} style={{
+                                          padding: '0.5rem 0.3rem',
+                                          textAlign: 'center',
+                                          borderBottom: '1px solid rgba(0,0,0,0.04)',
+                                          borderRight: '1px solid rgba(0,0,0,0.04)',
+                                          opacity: isLocked ? 0.5 : 1
+                                        }}>
+                                          <select
+                                            value={currentValue}
+                                            onChange={(e) => handleToggleMatrixAttendance(student.id, dateStr, e.target.value)}
+                                            disabled={isLocked}
+                                            style={{
+                                              padding: '0.2rem 0.3rem',
+                                              borderRadius: '6px',
+                                              border: '1px solid rgba(0,0,0,0.12)',
+                                              background: currentValue === 'On Time' ? 'rgba(34,197,94,0.08)' : currentValue === 'Late' ? 'rgba(180,83,9,0.08)' : currentValue === 'Half Day' ? 'rgba(59,130,246,0.08)' : currentValue === 'Absent' ? 'rgba(239,68,68,0.08)' : 'white',
+                                              color: currentValue === 'On Time' ? '#16a34a' : currentValue === 'Late' ? '#b45309' : currentValue === 'Half Day' ? '#3b82f6' : currentValue === 'Absent' ? '#dc2626' : 'var(--text-muted)',
+                                              fontWeight: currentValue ? 700 : 500,
+                                              fontSize: '0.75rem',
+                                              outline: 'none',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            <option value="">-</option>
+                                            <option value="On Time">On Time</option>
+                                            <option value="Late">Late</option>
+                                            <option value="Half Day">Half Day</option>
+                                            <option value="Absent">Absent</option>
+                                          </select>
+                                        </td>
+                                      );
+                                    } else {
+                                      const existing = batchScores.find(s => s.student_id === student.id && s.logged_date === dateStr && s.score_type === matrixActivity);
+                                      const isChecked = !!existing;
+
+                                      return (
+                                        <td key={dateStr} style={{
+                                          padding: '0.5rem 0.3rem',
+                                          textAlign: 'center',
+                                          borderBottom: '1px solid rgba(0,0,0,0.04)',
+                                          borderRight: '1px solid rgba(0,0,0,0.04)',
+                                          opacity: isLocked ? 0.5 : 1
+                                        }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            disabled={isLocked}
+                                            onChange={() => handleToggleMatrixCell(student.id, dateStr, matrixActivity, existing)}
+                                            style={{
+                                              width: '16px',
+                                              height: '16px',
+                                              cursor: 'pointer',
+                                              accentColor: 'var(--primary)'
+                                            }}
+                                          />
+                                        </td>
+                                      );
+                                    }
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Sub Mode A: Daily Checkins & Red Penalty Button */}
                 {gradingMode === 'vocab_sentences' && (
@@ -5034,26 +5458,6 @@ const AdminDashboard = () => {
                         const studentInterval = intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number && i.is_active)
                           || intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number);
 
-                        const getDatesRange = (startDateStr: string) => {
-                          const dates: string[] = [];
-                          const start = new Date(startDateStr);
-                          start.setHours(0, 0, 0, 0);
-                          
-                          const end = new Date();
-                          end.setHours(0, 0, 0, 0);
-                          
-                          let limit = 0;
-                          const current = new Date(end);
-                          while (current >= start && limit < 90) {
-                            const yyyy = current.getFullYear();
-                            const mm = String(current.getMonth() + 1).padStart(2, '0');
-                            const dd = String(current.getDate()).padStart(2, '0');
-                            dates.push(`${yyyy}-${mm}-${dd}`);
-                            current.setDate(current.getDate() - 1);
-                            limit++;
-                          }
-                          return dates;
-                        };
 
                         const intervalStartDate = (studentInterval && studentInterval.start_date) 
                           ? studentInterval.start_date 
@@ -5384,6 +5788,52 @@ const AdminDashboard = () => {
                               rows={3}
                               style={{ padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
                             />
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.8rem', background: 'rgba(0,0,0,0.01)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.03)' }}>
+                              <h4 style={{ fontSize: '0.8rem', fontWeight: 800, margin: 0, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>👔 Mock Interview</h4>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Mark:</label>
+                                <input 
+                                  type="number"
+                                  placeholder="Score"
+                                  value={remarksMockInterviewMark}
+                                  onChange={(e) => setRemarksMockInterviewMark(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                                  style={{ width: '80px', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem' }}
+                                />
+                              </div>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '-0.3rem' }}>Remark:</label>
+                              <textarea 
+                                placeholder="Mock Interview Feedback..."
+                                value={remarksMockInterviewRemark}
+                                onChange={(e) => setRemarksMockInterviewRemark(e.target.value)}
+                                rows={2}
+                                style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                              />
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.8rem', background: 'rgba(0,0,0,0.01)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.03)' }}>
+                              <h4 style={{ fontSize: '0.8rem', fontWeight: 800, margin: 0, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>🚌 Industrial Visit</h4>
+                              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Mark:</label>
+                                <input 
+                                  type="number"
+                                  placeholder="Score"
+                                  value={remarksIndustrialVisitMark}
+                                  onChange={(e) => setRemarksIndustrialVisitMark(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                                  style={{ width: '80px', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem' }}
+                                />
+                              </div>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '-0.3rem' }}>Remark:</label>
+                              <textarea 
+                                placeholder="Industrial Visit Feedback..."
+                                value={remarksIndustrialVisitRemark}
+                                onChange={(e) => setRemarksIndustrialVisitRemark(e.target.value)}
+                                rows={2}
+                                style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                              />
+                            </div>
                           </div>
 
                           <button

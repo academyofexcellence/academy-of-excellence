@@ -94,13 +94,17 @@ const StudentDashboard = () => {
     weaknesses: string;
     career_path: string;
     general_remarks: string;
+    mock_interview_mark: number | null;
+    mock_interview_remark: string;
+    industrial_visit_mark: number | null;
+    industrial_visit_remark: string;
   } | null>(null);
 
   const fetchStudentRemarks = async (studentId: string) => {
     try {
       const { data, error } = await supabase
         .from('student_remarks')
-        .select('strengths, weaknesses, career_path, general_remarks')
+        .select('strengths, weaknesses, career_path, general_remarks, mock_interview_mark, mock_interview_remark, industrial_visit_mark, industrial_visit_remark')
         .eq('student_id', studentId)
         .maybeSingle();
 
@@ -111,6 +115,10 @@ const StudentDashboard = () => {
           weaknesses: data.weaknesses || '',
           career_path: data.career_path || '',
           general_remarks: data.general_remarks || '',
+          mock_interview_mark: data.mock_interview_mark,
+          mock_interview_remark: data.mock_interview_remark || '',
+          industrial_visit_mark: data.industrial_visit_mark,
+          industrial_visit_remark: data.industrial_visit_remark || '',
         });
       }
     } catch (err) {
@@ -253,6 +261,10 @@ const StudentDashboard = () => {
     const rWeaknesses = remarks?.weaknesses || 'No improvement areas recorded yet.';
     const rCareerPath = remarks?.career_path || 'No career path recommendations recorded yet.';
     const rGeneral = remarks?.general_remarks || 'No general remarks recorded yet.';
+    const rMockInterviewMark = remarks?.mock_interview_mark !== null && remarks?.mock_interview_mark !== undefined ? `${remarks.mock_interview_mark}` : 'N/A';
+    const rMockInterviewRemark = remarks?.mock_interview_remark || 'No feedback recorded yet.';
+    const rIndustrialVisitMark = remarks?.industrial_visit_mark !== null && remarks?.industrial_visit_mark !== undefined ? `${remarks.industrial_visit_mark}` : 'N/A';
+    const rIndustrialVisitRemark = remarks?.industrial_visit_remark || 'No feedback recorded yet.';
 
     // Construct print template
     printWindow.document.write(`
@@ -527,6 +539,14 @@ const StudentDashboard = () => {
             <div class="remarks-card" style="border-left: 4px solid #c99c33;">
               <h4 style="color: #c99c33;">📝 General Remarks</h4>
               <p>${rGeneral}</p>
+            </div>
+            <div class="remarks-card" style="border-left: 4px solid #c99c33;">
+              <h4 style="color: #c99c33;">👔 Mock Interview (Score: ${rMockInterviewMark})</h4>
+              <p>${rMockInterviewRemark}</p>
+            </div>
+            <div class="remarks-card" style="border-left: 4px solid #c99c33;">
+              <h4 style="color: #c99c33;">🚌 Industrial Visit (Score: ${rIndustrialVisitMark})</h4>
+              <p>${rIndustrialVisitRemark}</p>
             </div>
           </div>
 
@@ -1488,7 +1508,11 @@ const StudentDashboard = () => {
               remarks.strengths?.trim() ||
               remarks.weaknesses?.trim() ||
               remarks.career_path?.trim() ||
-              remarks.general_remarks?.trim()
+              remarks.general_remarks?.trim() ||
+              (remarks.mock_interview_mark !== null && remarks.mock_interview_mark !== undefined) ||
+              remarks.mock_interview_remark?.trim() ||
+              (remarks.industrial_visit_mark !== null && remarks.industrial_visit_mark !== undefined) ||
+              remarks.industrial_visit_remark?.trim()
             );
 
             if (hasAnyRemarks) {
@@ -1531,6 +1555,26 @@ const StudentDashboard = () => {
                     </div>
                     <div className="remarks-content">
                       {remarks.general_remarks?.trim() ? remarks.general_remarks : <span className="remarks-empty">No general remarks recorded yet.</span>}
+                    </div>
+                  </div>
+
+                  {/* Mock Interview */}
+                  <div className="remarks-card" style={{ background: 'rgba(201, 156, 51, 0.015)', borderColor: 'rgba(201, 156, 51, 0.12)' }}>
+                    <div className="remarks-title" style={{ color: 'var(--primary-dark)' }}>
+                      <Award size={16} /> 👔 Mock Interview (Score: {remarks.mock_interview_mark !== null && remarks.mock_interview_mark !== undefined ? `${remarks.mock_interview_mark}` : 'N/A'})
+                    </div>
+                    <div className="remarks-content">
+                      {remarks.mock_interview_remark?.trim() ? remarks.mock_interview_remark : <span className="remarks-empty">No feedback recorded yet.</span>}
+                    </div>
+                  </div>
+
+                  {/* Industrial Visit */}
+                  <div className="remarks-card" style={{ background: 'rgba(201, 156, 51, 0.015)', borderColor: 'rgba(201, 156, 51, 0.12)' }}>
+                    <div className="remarks-title" style={{ color: 'var(--primary-dark)' }}>
+                      <Compass size={16} /> 🚌 Industrial Visit (Score: {remarks.industrial_visit_mark !== null && remarks.industrial_visit_mark !== undefined ? `${remarks.industrial_visit_mark}` : 'N/A'})
+                    </div>
+                    <div className="remarks-content">
+                      {remarks.industrial_visit_remark?.trim() ? remarks.industrial_visit_remark : <span className="remarks-empty">No feedback recorded yet.</span>}
                     </div>
                   </div>
                 </div>
