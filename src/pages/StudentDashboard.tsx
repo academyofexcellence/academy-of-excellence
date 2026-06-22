@@ -863,14 +863,16 @@ const StudentDashboard = () => {
           const { data: scores } = await supabase
             .from('scores')
             .select('student_id, points')
-            .in('interval_id', intervalIds);
+            .in('interval_id', intervalIds)
+            .limit(20000);
           if (scores) scoresData = scores;
         }
       } else {
         const { data: scores } = await supabase
           .from('scores')
           .select('student_id, points')
-          .eq('interval_id', intervalId);
+          .eq('interval_id', intervalId)
+          .limit(20000);
         if (scores) scoresData = scores;
       }
 
