@@ -199,6 +199,7 @@ const AdminDashboard = () => {
   const [filterBatch, setFilterBatch] = useState('');
   const [activeInterval, setActiveInterval] = useState<ScoringInterval | null>(null);
   const [selectedLeaderboardInterval, setSelectedLeaderboardInterval] = useState<string>('');
+  const [reportSelectedInterval, setReportSelectedInterval] = useState<string>('');
   const [showArchivedFilter, setShowArchivedFilter] = useState(false);
 
   // Form States - Exam/Custom Grading
@@ -1465,6 +1466,9 @@ const AdminDashboard = () => {
     setReportTab('attendance');
     setStudentReportData({ scores: [], loading: true });
     
+    const defaultInterval = selectedLeaderboardInterval || activeInterval?.id || 'cumulative';
+    setReportSelectedInterval(defaultInterval);
+    
     // Reset remarks textareas
     setRemarksStrengths('');
     setRemarksWeaknesses('');
@@ -2210,20 +2214,49 @@ const AdminDashboard = () => {
     printHtml(htmlContent);
   };
 
-  const handlePrintReport = (student: StudentProfile, scores: any[]) => {
+  const handlePrintReport = (student: StudentProfile, rawScores: any[]) => {
     
     // Format the date
     const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-    // Calculate metrics
-    const studentInterval = intervalsList.find(i => i.course_id === student.course_id && i.batch_number === student.batch_number && i.is_active) 
-      || intervalsList.find(i => i.course_id === student.course_id && i.batch_number === student.batch_number);
-    const totalWorkingDays = studentInterval?.total_working_days ?? 20;
-    const totalVocab = studentInterval?.total_vocab_tasks ?? 20;
-    const totalSentences = studentInterval?.total_sentences_tasks ?? 20;
-    const totalVlog = studentInterval?.total_vlog_tasks ?? 4;
-    const totalReaction = studentInterval?.total_reaction_tasks ?? 4;
-    const totalHadithul = studentInterval?.total_hadithul_tasks ?? 4;
+    // Filter scores based on the active report selection
+    const scores = reportSelectedInterval === 'cumulative'
+      ? rawScores
+      : rawScores.filter(s => s.interval_id === reportSelectedInterval);
+
+    const periodName = reportSelectedInterval === 'cumulative'
+      ? 'All Terms (Cumulative)'
+      : (intervalsList.find(i => i.id === reportSelectedInterval)?.name || 'Academic Term');
+
+    // Calculate metrics based on the active report selection (single or sum of all terms)
+    const studentIntervals = intervalsList.filter(i => i.course_id === student.course_id && i.batch_number === student.batch_number);
+    const studentInterval = reportSelectedInterval === 'cumulative'
+      ? null
+      : (intervalsList.find(i => i.id === reportSelectedInterval) || studentIntervals.find(i => i.is_active) || studentIntervals[0]);
+
+    const totalWorkingDays = reportSelectedInterval === 'cumulative'
+      ? studentIntervals.reduce((sum, i) => sum + (i.total_working_days ?? 20), 0)
+      : (studentInterval?.total_working_days ?? 20);
+
+    const totalVocab = reportSelectedInterval === 'cumulative'
+      ? studentIntervals.reduce((sum, i) => sum + (i.total_vocab_tasks ?? 20), 0)
+      : (studentInterval?.total_vocab_tasks ?? 20);
+
+    const totalSentences = reportSelectedInterval === 'cumulative'
+      ? studentIntervals.reduce((sum, i) => sum + (i.total_sentences_tasks ?? 20), 0)
+      : (studentInterval?.total_sentences_tasks ?? 20);
+
+    const totalVlog = reportSelectedInterval === 'cumulative'
+      ? studentIntervals.reduce((sum, i) => sum + (i.total_vlog_tasks ?? 4), 0)
+      : (studentInterval?.total_vlog_tasks ?? 4);
+
+    const totalReaction = reportSelectedInterval === 'cumulative'
+      ? studentIntervals.reduce((sum, i) => sum + (i.total_reaction_tasks ?? 4), 0)
+      : (studentInterval?.total_reaction_tasks ?? 4);
+
+    const totalHadithul = reportSelectedInterval === 'cumulative'
+      ? studentIntervals.reduce((sum, i) => sum + (i.total_hadithul_tasks ?? 4), 0)
+      : (studentInterval?.total_hadithul_tasks ?? 4);
 
     const attendanceRecords = scores.filter(s => s.score_type === 'attendance');
     const totalAttendance = attendanceRecords.length;
@@ -2548,8 +2581,8 @@ const AdminDashboard = () => {
               <span class="value">${student.courses?.name || 'N/A'}</span>
             </div>
             <div class="profile-item">
-              <span class="label">Batch Number</span>
-              <span class="value">Batch ${student.batch_number}</span>
+              <span class="label">Batch & Period</span>
+              <span class="value">Batch ${student.batch_number} (${periodName})</span>
             </div>
             <div class="profile-item">
               <span class="label">Status</span>
@@ -5989,24 +6022,43 @@ const AdminDashboard = () => {
                 </div>
                 
                 {!studentReportData.loading && (
-                  <button
-                    onClick={() => handlePrintReport(selectedReportStudent, studentReportData.scores)}
-                    className="btn btn-outline"
-                    style={{ 
-                      padding: '0.5rem 1rem', 
-                      fontSize: '0.85rem', 
-                      fontWeight: 700, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '0.4rem', 
-                      borderColor: 'var(--primary)',
-                      color: 'var(--primary-dark)',
-                      cursor: 'pointer',
-                      marginTop: '0.5rem'
-                    }}
-                  >
-                    <Printer size={16} /> Print Report
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>Period:</label>
+                      <select
+                        value={reportSelectedInterval}
+                        onChange={(e) => setReportSelectedInterval(e.target.value)}
+                        style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        <option value="cumulative">All Terms (Cumulative)</option>
+                        {intervalsList
+                          .filter(i => i.course_id === selectedReportStudent.course_id && i.batch_number === selectedReportStudent.batch_number)
+                          .map(int => (
+                            <option key={int.id} value={int.id}>
+                              {int.name} {int.is_active ? '(Active)' : '(Archived)'}
+                            </option>
+                          ))
+                        }
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => handlePrintReport(selectedReportStudent, studentReportData.scores)}
+                      className="btn btn-outline"
+                      style={{ 
+                        padding: '0.5rem 1rem', 
+                        fontSize: '0.85rem', 
+                        fontWeight: 700, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.4rem', 
+                        borderColor: 'var(--primary)',
+                        color: 'var(--primary-dark)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Printer size={16} /> Print Report
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -6023,16 +6075,38 @@ const AdminDashboard = () => {
                 </div>
               ) : (
                 (() => {
-                  const scores = studentReportData.scores;
+                  const scores = reportSelectedInterval === 'cumulative'
+                    ? studentReportData.scores
+                    : studentReportData.scores.filter(s => s.interval_id === reportSelectedInterval);
 
-                  const studentInterval = intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number && i.is_active)
-                    || intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number);
-                  const totalWorkingDays = studentInterval?.total_working_days ?? 20;
-                  const totalVocab = studentInterval?.total_vocab_tasks ?? 20;
-                  const totalSentences = studentInterval?.total_sentences_tasks ?? 20;
-                  const totalVlog = studentInterval?.total_vlog_tasks ?? 4;
-                  const totalReaction = studentInterval?.total_reaction_tasks ?? 4;
-                  const totalHadithul = studentInterval?.total_hadithul_tasks ?? 4;
+                  const studentIntervals = intervalsList.filter(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number);
+                  const studentInterval = reportSelectedInterval === 'cumulative'
+                    ? null
+                    : (intervalsList.find(i => i.id === reportSelectedInterval) || studentIntervals.find(i => i.is_active) || studentIntervals[0]);
+
+                  const totalWorkingDays = reportSelectedInterval === 'cumulative'
+                    ? studentIntervals.reduce((sum, i) => sum + (i.total_working_days ?? 20), 0)
+                    : (studentInterval?.total_working_days ?? 20);
+
+                  const totalVocab = reportSelectedInterval === 'cumulative'
+                    ? studentIntervals.reduce((sum, i) => sum + (i.total_vocab_tasks ?? 20), 0)
+                    : (studentInterval?.total_vocab_tasks ?? 20);
+
+                  const totalSentences = reportSelectedInterval === 'cumulative'
+                    ? studentIntervals.reduce((sum, i) => sum + (i.total_sentences_tasks ?? 20), 0)
+                    : (studentInterval?.total_sentences_tasks ?? 20);
+
+                  const totalVlog = reportSelectedInterval === 'cumulative'
+                    ? studentIntervals.reduce((sum, i) => sum + (i.total_vlog_tasks ?? 4), 0)
+                    : (studentInterval?.total_vlog_tasks ?? 4);
+
+                  const totalReaction = reportSelectedInterval === 'cumulative'
+                    ? studentIntervals.reduce((sum, i) => sum + (i.total_reaction_tasks ?? 4), 0)
+                    : (studentInterval?.total_reaction_tasks ?? 4);
+
+                  const totalHadithul = reportSelectedInterval === 'cumulative'
+                    ? studentIntervals.reduce((sum, i) => sum + (i.total_hadithul_tasks ?? 4), 0)
+                    : (studentInterval?.total_hadithul_tasks ?? 4);
 
                   // 1. Attendance Metrics
                   const attendanceRecords = scores.filter(s => s.score_type === 'attendance');
