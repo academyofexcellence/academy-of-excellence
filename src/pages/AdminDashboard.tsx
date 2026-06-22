@@ -198,6 +198,7 @@ const AdminDashboard = () => {
   const [filterCourse, setFilterCourse] = useState('');
   const [filterBatch, setFilterBatch] = useState('');
   const [activeInterval, setActiveInterval] = useState<ScoringInterval | null>(null);
+  const [selectedLeaderboardInterval, setSelectedLeaderboardInterval] = useState<string>('');
   const [showArchivedFilter, setShowArchivedFilter] = useState(false);
 
   // Form States - Exam/Custom Grading
@@ -744,9 +745,9 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (activeInterval) {
       fetchClassroomScores(activeInterval.id, selectedGradingDate);
-      fetchClassroomLeaderboard(activeInterval.id);
+      fetchClassroomLeaderboard(selectedLeaderboardInterval || activeInterval.id);
     }
-  }, [activeInterval, selectedGradingDate]);
+  }, [activeInterval, selectedGradingDate, selectedLeaderboardInterval]);
 
   // Load batch scores when Matrix view is activated
   useEffect(() => {
@@ -794,8 +795,10 @@ const AdminDashboard = () => {
     );
     if (active) {
       setActiveInterval(active);
+      setSelectedLeaderboardInterval(active.id);
     } else {
       setActiveInterval(null);
+      setSelectedLeaderboardInterval('');
       setScoresList([]);
     }
   };
@@ -826,17 +829,36 @@ const AdminDashboard = () => {
 
       if (!students) return [];
 
-      // Fetch all scores for this interval
-      const { data: scores } = await supabase
-        .from('scores')
-        .select('student_id, points')
-        .eq('interval_id', intervalId);
+      // Fetch all scores for this interval (or query all intervals if cumulative)
+      let scoresData: any[] = [];
+      if (intervalId === 'cumulative') {
+        const { data: intervals } = await supabase
+          .from('scoring_intervals')
+          .select('id')
+          .eq('course_id', courseId)
+          .eq('batch_number', batchNumber);
+        
+        const intervalIds = intervals?.map(i => i.id) || [];
+        if (intervalIds.length > 0) {
+          const { data: scores } = await supabase
+            .from('scores')
+            .select('student_id, points')
+            .in('interval_id', intervalIds);
+          if (scores) scoresData = scores;
+        }
+      } else {
+        const { data: scores } = await supabase
+          .from('scores')
+          .select('student_id, points')
+          .eq('interval_id', intervalId);
+        if (scores) scoresData = scores;
+      }
 
       const scoreMap: { [key: string]: number } = {};
       students.forEach(s => { scoreMap[s.id] = 0; });
 
-      if (scores) {
-        scores.forEach(s => {
+      if (scoresData.length > 0) {
+        scoresData.forEach(s => {
           if (scoreMap[s.student_id] !== undefined) {
             scoreMap[s.student_id] += s.points;
           }
@@ -877,11 +899,17 @@ const AdminDashboard = () => {
 
   const fetchClassroomLeaderboard = async (intervalId: string) => {
     if (!filterCourse || !filterBatch) return;
-    const entries = await fetchLeaderboardData(intervalId, filterCourse, parseInt(filterBatch));
+    const targetIntervalId = selectedLeaderboardInterval || intervalId;
+    const entries = await fetchLeaderboardData(targetIntervalId, filterCourse, parseInt(filterBatch));
     setClassroomLeaderboard(entries);
-    if (overviewSelectedInterval === intervalId) {
+    if (overviewSelectedInterval === targetIntervalId) {
       setOverviewLeaderboard(entries);
     }
+  };
+
+  const handleLeaderboardIntervalChange = (intervalId: string) => {
+    setSelectedLeaderboardInterval(intervalId);
+    fetchClassroomLeaderboard(intervalId);
   };
 
   const fetchOverviewLeaderboard = async (intervalId: string, courseId: string, batchNumber: number) => {
@@ -1912,6 +1940,9 @@ const AdminDashboard = () => {
 
     const courseName = courses.find(c => c.id === activeInterval.course_id)?.name || '';
     const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const currentLeaderboardName = selectedLeaderboardInterval === 'cumulative'
+      ? 'All Terms (Cumulative)'
+      : (intervalsList.find(i => i.id === selectedLeaderboardInterval)?.name || activeInterval.name);
 
     const rows = classroomLeaderboard.map((entry) => `
       <tr style="border-bottom: 1px solid #e2e8f0;">
@@ -1980,7 +2011,7 @@ const AdminDashboard = () => {
           <div class="header">
             <div class="title-section">
               <h1>Class Standing Leaderboard</h1>
-              <p>${courseName} • Batch ${activeInterval.batch_number} • ${activeInterval.name}</p>
+              <p>${courseName} • Batch ${activeInterval.batch_number} • ${currentLeaderboardName}</p>
               <p style="margin-top: 5px;">Report Generated: ${printDate}</p>
             </div>
             <div class="academy-info">
@@ -4858,27 +4889,52 @@ const AdminDashboard = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: '1rem' }}>
                       <div>
                         <h3 style={{ fontSize: '1.2rem', margin: 0 }}>Class Standing Scoreboard</h3>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>Standings computed in-memory based on all points accrued in the current term. Click any card to view detailed reports.</p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>
+                          {selectedLeaderboardInterval === 'cumulative'
+                            ? 'Cumulative standings computed in-memory across all active and archived terms.'
+                            : 'Standings computed in-memory based on all points accrued in the selected term. Click any card to view detailed reports.'
+                          }
+                        </p>
                       </div>
-                      {classroomLeaderboard.length > 0 && (
-                        <button
-                          onClick={handlePrintRankList}
-                          className="btn btn-outline"
-                          style={{
-                            padding: '0.4rem 0.8rem',
-                            fontSize: '0.8rem',
-                            fontWeight: 700,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            borderColor: 'var(--primary)',
-                            color: 'var(--primary-dark)',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Printer size={14} /> Print Rank List
-                        </button>
-                      )}
+                      <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Period:</label>
+                          <select
+                            value={selectedLeaderboardInterval}
+                            onChange={(e) => handleLeaderboardIntervalChange(e.target.value)}
+                            style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            <option value="cumulative">All Terms (Cumulative)</option>
+                            {intervalsList
+                              .filter(i => i.course_id === filterCourse && i.batch_number === parseInt(filterBatch))
+                              .map(int => (
+                                <option key={int.id} value={int.id}>
+                                  {int.name} {int.is_active ? '(Active)' : '(Archived)'}
+                                </option>
+                              ))
+                            }
+                          </select>
+                        </div>
+                        {classroomLeaderboard.length > 0 && (
+                          <button
+                            onClick={handlePrintRankList}
+                            className="btn btn-outline"
+                            style={{
+                              padding: '0.4rem 0.8rem',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              borderColor: 'var(--primary)',
+                              color: 'var(--primary-dark)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Printer size={14} /> Print Rank List
+                          </button>
+                        )}
+                      </div>
                     </div>
                     
                     {filteredActiveStudents.length === 0 ? (

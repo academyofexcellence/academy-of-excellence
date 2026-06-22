@@ -849,17 +849,36 @@ const StudentDashboard = () => {
 
       if (!students) return;
 
-      // Fetch all scores for this interval
-      const { data: scores } = await supabase
-        .from('scores')
-        .select('student_id, points')
-        .eq('interval_id', intervalId);
+      // Fetch all scores for this interval (or query all intervals if cumulative)
+      let scoresData: any[] = [];
+      if (intervalId === 'cumulative') {
+        const { data: intervals } = await supabase
+          .from('scoring_intervals')
+          .select('id')
+          .eq('course_id', courseId)
+          .eq('batch_number', batchNumber);
+        
+        const intervalIds = intervals?.map(i => i.id) || [];
+        if (intervalIds.length > 0) {
+          const { data: scores } = await supabase
+            .from('scores')
+            .select('student_id, points')
+            .in('interval_id', intervalIds);
+          if (scores) scoresData = scores;
+        }
+      } else {
+        const { data: scores } = await supabase
+          .from('scores')
+          .select('student_id, points')
+          .eq('interval_id', intervalId);
+        if (scores) scoresData = scores;
+      }
 
       const scoreMap: { [key: string]: number } = {};
       students.forEach(s => { scoreMap[s.id] = 0; });
 
-      if (scores) {
-        scores.forEach(s => {
+      if (scoresData.length > 0) {
+        scoresData.forEach(s => {
           if (scoreMap[s.student_id] !== undefined) {
             scoreMap[s.student_id] += s.points;
           }
@@ -908,8 +927,12 @@ const StudentDashboard = () => {
         .order('created_at', { ascending: false });
 
       if (logs) {
-        // Show only the selected interval's audit logs in history
-        setRecentLogs(logs.filter(log => log.interval_id === intervalId));
+        // Show only the selected interval's audit logs in history (or show all if cumulative)
+        if (intervalId === 'cumulative') {
+          setRecentLogs(logs);
+        } else {
+          setRecentLogs(logs.filter(log => log.interval_id === intervalId));
+        }
 
         // Calculate weekly status (Mon-Fri checkins + weekly vlog)
         // Get start of current week (Monday)
@@ -1253,6 +1276,7 @@ const StudentDashboard = () => {
                   onChange={(e) => handleIntervalChange(e.target.value)}
                   style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
                 >
+                  <option value="cumulative">All Terms (Cumulative)</option>
                   {intervals.map(int => (
                     <option key={int.id} value={int.id}>
                       {int.name} {int.is_active ? '(Active)' : '(Archived)'}
@@ -1644,8 +1668,23 @@ const StudentDashboard = () => {
 
       {/* --- MY DAILY MARKS MATRIX --- */}
       {(() => {
-        const currentIntervalObj = intervals.find(i => i.id === selectedInterval);
-        const intervalStartDate = currentIntervalObj?.start_date || currentIntervalObj?.created_at || new Date().toISOString();
+        let intervalStartDate = new Date().toISOString();
+        if (selectedInterval === 'cumulative') {
+          const sortedInts = [...intervals].sort((a, b) => {
+            const dateA = new Date(a.start_date || a.created_at || '').getTime();
+            const dateB = new Date(b.start_date || b.created_at || '').getTime();
+            return dateA - dateB;
+          });
+          const earliest = sortedInts[0];
+          if (earliest) {
+            intervalStartDate = earliest.start_date || earliest.created_at || new Date().toISOString();
+          }
+        } else {
+          const currentIntervalObj = intervals.find(i => i.id === selectedInterval);
+          if (currentIntervalObj) {
+            intervalStartDate = currentIntervalObj.start_date || currentIntervalObj.created_at || new Date().toISOString();
+          }
+        }
         const matrixDates = getDatesRange(intervalStartDate);
         
         return (
