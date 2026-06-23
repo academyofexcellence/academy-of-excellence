@@ -583,9 +583,7 @@ const AdminDashboard = () => {
         if (studentProfile) {
           const studentCourseId = studentProfile.course_id;
           const studentBatchNum = studentProfile.batch_number;
-          const matchedInterval = intervalsList.find(
-            int => int.course_id === studentCourseId && int.batch_number === studentBatchNum && int.is_active
-          );
+          const matchedInterval = getIntervalForDate(loggedDate, studentCourseId, studentBatchNum);
 
           if (matchedInterval) {
             if (reqType === 'attendance') {
@@ -998,6 +996,47 @@ const AdminDashboard = () => {
     }
   };
 
+  const getIntervalForDate = (dateStr: string, courseId: string, batchNumber: number): ScoringInterval | null => {
+    const courseInts = intervalsList.filter(
+      i => i.course_id === courseId && i.batch_number === batchNumber
+    );
+    if (courseInts.length === 0) return null;
+
+    const sorted = [...courseInts].sort((a, b) => {
+      const dateA = new Date(a.start_date || a.created_at || '').getTime();
+      const dateB = new Date(b.start_date || b.created_at || '').getTime();
+      return dateA - dateB;
+    });
+
+    const targetTime = new Date(dateStr).getTime();
+
+    for (let i = 0; i < sorted.length; i++) {
+      const current = sorted[i];
+      const startStr = current.start_date || current.created_at || '';
+      const startTime = new Date(startStr).getTime();
+
+      let endTime = Infinity;
+      if (current.end_date) {
+        endTime = new Date(current.end_date).getTime() + 24 * 60 * 60 * 1000 - 1;
+      } else if (i < sorted.length - 1) {
+        const nextStart = sorted[i + 1].start_date || sorted[i + 1].created_at || '';
+        endTime = new Date(nextStart).getTime() - 1;
+      }
+
+      if (targetTime >= startTime && targetTime <= endTime) {
+        return current;
+      }
+    }
+
+    const active = sorted.find(i => i.is_active);
+    if (active) return active;
+    
+    if (targetTime < new Date(sorted[0].start_date || sorted[0].created_at || '').getTime()) {
+      return sorted[0];
+    }
+    return sorted[sorted.length - 1];
+  };
+
   const fetchClassroomLeaderboard = async (intervalId: string) => {
     if (!filterCourse || !filterBatch) return;
     const targetIntervalId = selectedLeaderboardInterval || intervalId;
@@ -1042,10 +1081,16 @@ const AdminDashboard = () => {
 
     try {
       if (isChecked) {
+        const student = studentList.find(s => s.id === studentId);
+        const targetInterval = getIntervalForDate(
+          targetDate,
+          student?.course_id || activeInterval.course_id,
+          student?.batch_number || activeInterval.batch_number
+        );
         const { error } = await supabase.from('scores').insert([
           {
             student_id: studentId,
-            interval_id: activeInterval.id,
+            interval_id: targetInterval ? targetInterval.id : activeInterval.id,
             score_type: scoreType,
             points: pointsMap[scoreType],
             max_points: pointsMap[scoreType],
@@ -1149,12 +1194,18 @@ const AdminDashboard = () => {
           hadithul_arabia: 'Hadithul Arabia Attendance'
         } as any;
 
+        const student = studentList.find(s => s.id === studentId);
+        const targetInterval = getIntervalForDate(
+          dateStr,
+          student?.course_id || activeInterval.course_id,
+          student?.batch_number || activeInterval.batch_number
+        );
         const { data, error } = await supabase
           .from('scores')
           .insert([
             {
               student_id: studentId,
-              interval_id: activeInterval.id,
+              interval_id: targetInterval ? targetInterval.id : activeInterval.id,
               score_type: scoreType,
               points: pointsMap[scoreType as 'daily_vocab'],
               max_points: pointsMap[scoreType as 'daily_vocab'],
@@ -1229,21 +1280,27 @@ const AdminDashboard = () => {
           const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
           await logActivity('student_score_logged', `Updated Attendance to ${statusValue} for ${studName} on ${dateStr} (Matrix View)`);
         } else {
-          const { data, error } = await supabase
-            .from('scores')
-            .insert([
-              {
-                student_id: studentId,
-                interval_id: activeInterval.id,
-                score_type: 'attendance',
-                points: points,
-                max_points: points,
-                activity_name: dbActivityName,
-                logged_by: currentUser.id,
-                logged_date: dateStr
-              }
-            ])
-            .select();
+        const student = studentList.find(s => s.id === studentId);
+        const targetInterval = getIntervalForDate(
+          dateStr,
+          student?.course_id || activeInterval.course_id,
+          student?.batch_number || activeInterval.batch_number
+        );
+        const { data, error } = await supabase
+          .from('scores')
+          .insert([
+            {
+              student_id: studentId,
+              interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+              score_type: 'attendance',
+              points: points,
+              max_points: points,
+              activity_name: dbActivityName,
+              logged_by: currentUser.id,
+              logged_date: dateStr
+            }
+          ])
+          .select();
           if (error) throw error;
           if (data && data.length > 0) {
             setBatchScores(prev => [...prev, data[0]]);
@@ -1300,10 +1357,16 @@ const AdminDashboard = () => {
           await logActivity('malayalam_penalty_inc', `Increased Malayalam penalty count for ${studName} (Total: ${newPoints} XP) on ${targetDate}`);
           setMessage(`⚠️ Malayalam penalty count increased (Total: ${newPoints} XP) for ${studName}.`);
         } else {
+          const student = studentList.find(s => s.id === studentId);
+          const targetInterval = getIntervalForDate(
+            targetDate,
+            student?.course_id || activeInterval.course_id,
+            student?.batch_number || activeInterval.batch_number
+          );
           const { error: insertError } = await supabase.from('scores').insert([
             {
               student_id: studentId,
-              interval_id: activeInterval.id,
+              interval_id: targetInterval ? targetInterval.id : activeInterval.id,
               score_type: 'penalty',
               points: -2,
               max_points: 0,
@@ -1396,12 +1459,18 @@ const AdminDashboard = () => {
           setMessage(`📅 Attendance updated to ${statusValue} (${pointsValue} XP) for ${studName}.`);
         } else {
           // Insert new score row
+          const student = studentList.find(s => s.id === studentId);
+          const targetInterval = getIntervalForDate(
+            targetDate,
+            student?.course_id || activeInterval.course_id,
+            student?.batch_number || activeInterval.batch_number
+          );
           const { error: insertError } = await supabase
             .from('scores')
             .insert([
               {
                 student_id: studentId,
-                interval_id: activeInterval.id,
+                interval_id: targetInterval ? targetInterval.id : activeInterval.id,
                 points: pointsValue,
                 max_points: 10,
                 score_type: 'attendance',
@@ -1466,12 +1535,18 @@ const AdminDashboard = () => {
           setMessage(`🎙️ One Minute Talk score updated to ${pointsValue}/10 for ${studName}.`);
         } else {
           // Insert new score row
+          const student = studentList.find(s => s.id === studentId);
+          const targetInterval = getIntervalForDate(
+            targetDate,
+            student?.course_id || activeInterval.course_id,
+            student?.batch_number || activeInterval.batch_number
+          );
           const { error: insertError } = await supabase
             .from('scores')
             .insert([
               {
                 student_id: studentId,
-                interval_id: activeInterval.id,
+                interval_id: targetInterval ? targetInterval.id : activeInterval.id,
                 points: pointsValue,
                 max_points: 10,
                 score_type: 'custom',
@@ -1505,16 +1580,24 @@ const AdminDashboard = () => {
     setMessage('Saving exam grades to database...');
     try {
       const maxPts = parseInt(examMaxPoints);
-      const insertRecords = Object.keys(examScores).map(studId => ({
-        student_id: studId,
-        interval_id: activeInterval.id,
-        score_type: 'exam',
-        points: examScores[studId] || 0,
-        max_points: maxPts,
-        activity_name: `Exam: ${examName}`,
-        logged_by: currentUser.id,
-        logged_date: selectedGradingDate
-      }));
+      const insertRecords = Object.keys(examScores).map(studId => {
+        const student = studentList.find(s => s.id === studId);
+        const targetInterval = getIntervalForDate(
+          selectedGradingDate,
+          student?.course_id || activeInterval.course_id,
+          student?.batch_number || activeInterval.batch_number
+        );
+        return {
+          student_id: studId,
+          interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+          score_type: 'exam',
+          points: examScores[studId] || 0,
+          max_points: maxPts,
+          activity_name: `Exam: ${examName}`,
+          logged_by: currentUser.id,
+          logged_date: selectedGradingDate
+        };
+      });
 
       if (insertRecords.length === 0) {
         throw new Error('No student grades entered.');
@@ -1544,16 +1627,24 @@ const AdminDashboard = () => {
     setMessage('Saving custom grades to database...');
     try {
       const maxPts = parseInt(customMaxPoints);
-      const insertRecords = Object.keys(customScores).map(studId => ({
-        student_id: studId,
-        interval_id: activeInterval.id,
-        score_type: 'custom',
-        points: customScores[studId] || 0,
-        max_points: maxPts,
-        activity_name: customActivityName,
-        logged_by: currentUser.id,
-        logged_date: selectedGradingDate
-      }));
+      const insertRecords = Object.keys(customScores).map(studId => {
+        const student = studentList.find(s => s.id === studId);
+        const targetInterval = getIntervalForDate(
+          selectedGradingDate,
+          student?.course_id || activeInterval.course_id,
+          student?.batch_number || activeInterval.batch_number
+        );
+        return {
+          student_id: studId,
+          interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+          score_type: 'custom',
+          points: customScores[studId] || 0,
+          max_points: maxPts,
+          activity_name: customActivityName,
+          logged_by: currentUser.id,
+          logged_date: selectedGradingDate
+        };
+      });
 
       if (insertRecords.length === 0) {
         throw new Error('No student grades entered.');
@@ -1654,6 +1745,7 @@ const AdminDashboard = () => {
       });
       setIntervalsAuditSummary(intervalSummary);
 
+      const targetIntervalId = selectedLeaderboardInterval || activeInterval?.id || '';
       const report = students.map(student => {
         const termScores: { [termName: string]: number } = {};
         let calculatedSum = 0;
@@ -1662,7 +1754,10 @@ const AdminDashboard = () => {
           const intervalScores = (allScores || []).filter(s => s.student_id === student.id && s.interval_id === interval.id);
           const sum = intervalScores.reduce((acc, s) => acc + s.points, 0);
           termScores[interval.name] = sum;
-          calculatedSum += sum;
+          
+          if (targetIntervalId === 'cumulative' || interval.id === targetIntervalId) {
+            calculatedSum += sum;
+          }
         });
 
         const entry = classroomLeaderboard.find(e => e.student_id === student.id);
@@ -1855,7 +1950,8 @@ const AdminDashboard = () => {
       } else {
         const studentCourseId = selectedReportStudent.course_id;
         const studentBatchNum = selectedReportStudent.batch_number;
-        const activeInt = intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum && i.is_active)
+        const activeInt = getIntervalForDate(dateStr, studentCourseId, studentBatchNum)
+          || intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum && i.is_active)
           || intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum);
         if (!activeInt) {
           setMessage('❌ Cannot log: No active interval found for this student\'s course & batch.');
@@ -2040,7 +2136,8 @@ const AdminDashboard = () => {
     
     const studentCourseId = selectedReportStudent.course_id;
     const studentBatchNum = selectedReportStudent.batch_number;
-    const activeInt = intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum && i.is_active)
+    const activeInt = getIntervalForDate(addLogDate, studentCourseId, studentBatchNum)
+      || intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum && i.is_active)
       || intervalsList.find(i => i.course_id === studentCourseId && i.batch_number === studentBatchNum);
     if (!activeInt) {
       setMessage('❌ Cannot log: No active interval found for this student\'s course & batch.');
@@ -6807,7 +6904,7 @@ const AdminDashboard = () => {
               </button>
 
               <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-main)', fontSize: '1.4rem', fontWeight: 800 }}>
-                🔍 Score Sum Integrity Auditor
+                🔍 Score Sum Integrity Auditor ({selectedLeaderboardInterval === 'cumulative' ? 'Cumulative' : (intervalsList.find(i => i.id === (selectedLeaderboardInterval || activeInterval?.id))?.name || 'Active Period')})
               </h3>
               <p style={{ margin: '0 0 1.5rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 This auditor performs an in-memory cross-check. It fetches every individual score entry for each active student and compares the calculated sum across all terms against the live scoreboard value.
