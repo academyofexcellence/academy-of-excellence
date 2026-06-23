@@ -848,13 +848,6 @@ const AdminDashboard = () => {
 
   // Synchronize configuration editor states when intervalsList or selectedConfigIntervalId changes
   useEffect(() => {
-    const activeInts = intervalsList.filter(i => i.is_active);
-    if (activeInts.length > 0 && !selectedConfigIntervalId) {
-      setSelectedConfigIntervalId(activeInts[0].id);
-    }
-  }, [intervalsList, selectedConfigIntervalId]);
-
-  useEffect(() => {
     if (selectedConfigIntervalId) {
       const selected = intervalsList.find(i => i.id === selectedConfigIntervalId);
       if (selected) {
@@ -877,10 +870,18 @@ const AdminDashboard = () => {
     if (active) {
       setActiveInterval(active);
       setSelectedLeaderboardInterval(active.id);
+      setSelectedConfigIntervalId(active.id);
     } else {
       setActiveInterval(null);
       setSelectedLeaderboardInterval('');
       setScoresList([]);
+      
+      const courseInts = intervalsList.filter(i => i.course_id === filterCourse && i.batch_number === parseInt(filterBatch));
+      if (courseInts.length > 0) {
+        setSelectedConfigIntervalId(courseInts[0].id);
+      } else {
+        setSelectedConfigIntervalId('');
+      }
     }
   };
 
@@ -5993,26 +5994,27 @@ const AdminDashboard = () => {
               </div>
 
               {/* Active Period Target Configurations */}
-              {intervalsList.filter(i => i.is_active).length > 0 && (
+              {intervalsList.filter(i => i.course_id === filterCourse && i.batch_number === parseInt(filterBatch)).length > 0 && (
                 <div style={{ marginTop: '2rem', marginBottom: '2rem', borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '1.5rem' }}>
                   <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <Settings size={16} className="text-primary" /> Active Period Target Configurations
+                    <Settings size={16} className="text-primary" /> Period Target Configurations
                   </h4>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '1rem' }}>Configure targets (total working days and task requirements) for active scoring intervals.</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '1rem' }}>Configure targets, start dates, and end dates for academic periods of the selected course and batch.</p>
                   
                   <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Select Active Period</label>
+                    <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Select Academic Period to Configure</label>
                     <select 
                       value={selectedConfigIntervalId}
                       onChange={(e) => setSelectedConfigIntervalId(e.target.value)}
                       className="form-input"
                     >
-                      {intervalsList.filter(i => i.is_active).map(int => {
-                        const cName = courses.find(c => c.id === int.course_id)?.name || 'Course';
-                        return (
-                          <option key={int.id} value={int.id}>{int.name} - {cName} (Batch {int.batch_number})</option>
-                        );
-                      })}
+                      {intervalsList
+                        .filter(i => i.course_id === filterCourse && i.batch_number === parseInt(filterBatch))
+                        .map(int => (
+                          <option key={int.id} value={int.id}>
+                            {int.name} {int.is_active ? '⭐️ (Active)' : '(Archived)'}
+                          </option>
+                        ))}
                     </select>
                   </div>
 
