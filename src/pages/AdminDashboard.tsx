@@ -247,6 +247,7 @@ const AdminDashboard = () => {
   // Score Auditor / Verifier States
   const [showScoreVerifierModal, setShowScoreVerifierModal] = useState(false);
   const [scoreVerifierList, setScoreVerifierList] = useState<any[]>([]);
+  const [intervalsAuditSummary, setIntervalsAuditSummary] = useState<any[]>([]);
   const [verifyingScores, setVerifyingScores] = useState(false);
   
   const [selectedGradingDate, setSelectedGradingDate] = useState(new Date().toISOString().split('T')[0]);
@@ -1586,7 +1587,7 @@ const AdminDashboard = () => {
 
       const { data: intervals, error: intervalErr } = await supabase
         .from('scoring_intervals')
-        .select('id, name')
+        .select('id, name, start_date')
         .eq('course_id', filterCourse)
         .eq('batch_number', parseInt(filterBatch));
       if (intervalErr) throw intervalErr;
@@ -1605,7 +1606,7 @@ const AdminDashboard = () => {
       while (hasMore) {
         const { data: pageData, error: scoreErr } = await supabase
           .from('scores')
-          .select('student_id, interval_id, points')
+          .select('student_id, interval_id, points, logged_date')
           .in('interval_id', intervalIds)
           .in('student_id', students.map(s => s.id))
           .range(from, from + pageSize - 1);
@@ -1621,6 +1622,32 @@ const AdminDashboard = () => {
           hasMore = false;
         }
       }
+
+      // Calculate intervals audit summary (dates logged vs configured start)
+      const intervalSummary = intervals.map(interval => {
+        const intervalScores = allScores.filter(s => s.interval_id === interval.id);
+        const dates = intervalScores.map(s => s.logged_date).filter(Boolean);
+        
+        let actualStart = 'N/A';
+        let actualEnd = 'N/A';
+        if (dates.length > 0) {
+          actualStart = dates.reduce((min, d) => d < min ? d : min);
+          actualEnd = dates.reduce((max, d) => d > max ? d : max);
+        }
+        
+        const totalPoints = intervalScores.reduce((sum, s) => sum + s.points, 0);
+
+        return {
+          id: interval.id,
+          name: interval.name,
+          configuredStart: interval.start_date || 'N/A',
+          actualStart,
+          actualEnd,
+          totalPoints,
+          count: intervalScores.length
+        };
+      });
+      setIntervalsAuditSummary(intervalSummary);
 
       const report = students.map(student => {
         const termScores: { [termName: string]: number } = {};
@@ -6768,6 +6795,27 @@ const AdminDashboard = () => {
               <p style={{ margin: '0 0 1.5rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                 This auditor performs an in-memory cross-check. It fetches every individual score entry for each active student and compares the calculated sum across all terms against the live scoreboard value.
               </p>
+
+              {/* Term Configurations Summary */}
+              {!verifyingScores && intervalsAuditSummary.length > 0 && (
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(201,156,51,0.04)', borderRadius: '16px', border: '1px solid rgba(201,156,51,0.12)' }}>
+                  <h4 style={{ margin: '0 0 0.8rem 0', color: 'var(--text-main)', fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    📅 Academic Terms & Logged Date Boundaries
+                  </h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+                    {intervalsAuditSummary.map(int => (
+                      <div key={int.id} style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', fontSize: '0.8rem', lineHeight: '1.5' }}>
+                        <div style={{ fontWeight: 800, color: 'var(--primary-dark)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>{int.name}</div>
+                        <div><strong>Configured Start:</strong> {int.configuredStart}</div>
+                        <div><strong>Actual Logged Range:</strong> {int.count > 0 ? `${int.actualStart} to ${int.actualEnd}` : <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No scores logged</span>}</div>
+                        <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: 'var(--text-muted)', borderTop: '1px dashed rgba(0,0,0,0.05)', paddingTop: '0.25rem' }}>
+                          {int.count} score records ({int.totalPoints} total XP)
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {verifyingScores ? (
                 <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>
