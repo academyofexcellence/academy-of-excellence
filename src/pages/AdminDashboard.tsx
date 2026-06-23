@@ -6172,7 +6172,7 @@ const AdminDashboard = () => {
                 <div>
                   <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Employed</h4>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.1rem' }}>
-                    {alumniProfiles.filter(p => p.status === 'alumni' && p.career?.employment_status === 'employed').length}
+                    {alumniProfiles.filter(p => p.status === 'alumni' && (p.career?.employment_status === 'employed' || p.career?.employment_status === 'employed_looking')).length}
                   </div>
                 </div>
               </div>
@@ -6184,7 +6184,7 @@ const AdminDashboard = () => {
                 <div>
                   <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Looking for Job</h4>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.1rem' }}>
-                    {alumniProfiles.filter(p => p.status === 'alumni' && p.career?.employment_status === 'unemployed_looking').length}
+                    {alumniProfiles.filter(p => p.status === 'alumni' && (p.career?.employment_status === 'unemployed_looking' || p.career?.employment_status === 'employed_looking')).length}
                   </div>
                 </div>
               </div>
@@ -6199,7 +6199,7 @@ const AdminDashboard = () => {
                     {(() => {
                       const totalAlumni = alumniProfiles.filter(p => p.status === 'alumni').length;
                       if (totalAlumni === 0) return '0%';
-                      const employed = alumniProfiles.filter(p => p.status === 'alumni' && p.career?.employment_status === 'employed').length;
+                      const employed = alumniProfiles.filter(p => p.status === 'alumni' && (p.career?.employment_status === 'employed' || p.career?.employment_status === 'employed_looking')).length;
                       return `${Math.round((employed / totalAlumni) * 100)}%`;
                     })()}
                   </div>
@@ -6274,8 +6274,9 @@ const AdminDashboard = () => {
                     style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
                   >
                     <option value="">All Statuses</option>
-                    <option value="unemployed_looking">Looking for Job</option>
-                    <option value="employed">Employed / Working</option>
+                    <option value="unemployed_looking">Looking for Job (Unemployed)</option>
+                    <option value="employed_looking">Looking for Job (Employed)</option>
+                    <option value="employed">Employed (Not Looking)</option>
                     <option value="higher_studies">Higher Studies</option>
                     <option value="unemployed_not_looking">Not Looking</option>
                   </select>
@@ -6367,15 +6368,18 @@ const AdminDashboard = () => {
                         {filtered.map(alumnus => {
                           const statusLabel = 
                             alumnus.career?.employment_status === 'employed' ? 'Employed' : 
+                            alumnus.career?.employment_status === 'employed_looking' ? 'Employed (Looking)' : 
                             alumnus.career?.employment_status === 'unemployed_looking' ? 'Looking for Job' : 
                             alumnus.career?.employment_status === 'higher_studies' ? 'Higher Studies' : 'Not Looking';
                           
                           const statusColor = 
                             alumnus.career?.employment_status === 'employed' ? '#16a34a' : 
+                            alumnus.career?.employment_status === 'employed_looking' ? '#7c3aed' : 
                             alumnus.career?.employment_status === 'unemployed_looking' ? '#2563eb' : '#475569';
 
                           const statusBg = 
                             alumnus.career?.employment_status === 'employed' ? 'rgba(22, 163, 74, 0.1)' : 
+                            alumnus.career?.employment_status === 'employed_looking' ? 'rgba(124, 58, 237, 0.1)' : 
                             alumnus.career?.employment_status === 'unemployed_looking' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(71, 85, 105, 0.1)';
 
                           const locPrefLabel = 
@@ -6447,7 +6451,7 @@ const AdminDashboard = () => {
                                 <span style={{ display: 'inline-block', fontSize: '0.75rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '6px', background: statusBg, color: statusColor, textTransform: 'uppercase', marginBottom: '0.5rem' }}>
                                   {statusLabel}
                                 </span>
-                                {alumnus.career?.employment_status === 'employed' && (
+                                {(alumnus.career?.employment_status === 'employed' || alumnus.career?.employment_status === 'employed_looking') && (
                                   <div style={{ fontSize: '0.8rem', lineHeight: '1.4' }}>
                                     <div><strong>Role:</strong> {alumnus.career.current_job_title || 'N/A'}</div>
                                     <div><strong>Employer:</strong> {alumnus.career.current_company || 'N/A'}</div>

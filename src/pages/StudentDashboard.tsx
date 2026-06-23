@@ -141,7 +141,7 @@ const StudentDashboard = () => {
   const [experienceDetails, setExperienceDetails] = useState('');
 
   // Career States
-  const [employmentStatus, setEmploymentStatus] = useState<'unemployed_looking' | 'unemployed_not_looking' | 'employed' | 'higher_studies'>('unemployed_looking');
+  const [employmentStatus, setEmploymentStatus] = useState<'unemployed_looking' | 'unemployed_not_looking' | 'employed' | 'employed_looking' | 'higher_studies'>('unemployed_looking');
   const [preferredLocation, setPreferredLocation] = useState<'near_home' | 'india' | 'abroad' | 'anywhere'>('anywhere');
   const [preferredRoles, setPreferredRoles] = useState('');
   const [currentJobTitle, setCurrentJobTitle] = useState('');
@@ -250,9 +250,9 @@ const StudentDashboard = () => {
           employment_status: employmentStatus,
           preferred_location: preferredLocation,
           preferred_roles: preferredRoles,
-          current_job_title: employmentStatus === 'employed' ? currentJobTitle : null,
-          current_company: employmentStatus === 'employed' ? currentCompany : null,
-          current_work_location: employmentStatus === 'employed' ? currentWorkLocation : null,
+          current_job_title: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentJobTitle : null,
+          current_company: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentCompany : null,
+          current_work_location: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentWorkLocation : null,
           skills_learned: skillsLearned,
           linkedin_url: linkedinUrl,
           marital_status: maritalStatus,
@@ -2240,19 +2240,20 @@ const StudentDashboard = () => {
                     <strong>Employment Status:</strong>{' '}
                     <span style={{
                       padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700,
-                      background: employmentStatus === 'employed' ? 'rgba(34,197,94,0.1)' : 'rgba(0,0,0,0.05)',
-                      color: employmentStatus === 'employed' ? '#16a34a' : 'var(--text-main)'
+                      background: employmentStatus === 'employed' || employmentStatus === 'employed_looking' ? 'rgba(34,197,94,0.1)' : 'rgba(0,0,0,0.05)',
+                      color: employmentStatus === 'employed' || employmentStatus === 'employed_looking' ? '#16a34a' : 'var(--text-main)'
                     }}>
                       {({
                         unemployed_looking: 'Unemployed (Seeking Job)',
                         unemployed_not_looking: 'Unemployed (Not Seeking)',
-                        employed: 'Employed / Self-Employed',
+                        employed: 'Employed / Self-Employed (Not Seeking)',
+                        employed_looking: 'Employed (Looking for Opportunities)',
                         higher_studies: 'Higher Studies'
                       })[employmentStatus] || employmentStatus}
                     </span>
                   </div>
 
-                  {employmentStatus === 'employed' && (
+                  {(employmentStatus === 'employed' || employmentStatus === 'employed_looking') && (
                     <>
                       <div><strong>Job Title:</strong> {currentJobTitle || <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
                       <div><strong>Company:</strong> {currentCompany || <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
@@ -2419,7 +2420,8 @@ const StudentDashboard = () => {
                     <select value={employmentStatus} onChange={e => setEmploymentStatus(e.target.value as any)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: 'white' }}>
                       <option value="unemployed_looking">Unemployed (Actively Looking)</option>
                       <option value="unemployed_not_looking">Unemployed (Not Looking)</option>
-                      <option value="employed">Employed / Business / Self-Employed</option>
+                      <option value="employed">Employed (Not Looking for Job)</option>
+                      <option value="employed_looking">Employed (Looking for Opportunities)</option>
                       <option value="higher_studies">Higher Studies</option>
                     </select>
                   </div>
@@ -2435,7 +2437,7 @@ const StudentDashboard = () => {
                   </div>
                 </div>
 
-                {employmentStatus === 'employed' && (
+                {(employmentStatus === 'employed' || employmentStatus === 'employed_looking') && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                     <div className="form-group">
                       <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Job Title</label>

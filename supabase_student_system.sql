@@ -469,7 +469,7 @@ ALTER TABLE public.student_profiles
 CREATE TABLE IF NOT EXISTS public.alumni_profiles (
     student_id UUID PRIMARY KEY REFERENCES public.student_profiles(id) ON DELETE CASCADE,
     employment_status TEXT NOT NULL DEFAULT 'unemployed_looking' 
-        CHECK (employment_status IN ('unemployed_looking', 'unemployed_not_looking', 'employed', 'higher_studies')),
+        CHECK (employment_status IN ('unemployed_looking', 'unemployed_not_looking', 'employed', 'employed_looking', 'higher_studies')),
     preferred_location TEXT NOT NULL DEFAULT 'anywhere' 
         CHECK (preferred_location IN ('near_home', 'india', 'abroad', 'anywhere')),
     preferred_roles TEXT,          -- Types of work they like (e.g. Translation, Web Dev, Teaching)

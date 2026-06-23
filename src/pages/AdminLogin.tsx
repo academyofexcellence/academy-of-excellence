@@ -34,7 +34,7 @@ const AdminLogin = () => {
   const [experienceDetails, setExperienceDetails] = useState('');
 
   // Career states (Alumni only)
-  const [employmentStatus, setEmploymentStatus] = useState<'unemployed_looking' | 'unemployed_not_looking' | 'employed' | 'higher_studies'>('unemployed_looking');
+  const [employmentStatus, setEmploymentStatus] = useState<'unemployed_looking' | 'unemployed_not_looking' | 'employed' | 'employed_looking' | 'higher_studies'>('unemployed_looking');
   const [preferredLocation, setPreferredLocation] = useState<'near_home' | 'india' | 'abroad' | 'anywhere'>('anywhere');
   const [preferredRoles, setPreferredRoles] = useState('');
   const [currentJobTitle, setCurrentJobTitle] = useState('');
@@ -212,9 +212,9 @@ const AdminLogin = () => {
             employment_status: isAlumniSignup ? employmentStatus : 'unemployed_looking',
             preferred_location: isAlumniSignup ? preferredLocation : 'anywhere',
             preferred_roles: isAlumniSignup ? preferredRoles : null,
-            current_job_title: isAlumniSignup && employmentStatus === 'employed' ? currentJobTitle : null,
-            current_company: isAlumniSignup && employmentStatus === 'employed' ? currentCompany : null,
-            current_work_location: isAlumniSignup && employmentStatus === 'employed' ? currentWorkLocation : null,
+            current_job_title: isAlumniSignup && (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentJobTitle : null,
+            current_company: isAlumniSignup && (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentCompany : null,
+            current_work_location: isAlumniSignup && (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentWorkLocation : null,
             skills_learned: isAlumniSignup ? skillsLearned : null,
             linkedin_url: isAlumniSignup ? linkedinUrl : null,
             // Spouse Details (if Alumnus)
@@ -613,7 +613,8 @@ const AdminLogin = () => {
                         >
                           <option value="unemployed_looking">Unemployed (Actively Looking)</option>
                           <option value="unemployed_not_looking">Unemployed (Not Looking)</option>
-                          <option value="employed">Employed / Business Owner</option>
+                          <option value="employed">Employed (Not Looking for Job)</option>
+                          <option value="employed_looking">Employed (Looking for Opportunities)</option>
                           <option value="higher_studies">Higher Studies</option>
                         </select>
                       </div>

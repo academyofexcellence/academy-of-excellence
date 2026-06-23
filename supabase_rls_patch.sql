@@ -13,6 +13,11 @@ ALTER TABLE public.alumni_profiles
     ADD COLUMN IF NOT EXISTS spouse_company TEXT,
     ADD COLUMN IF NOT EXISTS spouse_work_location TEXT;
 
+-- Update employment status check constraint
+ALTER TABLE public.alumni_profiles DROP CONSTRAINT IF EXISTS alumni_profiles_employment_status_check;
+ALTER TABLE public.alumni_profiles ADD CONSTRAINT alumni_profiles_employment_status_check
+    CHECK (employment_status IN ('unemployed_looking', 'unemployed_not_looking', 'employed', 'employed_looking', 'higher_studies'));
+
 -- 3. Enable students to update their own student_profiles row (contact, address, experience etc.)
 DROP POLICY IF EXISTS "Enable update for users on own profile" ON public.student_profiles;
 CREATE POLICY "Enable update for users on own profile"
