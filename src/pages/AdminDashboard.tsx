@@ -23,7 +23,8 @@ import {
   AlertTriangle,
   Award,
   Printer,
-  HelpCircle
+  HelpCircle,
+  Download
 } from 'lucide-react';
 
 interface StaffProfile {
@@ -68,8 +69,20 @@ interface StudentProfile {
   course_id: string;
   batch_number: number;
   roll_number?: string;
-  status: 'pending' | 'active' | 'inactive';
+  status: 'pending' | 'active' | 'inactive' | 'alumni';
   courses?: Course;
+  is_alumni_signup?: boolean;
+  hometown?: string;
+  house_name?: string;
+  street?: string;
+  locality?: string;
+  district?: string;
+  state?: string;
+  pincode?: string;
+  mobile_number?: string;
+  whatsapp_number?: string;
+  total_experience_years?: string;
+  experience_details?: string;
 }
 
 interface ScoringInterval {
@@ -124,7 +137,7 @@ const AdminDashboard = () => {
 
   // Tab navigation states
   const [staffTab, setStaffTab] = useState<'checklist' | 'one_off' | 'history'>('checklist');
-  const [adminTab, setAdminTab] = useState<'kpis' | 'tasks' | 'students' | 'roster' | 'student_roster' | 'logs' | 'website' | 'settings' | 'appeals'>('kpis');
+  const [adminTab, setAdminTab] = useState<'kpis' | 'tasks' | 'students' | 'roster' | 'student_roster' | 'logs' | 'website' | 'settings' | 'appeals' | 'placement'>('kpis');
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
 
   // UI State Messages
@@ -152,6 +165,16 @@ const AdminDashboard = () => {
   const [studentFilterCourse, setStudentFilterCourse] = useState('');
   const [studentFilterBatch, setStudentFilterBatch] = useState('');
   const [studentFilterStatus, setStudentFilterStatus] = useState('');
+
+  // Alumni & Placement States
+  const [alumniProfiles, setAlumniProfiles] = useState<any[]>([]);
+  const [loadingAlumni, setLoadingAlumni] = useState(false);
+  const [placementSearch, setPlacementSearch] = useState('');
+  const [placementFilterCourse, setPlacementFilterCourse] = useState('');
+  const [placementFilterBatch, setPlacementFilterBatch] = useState('');
+  const [placementFilterStatus, setPlacementFilterStatus] = useState('');
+  const [placementFilterLocation, setPlacementFilterLocation] = useState('');
+  const [placementFilterGradOnly, setPlacementFilterGradOnly] = useState('graduated');
 
   // Student Report States
   const [selectedReportStudent, setSelectedReportStudent] = useState<StudentProfile | null>(null);
@@ -267,6 +290,12 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (adminTab === 'appeals') {
       fetchAdminAppeals();
+    }
+  }, [adminTab]);
+
+  useEffect(() => {
+    if (adminTab === 'placement') {
+      fetchAlumniProfiles();
     }
   }, [adminTab]);
 
@@ -457,13 +486,55 @@ const AdminDashboard = () => {
       if (error) throw error;
       setAdminAppeals(data || []);
       
-      // Calculate pending count
       const pending = (data || []).filter((a: any) => a.status === 'pending').length;
       setPendingAppealsCount(pending);
     } catch (err) {
       console.error('Error fetching admin appeals:', err);
     } finally {
       setLoadingAdminAppeals(false);
+    }
+  };
+
+  const fetchAlumniProfiles = async () => {
+    setLoadingAlumni(true);
+    try {
+      const { data: students, error: studentErr } = await supabase
+        .from('student_profiles')
+        .select('*, courses:course_id(name)');
+      if (studentErr) throw studentErr;
+
+      const { data: careers, error: careerErr } = await supabase
+        .from('alumni_profiles')
+        .select('*');
+      if (careerErr) throw careerErr;
+
+      const mapped = (students || []).map(stud => {
+        const career = (careers || []).find(c => c.student_id === stud.id);
+        return {
+          ...stud,
+          career: career || {
+            employment_status: 'unemployed_looking',
+            preferred_location: 'anywhere',
+            preferred_roles: '',
+            current_job_title: '',
+            current_company: '',
+            current_work_location: '',
+            skills_learned: '',
+            linkedin_url: '',
+            marital_status: 'single',
+            spouse_name: '',
+            spouse_profession: '',
+            spouse_company: '',
+            spouse_work_location: ''
+          }
+        };
+      });
+
+      setAlumniProfiles(mapped);
+    } catch (err) {
+      console.error('Error fetching alumni profiles:', err);
+    } finally {
+      setLoadingAlumni(false);
     }
   };
 
@@ -2726,21 +2797,39 @@ const AdminDashboard = () => {
     try {
       const targetStudent = studentList.find(s => s.id === studentId);
       if (isApprove) {
+        const isAlumni = targetStudent?.is_alumni_signup || false;
+        const newStatus = isAlumni ? 'alumni' : 'active';
+        
         const { error } = await supabase
           .from('student_profiles')
-          .update({ status: 'active' })
+          .update({ status: newStatus })
           .eq('id', studentId);
         if (error) throw error;
 
-        await logActivity('student_approved', `Approved student signup: ${targetStudent?.name}`);
-        setMessage('✅ Student approved successfully.');
+        if (isAlumni) {
+          // Check if placement profile already exists (e.g. created by trigger during signup)
+          const { data: existingProfile } = await supabase
+            .from('alumni_profiles')
+            .select('student_id')
+            .eq('student_id', studentId)
+            .maybeSingle();
+
+          if (!existingProfile) {
+            await supabase.from('alumni_profiles').insert([{ student_id: studentId }]);
+          }
+          await logActivity('alumni_approved', `Approved alumni signup: ${targetStudent?.name}`);
+          setMessage('✅ Alumni approved successfully.');
+        } else {
+          await logActivity('student_approved', `Approved student signup: ${targetStudent?.name}`);
+          setMessage('✅ Student approved successfully.');
+        }
       } else {
         // Delete student auth user
         const { error: dbError } = await supabase.from('student_profiles').delete().eq('id', studentId);
         if (dbError) throw dbError;
 
         await logActivity('student_rejected', `Rejected student registration: ${targetStudent?.name}`);
-        setMessage('❌ Student profile rejected and removed.');
+        setMessage('❌ Registration rejected and profile removed.');
       }
       fetchLeadershipDashboardData();
     } catch (err: any) {
@@ -2748,6 +2837,152 @@ const AdminDashboard = () => {
       setMessage(`❌ Profile approval update failed: ${err.message}`);
     }
     setTimeout(() => setMessage(''), 4000);
+  };
+
+  const handleExportAlumniCSV = () => {
+    if (alumniProfiles.length === 0) return;
+
+    // Filter students exactly matching the active search and dropdown states
+    const filtered = alumniProfiles.filter(alumnus => {
+      const matchesSearch = 
+        alumnus.name.toLowerCase().includes(placementSearch.toLowerCase()) ||
+        alumnus.email.toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.hometown || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.house_name || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.street || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.locality || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.district || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.mobile_number || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.whatsapp_number || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.total_experience_years || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.experience_details || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.career?.skills_learned || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.career?.current_job_title || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+        (alumnus.career?.current_company || '').toLowerCase().includes(placementSearch.toLowerCase());
+
+      const matchesCourse = placementFilterCourse === '' || alumnus.course_id === placementFilterCourse;
+      const matchesBatch = placementFilterBatch === '' || alumnus.batch_number === parseInt(placementFilterBatch);
+      const matchesStatus = placementFilterStatus === '' || alumnus.career?.employment_status === placementFilterStatus;
+      const matchesLocPref = placementFilterLocation === '' || alumnus.career?.preferred_location === placementFilterLocation;
+      const matchesGrad = 
+        placementFilterGradOnly === 'all' ? true :
+        placementFilterGradOnly === 'graduated' ? alumnus.status === 'alumni' :
+        alumnus.status !== 'alumni';
+
+      return matchesSearch && matchesCourse && matchesBatch && matchesStatus && matchesLocPref && matchesGrad;
+    });
+
+    const headers = [
+      'Name', 'Email', 'Course', 'Batch', 'Roll Number', 'Mobile Number', 'WhatsApp Number', 
+      'Total Experience Years', 'Prior Experience Details',
+      'Hometown', 'House Name', 'Street', 'Locality', 'District', 'State', 'Pincode',
+      'Employment Status', 'Preferred Location', 'Preferred Roles', 'Current Job Title', 
+      'Current Company', 'Current Work Location', 'Skills Learned', 'LinkedIn URL',
+      'Marital Status', 'Spouse Name', 'Spouse Profession', 'Spouse Company', 'Spouse Work Location'
+    ];
+
+    const rows = filtered.map(alumnus => [
+      alumnus.name,
+      alumnus.email,
+      alumnus.courses?.name || 'N/A',
+      alumnus.batch_number,
+      alumnus.roll_number || 'N/A',
+      alumnus.mobile_number || '',
+      alumnus.whatsapp_number || '',
+      alumnus.total_experience_years || 'None',
+      alumnus.experience_details || '',
+      alumnus.hometown || '',
+      alumnus.house_name || '',
+      alumnus.street || '',
+      alumnus.locality || '',
+      alumnus.district || '',
+      alumnus.state || '',
+      alumnus.pincode || '',
+      alumnus.career?.employment_status || 'unemployed_looking',
+      alumnus.career?.preferred_location || 'anywhere',
+      alumnus.career?.preferred_roles || '',
+      alumnus.career?.current_job_title || '',
+      alumnus.career?.current_company || '',
+      alumnus.career?.current_work_location || '',
+      alumnus.career?.skills_learned || '',
+      alumnus.career?.linkedin_url || '',
+      alumnus.career?.marital_status || 'single',
+      alumnus.career?.spouse_name || '',
+      alumnus.career?.spouse_profession || '',
+      alumnus.career?.spouse_company || '',
+      alumnus.career?.spouse_work_location || ''
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `academy_alumni_placements_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const [graduatingBatch, setGraduatingBatch] = useState(false);
+
+  const handleGraduateBatch = async () => {
+    if (!filterCourse || !filterBatch) return;
+    const courseName = courses.find(c => c.id === filterCourse)?.name || 'Course';
+    
+    const confirmMsg = `Are you sure you want to graduate all active students in Batch ${filterBatch} of ${courseName} to Alumni? This action cannot be easily undone.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setGraduatingBatch(true);
+    try {
+      const { data: activeStudents, error: fetchErr } = await supabase
+        .from('student_profiles')
+        .select('id, name')
+        .eq('course_id', filterCourse)
+        .eq('batch_number', parseInt(filterBatch))
+        .eq('status', 'active');
+
+      if (fetchErr) throw fetchErr;
+      if (!activeStudents || activeStudents.length === 0) {
+        setMessage('⚠️ No active students found in this batch to graduate.');
+        setGraduatingBatch(false);
+        return;
+      }
+
+      const studentIds = activeStudents.map(s => s.id);
+
+      const { error: updateErr } = await supabase
+        .from('student_profiles')
+        .update({ status: 'alumni' })
+        .in('id', studentIds);
+
+      if (updateErr) throw updateErr;
+
+      const alumniInsertRows = studentIds.map(id => ({ student_id: id }));
+      const { error: alumniErr } = await supabase
+        .from('alumni_profiles')
+        .upsert(alumniInsertRows, { onConflict: 'student_id' });
+
+      if (alumniErr) throw alumniErr;
+
+      await logActivity('batch_graduation', `Graduated ${activeStudents.length} students of Course ID ${filterCourse} (Batch ${filterBatch}) to Alumni.`);
+
+      await supabase
+        .from('scoring_intervals')
+        .update({ is_active: false })
+        .eq('course_id', filterCourse)
+        .eq('batch_number', parseInt(filterBatch));
+
+      setMessage(`🎉 Successfully graduated ${activeStudents.length} students to Alumni status and archived batch scoring intervals.`);
+      fetchLeadershipDashboardData();
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Batch graduation failed: ${err.message}`);
+    } finally {
+      setGraduatingBatch(false);
+      setTimeout(() => setMessage(''), 5000);
+    }
   };
 
   // Update student profile details (Leadership only)
@@ -3458,6 +3693,18 @@ const AdminDashboard = () => {
             )}
           </button>
 
+          <button 
+            onClick={() => setAdminTab('placement')}
+            style={{
+              padding: '0.8rem 1.2rem', background: 'none', border: 'none',
+              borderBottom: adminTab === 'placement' ? '3px solid var(--primary)' : '3px solid transparent',
+              color: adminTab === 'placement' ? 'var(--primary-dark)' : 'var(--text-muted)',
+              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+            }}
+          >
+            <GraduationCap size={16} /> Alumni & Placements
+          </button>
+
           {isLeadership && (
             <>
               <button 
@@ -4137,7 +4384,13 @@ const AdminDashboard = () => {
                     {studentList.filter(s => s.status === 'pending').map(stud => (
                       <div key={stud.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'rgba(0,0,0,0.015)', border: '1px solid rgba(0,0,0,0.04)', borderRadius: '10px', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                         <div>
-                          <strong>{stud.name}</strong> ({stud.email})
+                          <strong>{stud.name}</strong>
+                          {stud.is_alumni_signup ? (
+                            <span className="badge" style={{ marginLeft: '0.5rem', background: 'rgba(59,130,246,0.12)', color: '#2563eb', fontSize: '0.7rem', padding: '0.1rem 0.4rem', verticalAlign: 'middle', border: '1px solid rgba(59,130,246,0.2)' }}>Alumni</span>
+                          ) : (
+                            <span className="badge" style={{ marginLeft: '0.5rem', background: 'rgba(245,158,11,0.12)', color: '#d97706', fontSize: '0.7rem', padding: '0.1rem 0.4rem', verticalAlign: 'middle', border: '1px solid rgba(245,158,11,0.2)' }}>Student</span>
+                          )}
+                          <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}> ({stud.email})</span>
                           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                             Course: <strong>{courses.find(c => c.id === stud.course_id)?.name || 'Course'}</strong> • Batch: <strong>{stud.batch_number}</strong>
                           </div>
@@ -5216,7 +5469,26 @@ const AdminDashboard = () => {
                 {isLeadership && gradingMode === 'manage' && (
                   <div>
                     <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Classroom Student Roster</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '2rem' }}>Reset student passwords directly or delete accounts permanently from the system.</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Reset student passwords directly or delete accounts permanently from the system.</p>
+
+                    <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem', border: '1px solid rgba(59,130,246,0.2)', background: 'rgba(59,130,246,0.02)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderRadius: '12px' }}>
+                      <div style={{ flex: 1, minWidth: '250px' }}>
+                        <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#1e3a8a' }}>
+                          🎓 Graduate Batch to Alumni
+                        </h4>
+                        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          Transition all {filteredActiveStudents.length} active students of Batch {filterBatch} (Course: {courses.find(c => c.id === filterCourse)?.name}) to Alumni status. This will archive their scoring intervals but enable their placement profile updates.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleGraduateBatch}
+                        disabled={filteredActiveStudents.length === 0 || graduatingBatch}
+                        className="btn btn-primary"
+                        style={{ background: '#2563eb', borderColor: '#2563eb', padding: '0.6rem 1.2rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                      >
+                        {graduatingBatch ? 'Processing...' : 'Graduate Batch'}
+                      </button>
+                    </div>
                     
                     {filteredActiveStudents.length === 0 ? (
                       <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No active students in this batch.</p>
@@ -5333,7 +5605,7 @@ const AdminDashboard = () => {
                   style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
                 >
                   <option value="">All Batches</option>
-                  {[...Array(20)].map((_, i) => (
+                  {[...Array(30)].map((_, i) => (
                     <option key={i + 1} value={i + 1}>Batch {i + 1}</option>
                   ))}
                 </select>
@@ -5350,6 +5622,7 @@ const AdminDashboard = () => {
                   <option value="pending">Pending</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
+                  <option value="alumni">Alumni</option>
                 </select>
               </div>
             </div>
@@ -5874,6 +6147,348 @@ const AdminDashboard = () => {
                 </div>
               );
             })()}
+          </div>
+        )}
+        {adminTab === 'placement' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {/* Stat Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem' }}>
+              <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ background: 'rgba(201, 156, 51, 0.1)', color: 'var(--primary-dark)', width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GraduationCap size={24} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Total Alumni</h4>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.1rem' }}>
+                    {alumniProfiles.filter(p => p.status === 'alumni').length}
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ background: 'rgba(34,197,94,0.1)', color: '#16a34a', width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserCheck size={24} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Employed</h4>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.1rem' }}>
+                    {alumniProfiles.filter(p => p.status === 'alumni' && p.career?.employment_status === 'employed').length}
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid rgba(59,130,246,0.15)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ background: 'rgba(59,130,246,0.1)', color: '#2563eb', width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Users size={24} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Looking for Job</h4>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.1rem' }}>
+                    {alumniProfiles.filter(p => p.status === 'alumni' && p.career?.employment_status === 'unemployed_looking').length}
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ background: 'rgba(201, 156, 51, 0.1)', color: 'var(--primary-dark)', width: '48px', height: '48px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Award size={24} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Employment Rate</h4>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.1rem' }}>
+                    {(() => {
+                      const totalAlumni = alumniProfiles.filter(p => p.status === 'alumni').length;
+                      if (totalAlumni === 0) return '0%';
+                      const employed = alumniProfiles.filter(p => p.status === 'alumni' && p.career?.employment_status === 'employed').length;
+                      return `${Math.round((employed / totalAlumni) * 100)}%`;
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter and Directory Card */}
+            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: '1rem' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.4rem', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    🎓 Alumni & Placement Directory
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.2rem 0 0 0' }}>
+                    Search and filter graduate student addresses, contacts, and live job status updates.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <button onClick={handleExportAlumniCSV} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderColor: 'var(--primary)', color: 'var(--primary-dark)', padding: '0.55rem 1rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+                    <Download size={16} /> Export CSV
+                  </button>
+                </div>
+              </div>
+
+              {/* Filters Block */}
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem', background: 'rgba(0,0,0,0.015)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                <div style={{ flex: '2 1 200px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Search Student</label>
+                  <input
+                    type="text"
+                    value={placementSearch}
+                    onChange={(e) => setPlacementSearch(e.target.value)}
+                    placeholder="Search by name, hometown, street, district, role, phone..."
+                    style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  />
+                </div>
+
+                <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Course</label>
+                  <select
+                    value={placementFilterCourse}
+                    onChange={(e) => setPlacementFilterCourse(e.target.value)}
+                    style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  >
+                    <option value="">All Courses</option>
+                    {courses.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ flex: '1 1 100px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Filter Batch</label>
+                  <select
+                    value={placementFilterBatch}
+                    onChange={(e) => setPlacementFilterBatch(e.target.value)}
+                    style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  >
+                    <option value="">All Batches</option>
+                    {[...Array(30)].map((_, i) => (
+                      <option key={i + 1} value={i + 1}>Batch {i + 1}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Employment Status</label>
+                  <select
+                    value={placementFilterStatus}
+                    onChange={(e) => setPlacementFilterStatus(e.target.value)}
+                    style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="unemployed_looking">Looking for Job</option>
+                    <option value="employed">Employed / Working</option>
+                    <option value="higher_studies">Higher Studies</option>
+                    <option value="unemployed_not_looking">Not Looking</option>
+                  </select>
+                </div>
+
+                <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Pref. Location</label>
+                  <select
+                    value={placementFilterLocation}
+                    onChange={(e) => setPlacementFilterLocation(e.target.value)}
+                    style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  >
+                    <option value="">All Locations</option>
+                    <option value="near_home">Near Home</option>
+                    <option value="india">In India</option>
+                    <option value="abroad">Abroad</option>
+                    <option value="anywhere">Anywhere</option>
+                  </select>
+                </div>
+
+                <div style={{ flex: '1 1 150px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Graduation Status</label>
+                  <select
+                    value={placementFilterGradOnly}
+                    onChange={(e) => setPlacementFilterGradOnly(e.target.value)}
+                    style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.9rem', outline: 'none', background: 'white' }}
+                  >
+                    <option value="graduated">Graduates Only</option>
+                    <option value="all">All Students</option>
+                    <option value="active">Active Only</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Alumni Table */}
+              {loadingAlumni ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading alumni profiles...</div>
+              ) : (() => {
+                const filtered = alumniProfiles.filter(alumnus => {
+                  const matchesSearch = 
+                    alumnus.name.toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    alumnus.email.toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.hometown || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.house_name || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.street || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.locality || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.district || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.mobile_number || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.whatsapp_number || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.total_experience_years || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.experience_details || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.career?.skills_learned || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.career?.current_job_title || '').toLowerCase().includes(placementSearch.toLowerCase()) ||
+                    (alumnus.career?.current_company || '').toLowerCase().includes(placementSearch.toLowerCase());
+
+                  const matchesCourse = placementFilterCourse === '' || alumnus.course_id === placementFilterCourse;
+                  const matchesBatch = placementFilterBatch === '' || alumnus.batch_number === parseInt(placementFilterBatch);
+                  const matchesStatus = placementFilterStatus === '' || alumnus.career?.employment_status === placementFilterStatus;
+                  const matchesLocPref = placementFilterLocation === '' || alumnus.career?.preferred_location === placementFilterLocation;
+                  const matchesGrad = 
+                    placementFilterGradOnly === 'all' ? true :
+                    placementFilterGradOnly === 'graduated' ? alumnus.status === 'alumni' :
+                    alumnus.status !== 'alumni';
+
+                  return matchesSearch && matchesCourse && matchesBatch && matchesStatus && matchesLocPref && matchesGrad;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)', border: '1px dashed rgba(0,0,0,0.08)', borderRadius: '12px' }}>
+                      No alumni matches found.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)', background: 'var(--bg-light)' }}>
+                          <th style={{ padding: '1rem', fontWeight: 700 }}>Graduate Info</th>
+                          <th style={{ padding: '1rem', fontWeight: 700 }}>Structured Address</th>
+                          <th style={{ padding: '1rem', fontWeight: 700 }}>Contacts</th>
+                          <th style={{ padding: '1rem', fontWeight: 700 }}>Employment Details</th>
+                          <th style={{ padding: '1rem', fontWeight: 700 }}>Job Preferences & Skills</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(alumnus => {
+                          const statusLabel = 
+                            alumnus.career?.employment_status === 'employed' ? 'Employed' : 
+                            alumnus.career?.employment_status === 'unemployed_looking' ? 'Looking for Job' : 
+                            alumnus.career?.employment_status === 'higher_studies' ? 'Higher Studies' : 'Not Looking';
+                          
+                          const statusColor = 
+                            alumnus.career?.employment_status === 'employed' ? '#16a34a' : 
+                            alumnus.career?.employment_status === 'unemployed_looking' ? '#2563eb' : '#475569';
+
+                          const statusBg = 
+                            alumnus.career?.employment_status === 'employed' ? 'rgba(22, 163, 74, 0.1)' : 
+                            alumnus.career?.employment_status === 'unemployed_looking' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(71, 85, 105, 0.1)';
+
+                          const locPrefLabel = 
+                            alumnus.career?.preferred_location === 'near_home' ? 'Near Home' : 
+                            alumnus.career?.preferred_location === 'india' ? 'In India' : 
+                            alumnus.career?.preferred_location === 'abroad' ? 'Abroad' : 'Anywhere';
+
+                          return (
+                            <tr key={alumnus.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                              <td style={{ padding: '1rem', verticalAlign: 'top' }}>
+                                <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-main)' }}>{alumnus.name}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{alumnus.email}</div>
+                                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary-dark)', marginTop: '0.3rem' }}>{alumnus.courses?.name}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Batch {alumnus.batch_number} • Roll {alumnus.roll_number || 'N/A'}</div>
+                                {alumnus.status !== 'alumni' && (
+                                  <span style={{ display: 'inline-block', fontSize: '0.65rem', background: 'rgba(245,158,11,0.15)', color: '#d97706', padding: '0.05rem 0.3rem', borderRadius: '4px', marginTop: '0.3rem', fontWeight: 700 }}>
+                                    Active (Not Graduated)
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ padding: '1rem', verticalAlign: 'top', color: '#475569', lineHeight: '1.4' }}>
+                                {alumnus.house_name && <div><strong>House:</strong> {alumnus.house_name}</div>}
+                                {alumnus.street && <div><strong>Street:</strong> {alumnus.street}</div>}
+                                {alumnus.locality && <div><strong>Locality/PO:</strong> {alumnus.locality}</div>}
+                                {alumnus.district && <div><strong>District:</strong> {alumnus.district}</div>}
+                                {alumnus.state && <div><strong>State:</strong> {alumnus.state} {alumnus.pincode ? ` - ${alumnus.pincode}` : ''}</div>}
+                                {alumnus.hometown && <div style={{ fontSize: '0.75rem', fontStyle: 'italic', marginTop: '0.2rem', color: 'var(--text-muted)' }}>Origin: {alumnus.hometown}</div>}
+                                {!alumnus.house_name && !alumnus.street && !alumnus.district && <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No address logged.</span>}
+                              </td>
+                              <td style={{ padding: '1rem', verticalAlign: 'top' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                  {alumnus.mobile_number && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: 650 }}>
+                                      <span>📞</span>
+                                      <a href={`tel:${alumnus.mobile_number}`} style={{ color: 'inherit', textDecoration: 'none' }} title="Call student">{alumnus.mobile_number}</a>
+                                    </div>
+                                  )}
+                                  {alumnus.whatsapp_number && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                      <span>💬</span>
+                                      <a 
+                                        href={`https://wa.me/${alumnus.whatsapp_number.replace(/[^0-9]/g, '').length === 10 ? '91' : ''}${alumnus.whatsapp_number.replace(/[^0-9]/g, '')}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        style={{ color: '#16a34a', textDecoration: 'none', fontWeight: 700 }}
+                                        title="Click to WhatsApp chat"
+                                      >
+                                        WhatsApp Chat
+                                      </a>
+                                    </div>
+                                  )}
+                                  {alumnus.career?.linkedin_url && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                      <span>🔗</span>
+                                      <a 
+                                        href={alumnus.career.linkedin_url.startsWith('http') ? alumnus.career.linkedin_url : `https://${alumnus.career.linkedin_url}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
+                                      >
+                                        LinkedIn
+                                      </a>
+                                    </div>
+                                  )}
+                                  {!alumnus.mobile_number && !alumnus.whatsapp_number && <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No contacts logged.</span>}
+                                </div>
+                              </td>
+                              <td style={{ padding: '1rem', verticalAlign: 'top' }}>
+                                <span style={{ display: 'inline-block', fontSize: '0.75rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '6px', background: statusBg, color: statusColor, textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+                                  {statusLabel}
+                                </span>
+                                {alumnus.career?.employment_status === 'employed' && (
+                                  <div style={{ fontSize: '0.8rem', lineHeight: '1.4' }}>
+                                    <div><strong>Role:</strong> {alumnus.career.current_job_title || 'N/A'}</div>
+                                    <div><strong>Employer:</strong> {alumnus.career.current_company || 'N/A'}</div>
+                                    {alumnus.career.current_work_location && <div><strong>Location:</strong> {alumnus.career.current_work_location}</div>}
+                                  </div>
+                                )}
+                                {alumnus.career?.marital_status === 'married' && (
+                                  <div style={{ fontSize: '0.75rem', marginTop: '0.8rem', paddingTop: '0.6rem', borderTop: '1px dashed rgba(0,0,0,0.08)', lineHeight: '1.4' }}>
+                                    <div style={{ fontWeight: 700, color: 'var(--primary-dark)' }}>💍 Spouse Details</div>
+                                    <div><strong>Name:</strong> {alumnus.career.spouse_name || 'N/A'}</div>
+                                    {alumnus.career.spouse_profession && <div><strong>Work:</strong> {alumnus.career.spouse_profession}</div>}
+                                    {alumnus.career.spouse_company && <div><strong>Company:</strong> {alumnus.career.spouse_company}</div>}
+                                    {alumnus.career.spouse_work_location && <div><strong>Work Place:</strong> {alumnus.career.spouse_work_location}</div>}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '1rem', verticalAlign: 'top', lineHeight: '1.4' }}>
+                                <div><strong>Pref. Location:</strong> <span style={{ fontWeight: 650, color: 'var(--text-main)' }}>{locPrefLabel}</span></div>
+                                {alumnus.career?.preferred_roles && <div style={{ fontSize: '0.8rem', marginTop: '0.2rem' }}><strong>Desired Roles:</strong> {alumnus.career.preferred_roles}</div>}
+                                {alumnus.total_experience_years && (
+                                  <div style={{ fontSize: '0.8rem', marginTop: '0.4rem', background: '#f0fdf4', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(22,101,52,0.15)' }}>
+                                    <div style={{ fontWeight: 700, color: '#16a34a' }}>💼 Work Experience</div>
+                                    <div><strong>Total:</strong> {alumnus.total_experience_years}</div>
+                                    {alumnus.experience_details && <div style={{ fontSize: '0.75rem', marginTop: '0.15rem', color: '#374151' }}>{alumnus.experience_details}</div>}
+                                  </div>
+                                )}
+                                {alumnus.career?.skills_learned && (
+                                  <div style={{ fontSize: '0.8rem', marginTop: '0.4rem', background: '#f8fafc', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.03)' }}>
+                                    <strong>Skills:</strong> {alumnus.career.skills_learned}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         )}
 
@@ -7075,12 +7690,27 @@ const StudentRosterRow = ({
   return (
     <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
       <td style={{ padding: '0.8rem 0.5rem' }}>
-        <input 
-          type="text" 
-          value={name} 
-          onChange={(e) => setName(e.target.value)} 
-          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '100%', fontSize: '0.9rem', fontWeight: 600 }} 
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <input 
+            type="text" 
+            value={name} 
+            onChange={(e) => setName(e.target.value)} 
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', width: '100%', fontSize: '0.9rem', fontWeight: 600 }} 
+          />
+          {student.status === 'pending' && (
+            <span style={{ 
+              fontSize: '0.7rem', 
+              fontWeight: 700, 
+              padding: '0.1rem 0.35rem', 
+              borderRadius: '4px', 
+              background: student.is_alumni_signup ? 'rgba(59,130,246,0.15)' : 'rgba(245,158,11,0.15)', 
+              color: student.is_alumni_signup ? '#2563eb' : '#d97706',
+              alignSelf: 'flex-start'
+            }}>
+              Requested: {student.is_alumni_signup ? 'Alumni' : 'Student'}
+            </span>
+          )}
+        </div>
       </td>
       <td style={{ padding: '0.8rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>{student.email}</td>
       <td style={{ padding: '0.8rem 0.5rem' }}>
@@ -7120,6 +7750,7 @@ const StudentRosterRow = ({
           <option value="pending">Pending</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+          <option value="alumni">Alumni</option>
         </select>
       </td>
       <td style={{ padding: '0.8rem 0.5rem' }}>

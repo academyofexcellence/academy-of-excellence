@@ -130,23 +130,29 @@ USING (
 );
 
 
--- 5. Recreate handle_new_user function to support both Staff and Student signups
+-- 5. Recreate handle_new_user function to copy signup address/career/spouse/experience metadata
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
     is_student BOOLEAN;
+    is_alumni BOOLEAN;
     selected_course_id UUID;
     student_batch INTEGER;
 BEGIN
     -- Check if metadata specifies student account
     is_student := COALESCE((new.raw_user_meta_data->>'is_student')::boolean, false);
+    is_alumni := COALESCE((new.raw_user_meta_data->>'is_alumni_signup')::boolean, false);
 
     IF is_student THEN
         -- Extract course and batch
         selected_course_id := (new.raw_user_meta_data->>'course_id')::uuid;
         student_batch := (new.raw_user_meta_data->>'batch_number')::integer;
 
-        INSERT INTO public.student_profiles (id, email, name, course_id, batch_number, status, roll_number)
+        INSERT INTO public.student_profiles (
+            id, email, name, course_id, batch_number, status, roll_number, is_alumni_signup,
+            hometown, house_name, street, locality, district, state, pincode, mobile_number, whatsapp_number,
+            total_experience_years, experience_details
+        )
         VALUES (
             new.id,
             new.email,
@@ -154,14 +160,66 @@ BEGIN
             selected_course_id,
             student_batch,
             'pending',
-            new.raw_user_meta_data->>'roll_number'
+            new.raw_user_meta_data->>'roll_number',
+            is_alumni,
+            new.raw_user_meta_data->>'hometown',
+            new.raw_user_meta_data->>'house_name',
+            new.raw_user_meta_data->>'street',
+            new.raw_user_meta_data->>'locality',
+            new.raw_user_meta_data->>'district',
+            COALESCE(new.raw_user_meta_data->>'state', 'Kerala'),
+            new.raw_user_meta_data->>'pincode',
+            new.raw_user_meta_data->>'mobile_number',
+            new.raw_user_meta_data->>'whatsapp_number',
+            new.raw_user_meta_data->>'total_experience_years',
+            new.raw_user_meta_data->>'experience_details'
         );
+        
+        -- If registering as alumni, insert their career and spouse details immediately
+        IF is_alumni THEN
+            INSERT INTO public.alumni_profiles (
+                student_id,
+                employment_status,
+                preferred_location,
+                preferred_roles,
+                current_job_title,
+                current_company,
+                current_work_location,
+                skills_learned,
+                linkedin_url,
+                marital_status,
+                spouse_name,
+                spouse_profession,
+                spouse_company,
+                spouse_work_location
+            )
+            VALUES (
+                new.id,
+                COALESCE(new.raw_user_meta_data->>'employment_status', 'unemployed_looking'),
+                COALESCE(new.raw_user_meta_data->>'preferred_location', 'anywhere'),
+                new.raw_user_meta_data->>'preferred_roles',
+                new.raw_user_meta_data->>'current_job_title',
+                new.raw_user_meta_data->>'current_company',
+                new.raw_user_meta_data->>'current_work_location',
+                new.raw_user_meta_data->>'skills_learned',
+                new.raw_user_meta_data->>'linkedin_url',
+                COALESCE(new.raw_user_meta_data->>'marital_status', 'single'),
+                new.raw_user_meta_data->>'spouse_name',
+                new.raw_user_meta_data->>'spouse_profession',
+                new.raw_user_meta_data->>'spouse_company',
+                new.raw_user_meta_data->>'spouse_work_location'
+            );
+        END IF;
         
         INSERT INTO public.activity_logs (actor_name, action_type, details)
         VALUES (
             COALESCE(new.raw_user_meta_data->>'name', new.email),
             'student_signup',
-            'Registered a new student account (Pending Approval) for batch ' || student_batch::text
+            CASE WHEN is_alumni THEN
+                'Registered a new alumni account with career profile details (Pending Approval).'
+            ELSE
+                'Registered a new student account with contact & experience details (Pending Approval).'
+            END
         );
     ELSE
         -- Insert into staff profiles
@@ -381,4 +439,91 @@ USING (
         WHERE id = auth.uid() AND status = 'active'
     )
 );
+
+
+-- =====================================================================
+-- 8. ALUMNI & PLACEMENT PORTAL SCHEMAS
+-- =====================================================================
+
+-- Update check constraint on student_profiles status to include 'alumni'
+ALTER TABLE public.student_profiles DROP CONSTRAINT IF EXISTS student_profiles_status_check;
+ALTER TABLE public.student_profiles ADD CONSTRAINT student_profiles_status_check 
+    CHECK (status IN ('pending', 'active', 'inactive', 'alumni'));
+
+-- Add structured address, contact, work experience, and registration columns to student_profiles
+ALTER TABLE public.student_profiles 
+    ADD COLUMN IF NOT EXISTS hometown TEXT,
+    ADD COLUMN IF NOT EXISTS house_name TEXT,
+    ADD COLUMN IF NOT EXISTS street TEXT,
+    ADD COLUMN IF NOT EXISTS locality TEXT, -- Locality/Post Office/City
+    ADD COLUMN IF NOT EXISTS district TEXT,
+    ADD COLUMN IF NOT EXISTS state TEXT DEFAULT 'Kerala',
+    ADD COLUMN IF NOT EXISTS pincode TEXT,
+    ADD COLUMN IF NOT EXISTS mobile_number TEXT,
+    ADD COLUMN IF NOT EXISTS whatsapp_number TEXT,
+    ADD COLUMN IF NOT EXISTS is_alumni_signup BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS total_experience_years TEXT,
+    ADD COLUMN IF NOT EXISTS experience_details TEXT;
+
+-- Create alumni_profiles table for post-graduation tracking
+CREATE TABLE IF NOT EXISTS public.alumni_profiles (
+    student_id UUID PRIMARY KEY REFERENCES public.student_profiles(id) ON DELETE CASCADE,
+    employment_status TEXT NOT NULL DEFAULT 'unemployed_looking' 
+        CHECK (employment_status IN ('unemployed_looking', 'unemployed_not_looking', 'employed', 'higher_studies')),
+    preferred_location TEXT NOT NULL DEFAULT 'anywhere' 
+        CHECK (preferred_location IN ('near_home', 'india', 'abroad', 'anywhere')),
+    preferred_roles TEXT,          -- Types of work they like (e.g. Translation, Web Dev, Teaching)
+    current_job_title TEXT,        -- If employed
+    current_company TEXT,          -- If employed
+    current_work_location TEXT,    -- Current city/country
+    skills_learned TEXT,           -- Key subjects, coding languages, specializations
+    linkedin_url TEXT,
+    marital_status TEXT NOT NULL DEFAULT 'single' CHECK (marital_status IN ('single', 'married')),
+    spouse_name TEXT,
+    spouse_profession TEXT,
+    spouse_company TEXT,
+    spouse_work_location TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable RLS for alumni_profiles
+ALTER TABLE public.alumni_profiles ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for alumni_profiles
+DROP POLICY IF EXISTS "Enable select for authenticated users" ON public.alumni_profiles;
+CREATE POLICY "Enable select for authenticated users" 
+    ON public.alumni_profiles FOR SELECT 
+    TO authenticated 
+    USING (true);
+
+DROP POLICY IF EXISTS "Enable insert for owners and staff" ON public.alumni_profiles;
+CREATE POLICY "Enable insert for owners and staff" 
+    ON public.alumni_profiles FOR INSERT 
+    TO authenticated 
+    WITH CHECK (
+        auth.uid() = student_id OR 
+        EXISTS (
+            SELECT 1 FROM public.staff_profiles 
+            WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
+        )
+    );
+
+DROP POLICY IF EXISTS "Enable update for owners and staff" ON public.alumni_profiles;
+CREATE POLICY "Enable update for owners and staff" 
+    ON public.alumni_profiles FOR UPDATE 
+    TO authenticated 
+    USING (
+        auth.uid() = student_id OR 
+        EXISTS (
+            SELECT 1 FROM public.staff_profiles 
+            WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
+        )
+    )
+    WITH CHECK (
+        auth.uid() = student_id OR 
+        EXISTS (
+            SELECT 1 FROM public.staff_profiles 
+            WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
+        )
+    );
 

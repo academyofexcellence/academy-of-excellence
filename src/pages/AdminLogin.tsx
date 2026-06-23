@@ -15,6 +15,39 @@ const AdminLogin = () => {
   const [selectedCourse, setSelectedCourse] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  const [isAlumniSignup, setIsAlumniSignup] = useState(false);
+
+  // Address & Contact states
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [whatsappNumber, setWhatsAppNumber] = useState('');
+  const [hometown, setHometown] = useState('');
+  const [houseName, setHouseName] = useState('');
+  const [street, setStreet] = useState('');
+  const [locality, setLocality] = useState('');
+  const [district, setDistrict] = useState('');
+  const [stateStr, setStateStr] = useState('Kerala');
+  const [pincode, setPincode] = useState('');
+
+  // Experience states
+  const [totalExperienceYears, setTotalExperienceYears] = useState('');
+  const [experienceDetails, setExperienceDetails] = useState('');
+
+  // Career states (Alumni only)
+  const [employmentStatus, setEmploymentStatus] = useState<'unemployed_looking' | 'unemployed_not_looking' | 'employed' | 'higher_studies'>('unemployed_looking');
+  const [preferredLocation, setPreferredLocation] = useState<'near_home' | 'india' | 'abroad' | 'anywhere'>('anywhere');
+  const [preferredRoles, setPreferredRoles] = useState('');
+  const [currentJobTitle, setCurrentJobTitle] = useState('');
+  const [currentCompany, setCurrentCompany] = useState('');
+  const [currentWorkLocation, setCurrentWorkLocation] = useState('');
+  const [skillsLearned, setSkillsLearned] = useState('');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
+
+  // Spouse & Family states (Alumni only)
+  const [maritalStatus, setMaritalStatus] = useState<'single' | 'married'>('single');
+  const [spouseName, setSpouseName] = useState('');
+  const [spouseProfession, setSpouseProfession] = useState('');
+  const [spouseCompany, setSpouseCompany] = useState('');
+  const [spouseWorkLocation, setSpouseWorkLocation] = useState('');
 
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
@@ -83,12 +116,12 @@ const AdminLogin = () => {
         .maybeSingle();
 
       if (studentProfile) {
-        if (studentProfile.status !== 'active') {
+        if (studentProfile.status !== 'active' && studentProfile.status !== 'alumni') {
           await supabase.auth.signOut();
           throw new Error(
             studentProfile.status === 'pending'
-              ? 'Your student account is pending approval by staff.'
-              : 'Your student account has been deactivated.'
+              ? 'Your account is pending approval by the admin.'
+              : 'Your account has been deactivated.'
           );
         }
         navigate('/student/dashboard');
@@ -160,13 +193,46 @@ const AdminLogin = () => {
             course_id: selectedCourse,
             batch_number: parseInt(batchNumber),
             roll_number: rollNumber,
+            is_alumni_signup: isAlumniSignup,
+            // Contact & Address
+            mobile_number: mobileNumber,
+            whatsapp_number: whatsappNumber,
+            hometown: hometown,
+            house_name: houseName,
+            street: street,
+            locality: locality,
+            district: district,
+            state: stateStr,
+            pincode: pincode,
+            // Experience
+            total_experience_years: totalExperienceYears,
+            experience_details: experienceDetails,
+            // Career Details (if Alumnus)
+            employment_status: isAlumniSignup ? employmentStatus : 'unemployed_looking',
+            preferred_location: isAlumniSignup ? preferredLocation : 'anywhere',
+            preferred_roles: isAlumniSignup ? preferredRoles : null,
+            current_job_title: isAlumniSignup && employmentStatus === 'employed' ? currentJobTitle : null,
+            current_company: isAlumniSignup && employmentStatus === 'employed' ? currentCompany : null,
+            current_work_location: isAlumniSignup && employmentStatus === 'employed' ? currentWorkLocation : null,
+            skills_learned: isAlumniSignup ? skillsLearned : null,
+            linkedin_url: isAlumniSignup ? linkedinUrl : null,
+            // Spouse Details (if Alumnus)
+            marital_status: isAlumniSignup ? maritalStatus : 'single',
+            spouse_name: isAlumniSignup && maritalStatus === 'married' ? spouseName : null,
+            spouse_profession: isAlumniSignup && maritalStatus === 'married' ? spouseProfession : null,
+            spouse_company: isAlumniSignup && maritalStatus === 'married' ? spouseCompany : null,
+            spouse_work_location: isAlumniSignup && maritalStatus === 'married' ? spouseWorkLocation : null,
           },
         },
       });
 
       if (signUpError) throw signUpError;
 
-      setSuccessMsg('🎉 Student registration successful! Your account is pending approval by the institute staff.');
+      setSuccessMsg(
+        isAlumniSignup 
+          ? '🎉 Alumni registration successful! Your account is pending approval by the admin.'
+          : '🎉 Student registration successful! Your account is pending approval by the institute staff.'
+      );
       resetForm();
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -182,6 +248,40 @@ const AdminLogin = () => {
     setDesignation('');
     setBatchNumber('');
     setRollNumber('');
+    setIsAlumniSignup(false);
+    
+    // Reset address & contacts
+    setMobileNumber('');
+    setWhatsAppNumber('');
+    setHometown('');
+    setHouseName('');
+    setStreet('');
+    setLocality('');
+    setDistrict('');
+    setStateStr('Kerala');
+    setPincode('');
+
+    // Reset experience
+    setTotalExperienceYears('');
+    setExperienceDetails('');
+
+    // Reset career
+    setEmploymentStatus('unemployed_looking');
+    setPreferredLocation('anywhere');
+    setPreferredRoles('');
+    setCurrentJobTitle('');
+    setCurrentCompany('');
+    setCurrentWorkLocation('');
+    setSkillsLearned('');
+    setLinkedinUrl('');
+
+    // Reset marital
+    setMaritalStatus('single');
+    setSpouseName('');
+    setSpouseProfession('');
+    setSpouseCompany('');
+    setSpouseWorkLocation('');
+
     if (courses.length > 0) setSelectedCourse(courses[0].id);
   };
 
@@ -190,7 +290,7 @@ const AdminLogin = () => {
       <div className="hero-blob animate-float-1" style={{ top: '-10%', right: '-5%' }}></div>
       <div className="hero-blob animate-float-2" style={{ bottom: '-15%', left: '-10%' }}></div>
       
-      <div className="glass-card" style={{ maxWidth: '480px', width: '90%', height: 'max-content', zIndex: 10, border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 20px 50px rgba(201, 156, 51, 0.15)', padding: '2rem' }}>
+      <div className="glass-card animate-fade-in" style={{ maxWidth: activeTab === 'register_student' ? '680px' : '480px', width: '90%', maxHeight: '85vh', overflowY: 'auto', zIndex: 10, border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 20px 50px rgba(201, 156, 51, 0.15)', padding: '2rem', transition: 'max-width 0.3s ease' }}>
         
         {/* Toggle Tabs */}
         <div style={{ display: 'flex', background: 'rgba(0,0,0,0.03)', padding: '0.3rem', borderRadius: '50px', marginBottom: '2rem', flexWrap: 'wrap', gap: '0.2rem' }}>
@@ -282,50 +382,404 @@ const AdminLogin = () => {
           )}
 
           {activeTab === 'register_student' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Select Course</label>
+            <>
+              <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+                <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>I am registering as a:</label>
                 <select
-                  value={selectedCourse}
-                  onChange={(e) => setSelectedCourse(e.target.value)}
+                  value={isAlumniSignup ? 'alumni' : 'student'}
+                  onChange={(e) => setIsAlumniSignup(e.target.value === 'alumni')}
                   className="form-input"
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
-                  required
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white', fontWeight: 600 }}
                 >
-                  <option value="">Choose Course...</option>
-                  {courses.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                  <option value="student">Active Student (Current Course Member)</option>
+                  <option value="alumni">Alumnus / Graduate (Finished Course)</option>
                 </select>
               </div>
 
-              <div className="form-group">
-                <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Batch #</label>
-                <input 
-                  type="number" 
-                  value={batchNumber}
-                  onChange={(e) => setBatchNumber(e.target.value)}
-                  className="form-input"
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
-                  placeholder="e.g. 25"
-                  min="1"
-                  required
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+                <div className="form-group">
+                  <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Select Course</label>
+                  <select
+                    value={selectedCourse}
+                    onChange={(e) => setSelectedCourse(e.target.value)}
+                    className="form-input"
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                    required
+                  >
+                    <option value="">Choose Course...</option>
+                    {courses.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Batch #</label>
+                  <input 
+                    type="number" 
+                    value={batchNumber}
+                    onChange={(e) => setBatchNumber(e.target.value)}
+                    className="form-input"
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                    placeholder="e.g. 25"
+                    min="1"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Roll #{isAlumniSignup ? ' (Opt)' : ''}</label>
+                  <input 
+                    type="text" 
+                    value={rollNumber}
+                    onChange={(e) => setRollNumber(e.target.value)}
+                    className="form-input"
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                    placeholder="e.g. 1"
+                    required={!isAlumniSignup}
+                  />
+                </div>
               </div>
 
-              <div className="form-group">
-                <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Roll #</label>
-                <input 
-                  type="text" 
-                  value={rollNumber}
-                  onChange={(e) => setRollNumber(e.target.value)}
-                  className="form-input"
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
-                  placeholder="e.g. 1"
-                  required
-                />
+              {/* 🏠 Contact & Address Details */}
+              <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
+                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>🏠 Contact & Address Details</h4>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Mobile Number *</label>
+                    <input 
+                      type="tel" 
+                      value={mobileNumber}
+                      onChange={(e) => setMobileNumber(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. 9876543210"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>WhatsApp Number *</label>
+                    <input 
+                      type="tel" 
+                      value={whatsappNumber}
+                      onChange={(e) => setWhatsAppNumber(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. 9876543210"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Hometown *</label>
+                    <input 
+                      type="text" 
+                      value={hometown}
+                      onChange={(e) => setHometown(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. Calicut"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>House Name/No.</label>
+                    <input 
+                      type="text" 
+                      value={houseName}
+                      onChange={(e) => setHouseName(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. Green Villa"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Street/Road</label>
+                    <input 
+                      type="text" 
+                      value={street}
+                      onChange={(e) => setStreet(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. Stadium Rd"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr', gap: '0.8rem' }}>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Locality/PO *</label>
+                    <input 
+                      type="text" 
+                      value={locality}
+                      onChange={(e) => setLocality(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. Palayam PO"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>District *</label>
+                    <input 
+                      type="text" 
+                      value={district}
+                      onChange={(e) => setDistrict(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. Kozhikode"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Pincode *</label>
+                    <input 
+                      type="text" 
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="673001"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+
+              {/* 💼 Prior Work Experience */}
+              <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
+                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>💼 Prior Work Experience</h4>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.8rem' }}>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Total Experience *</label>
+                    <select
+                      value={totalExperienceYears}
+                      onChange={(e) => setTotalExperienceYears(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      required
+                    >
+                      <option value="">Select Experience...</option>
+                      <option value="None / Fresher">None / Fresher</option>
+                      <option value="6 Months">6 Months</option>
+                      <option value="1 Year">1 Year</option>
+                      <option value="2 Years">2 Years</option>
+                      <option value="3-5 Years">3-5 Years</option>
+                      <option value="5+ Years">5+ Years</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Prior Experience Details</label>
+                    <textarea 
+                      value={experienceDetails}
+                      onChange={(e) => setExperienceDetails(e.target.value)}
+                      className="form-input"
+                      rows={2}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white', fontSize: '0.8rem', resize: 'vertical' }}
+                      placeholder="e.g. 1 year as Arabic Content Writer, freelancer..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 🚀 Career & Placement Details (Alumni Only) */}
+              {isAlumniSignup && (
+                <>
+                  <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
+                    <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>🚀 Career & Placement Details</h4>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Employment Status *</label>
+                        <select
+                          value={employmentStatus}
+                          onChange={(e) => setEmploymentStatus(e.target.value as any)}
+                          className="form-input"
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                          required
+                        >
+                          <option value="unemployed_looking">Unemployed (Actively Looking)</option>
+                          <option value="unemployed_not_looking">Unemployed (Not Looking)</option>
+                          <option value="employed">Employed / Business Owner</option>
+                          <option value="higher_studies">Higher Studies</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Preferred Job Location *</label>
+                        <select
+                          value={preferredLocation}
+                          onChange={(e) => setPreferredLocation(e.target.value as any)}
+                          className="form-input"
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                          required
+                        >
+                          <option value="near_home">Near Home / Local Area</option>
+                          <option value="india">Anywhere in India</option>
+                          <option value="abroad">Abroad / GCC / International</option>
+                          <option value="anywhere">Anywhere (Flexible)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {employmentStatus === 'employed' && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                        <div className="form-group">
+                          <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Current Job Title *</label>
+                          <input 
+                            type="text" 
+                            value={currentJobTitle}
+                            onChange={(e) => setCurrentJobTitle(e.target.value)}
+                            className="form-input"
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                            placeholder="e.g. Translation Lead"
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Company Name *</label>
+                          <input 
+                            type="text" 
+                            value={currentCompany}
+                            onChange={(e) => setCurrentCompany(e.target.value)}
+                            className="form-input"
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                            placeholder="e.g. Amazon Arabia"
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Work Location *</label>
+                          <input 
+                            type="text" 
+                            value={currentWorkLocation}
+                            onChange={(e) => setCurrentWorkLocation(e.target.value)}
+                            className="form-input"
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                            placeholder="e.g. Dubai, UAE"
+                            required
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Skills & Specializations</label>
+                        <input 
+                          type="text" 
+                          value={skillsLearned}
+                          onChange={(e) => setSkillsLearned(e.target.value)}
+                          className="form-input"
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                          placeholder="e.g. Simultaneous Translation, coding"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>LinkedIn Profile URL</label>
+                        <input 
+                          type="url" 
+                          value={linkedinUrl}
+                          onChange={(e) => setLinkedinUrl(e.target.value)}
+                          className="form-input"
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                          placeholder="https://linkedin.com/..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Preferred Roles / Fields of Interest</label>
+                      <input 
+                        type="text" 
+                        value={preferredRoles}
+                        onChange={(e) => setPreferredRoles(e.target.value)}
+                        className="form-input"
+                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                        placeholder="e.g. Translation, Web Development, Teaching"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ❤️ Family & Spouse Details (Alumni Only) */}
+                  <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
+                    <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>❤️ Family & Spouse Details</h4>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: maritalStatus === 'married' ? '1fr 1.5fr' : '1fr', gap: '0.8rem', marginBottom: maritalStatus === 'married' ? '0.8rem' : '0' }}>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Marital Status *</label>
+                        <select
+                          value={maritalStatus}
+                          onChange={(e) => setMaritalStatus(e.target.value as any)}
+                          className="form-input"
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                          required
+                        >
+                          <option value="single">Single / Unmarried</option>
+                          <option value="married">Married</option>
+                        </select>
+                      </div>
+                      
+                      {maritalStatus === 'married' && (
+                        <div className="form-group">
+                          <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Spouse Name *</label>
+                          <input 
+                            type="text" 
+                            value={spouseName}
+                            onChange={(e) => setSpouseName(e.target.value)}
+                            className="form-input"
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                            placeholder="Spouse's Full Name"
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {maritalStatus === 'married' && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 1fr', gap: '0.8rem' }}>
+                        <div className="form-group">
+                          <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Spouse's Occupation</label>
+                          <input 
+                            type="text" 
+                            value={spouseProfession}
+                            onChange={(e) => setSpouseProfession(e.target.value)}
+                            className="form-input"
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                            placeholder="e.g. Teacher, Engineer"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Spouse's Company</label>
+                          <input 
+                            type="text" 
+                            value={spouseCompany}
+                            onChange={(e) => setSpouseCompany(e.target.value)}
+                            className="form-input"
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                            placeholder="e.g. Govt School"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Spouse's Work Place</label>
+                          <input 
+                            type="text" 
+                            value={spouseWorkLocation}
+                            onChange={(e) => setSpouseWorkLocation(e.target.value)}
+                            className="form-input"
+                            style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                            placeholder="e.g. Malappuram"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
           )}
 
           <div className="form-group">
