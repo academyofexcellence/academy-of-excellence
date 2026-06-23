@@ -109,17 +109,17 @@ interface LeaderboardEntry {
   rank: number;
 }
 
-const getDatesRange = (startDateStr: string) => {
+const getDatesRange = (startDateStr: string, endDateStr?: string) => {
   const dates: string[] = [];
   const start = new Date(startDateStr);
   start.setHours(0, 0, 0, 0);
   
-  const end = new Date();
+  const end = endDateStr ? new Date(endDateStr) : new Date();
   end.setHours(0, 0, 0, 0);
   
   let limit = 0;
   const current = new Date(end);
-  while (current >= start && limit < 90) {
+  while (current >= start && limit < 180) {
     const yyyy = current.getFullYear();
     const mm = String(current.getMonth() + 1).padStart(2, '0');
     const dd = String(current.getDate()).padStart(2, '0');
@@ -243,6 +243,11 @@ const AdminDashboard = () => {
   const [appealActionRemark, setAppealActionRemark] = useState('');
   const [processingAppealAction, setProcessingAppealAction] = useState(false);
   const [pendingAppealsCount, setPendingAppealsCount] = useState(0);
+
+  // Score Auditor / Verifier States
+  const [showScoreVerifierModal, setShowScoreVerifierModal] = useState(false);
+  const [scoreVerifierList, setScoreVerifierList] = useState<any[]>([]);
+  const [verifyingScores, setVerifyingScores] = useState(false);
   
   const [selectedGradingDate, setSelectedGradingDate] = useState(new Date().toISOString().split('T')[0]);
   const [examName, setExamName] = useState('');
@@ -903,6 +908,8 @@ const AdminDashboard = () => {
 
       // Fetch all scores for this interval (or query all intervals if cumulative)
       let scoresData: any[] = [];
+      const studentIds = students.map(s => s.id);
+
       if (intervalId === 'cumulative') {
         const { data: intervals } = await supabase
           .from('scoring_intervals')
@@ -911,21 +918,25 @@ const AdminDashboard = () => {
           .eq('batch_number', batchNumber);
         
         const intervalIds = intervals?.map(i => i.id) || [];
-        if (intervalIds.length > 0) {
+        if (intervalIds.length > 0 && studentIds.length > 0) {
           const { data: scores } = await supabase
             .from('scores')
             .select('student_id, points')
             .in('interval_id', intervalIds)
-            .limit(20000);
+            .in('student_id', studentIds)
+            .limit(100000);
           if (scores) scoresData = scores;
         }
       } else {
-        const { data: scores } = await supabase
-          .from('scores')
-          .select('student_id, points')
-          .eq('interval_id', intervalId)
-          .limit(20000);
-        if (scores) scoresData = scores;
+        if (studentIds.length > 0) {
+          const { data: scores } = await supabase
+            .from('scores')
+            .select('student_id, points')
+            .eq('interval_id', intervalId)
+            .in('student_id', studentIds)
+            .limit(100000);
+          if (scores) scoresData = scores;
+        }
       }
 
       const scoreMap: { [key: string]: number } = {};
@@ -1529,6 +1540,74 @@ const AdminDashboard = () => {
       setMessage(`❌ Failed to save grades: ${err.message}`);
     }
     setTimeout(() => setMessage(''), 4000);
+  };
+
+  const handleVerifyScores = async () => {
+    if (!filterCourse || !filterBatch) return;
+    setVerifyingScores(true);
+    setShowScoreVerifierModal(true);
+    setScoreVerifierList([]);
+    try {
+      const { data: students, error: studentErr } = await supabase
+        .from('student_profiles')
+        .select('id, name')
+        .eq('course_id', filterCourse)
+        .eq('batch_number', parseInt(filterBatch))
+        .eq('status', 'active');
+      if (studentErr) throw studentErr;
+
+      const { data: intervals, error: intervalErr } = await supabase
+        .from('scoring_intervals')
+        .select('id, name')
+        .eq('course_id', filterCourse)
+        .eq('batch_number', parseInt(filterBatch));
+      if (intervalErr) throw intervalErr;
+
+      const intervalIds = intervals?.map(i => i.id) || [];
+      if (intervalIds.length === 0 || !students || students.length === 0) {
+        setVerifyingScores(false);
+        return;
+      }
+
+      const { data: allScores, error: scoreErr } = await supabase
+        .from('scores')
+        .select('student_id, interval_id, points')
+        .in('interval_id', intervalIds)
+        .in('student_id', students.map(s => s.id))
+        .limit(100000);
+      if (scoreErr) throw scoreErr;
+
+      const report = students.map(student => {
+        const termScores: { [termName: string]: number } = {};
+        let calculatedSum = 0;
+        
+        intervals.forEach(interval => {
+          const intervalScores = (allScores || []).filter(s => s.student_id === student.id && s.interval_id === interval.id);
+          const sum = intervalScores.reduce((acc, s) => acc + s.points, 0);
+          termScores[interval.name] = sum;
+          calculatedSum += sum;
+        });
+
+        const entry = classroomLeaderboard.find(e => e.student_id === student.id);
+        const scoreboardScore = entry ? entry.total_score : 0;
+
+        return {
+          id: student.id,
+          name: student.name,
+          terms: termScores,
+          calculatedSum,
+          scoreboardScore,
+          isOk: calculatedSum === scoreboardScore
+        };
+      });
+
+      setScoreVerifierList(report);
+    } catch (err: any) {
+      console.error(err);
+      setMessage(`❌ Failed verification: ${err.message}`);
+    } finally {
+      setVerifyingScores(false);
+    }
   };
 
   // Load and open student performance report modal
@@ -5205,23 +5284,42 @@ const AdminDashboard = () => {
                           </select>
                         </div>
                         {classroomLeaderboard.length > 0 && (
-                          <button
-                            onClick={handlePrintRankList}
-                            className="btn btn-outline"
-                            style={{
-                              padding: '0.4rem 0.8rem',
-                              fontSize: '0.8rem',
-                              fontWeight: 700,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.4rem',
-                              borderColor: 'var(--primary)',
-                              color: 'var(--primary-dark)',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <Printer size={14} /> Print Rank List
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.6rem' }}>
+                            <button
+                              onClick={handleVerifyScores}
+                              className="btn btn-outline"
+                              style={{
+                                padding: '0.4rem 0.8rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                borderColor: '#059669',
+                                color: '#047857',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              🔍 Verify Sums
+                            </button>
+                            <button
+                              onClick={handlePrintRankList}
+                              className="btn btn-outline"
+                              style={{
+                                padding: '0.4rem 0.8rem',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                borderColor: 'var(--primary)',
+                                color: 'var(--primary-dark)',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Printer size={14} /> Print Rank List
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -6566,6 +6664,135 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {/* --- SCORE INTEGRITY VERIFIER MODAL --- */}
+        {showScoreVerifierModal && (
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(10, 10, 10, 0.45)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 1000,
+              padding: '1.5rem'
+            }}
+            onClick={() => setShowScoreVerifierModal(false)}
+          >
+            <div 
+              style={{
+                background: 'white',
+                borderRadius: '24px',
+                border: '1px solid rgba(201, 156, 51, 0.15)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                width: '100%',
+                maxWidth: '680px',
+                maxHeight: '85vh',
+                overflowY: 'auto',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '2.5rem'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowScoreVerifierModal(false)}
+                style={{
+                  position: 'absolute',
+                  top: '1.5rem',
+                  right: '1.5rem',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                &times;
+              </button>
+
+              <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-main)', fontSize: '1.4rem', fontWeight: 800 }}>
+                🔍 Score Sum Integrity Auditor
+              </h3>
+              <p style={{ margin: '0 0 1.5rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                This auditor performs an in-memory cross-check. It fetches every individual score entry for each active student and compares the calculated sum across all terms against the live scoreboard value.
+              </p>
+
+              {verifyingScores ? (
+                <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>
+                  <div className="spinner" style={{ marginBottom: '1rem' }}>⚙️</div>
+                  Auditing scoring database records...
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {scoreVerifierList.length === 0 ? (
+                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                      No records to display.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '2px solid rgba(0,0,0,0.06)', color: 'var(--text-muted)' }}>
+                            <th style={{ padding: '0.6rem 0.8rem', textAlign: 'left', fontWeight: 700 }}>Student</th>
+                            <th style={{ padding: '0.6rem 0.8rem', textAlign: 'center', fontWeight: 700 }}>Terms Sum</th>
+                            <th style={{ padding: '0.6rem 0.8rem', textAlign: 'center', fontWeight: 700 }}>Scoreboard</th>
+                            <th style={{ padding: '0.6rem 0.8rem', textAlign: 'center', fontWeight: 700 }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {scoreVerifierList.map(row => (
+                            <tr key={row.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                              <td style={{ padding: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                                {row.name}
+                                <div style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                  {Object.entries(row.terms).map(([name, val]) => `${name}: ${val} XP`).join(' • ')}
+                                </div>
+                              </td>
+                              <td style={{ padding: '0.8rem', textAlign: 'center', fontWeight: 800, color: 'var(--text-main)' }}>
+                                {row.calculatedSum} XP
+                              </td>
+                              <td style={{ padding: '0.8rem', textAlign: 'center', fontWeight: 800, color: 'var(--primary-dark)' }}>
+                                {row.scoreboardScore} XP
+                              </td>
+                              <td style={{ padding: '0.8rem', textAlign: 'center' }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: '6px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  background: row.isOk ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                                  color: row.isOk ? '#059669' : '#dc2626'
+                                }}>
+                                  {row.isOk ? '✅ Consistent' : '❌ Mismatch'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: '1rem', padding: '1rem', background: '#f0fdf4', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', gap: '0.8rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '1.2rem' }}>💡</span>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#15803d', lineHeight: '1.4' }}>
+                      <strong>Tip:</strong> If you see "Consistent", it means every single daily and exam score points sum up perfectly to the displayed scoreboard totals. The 100,000+ query limit upgrade prevents any score truncation.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Student Performance Report Modal */}
         {selectedReportStudent && (
           <div 
@@ -7026,16 +7253,41 @@ const AdminDashboard = () => {
                           return acc;
                         }, {} as { [date: string]: { daily_vocab: boolean, daily_sentences: boolean, weekly_vlog: boolean, video_reaction: boolean, hadithul_arabia: boolean } });
 
-                        const studentInterval = intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number && i.is_active)
-                          || intervalsList.find(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number);
+                        const getIntervalTime = (i: ScoringInterval) => 
+                          i.start_date ? new Date(i.start_date).getTime() : 
+                          (i.created_at ? new Date(i.created_at).getTime() : 0);
 
+                        const studentIntervals = intervalsList
+                          .filter(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number)
+                          .sort((a, b) => getIntervalTime(a) - getIntervalTime(b));
 
-                        const intervalStartDate = (studentInterval && studentInterval.start_date) 
-                          ? studentInterval.start_date 
-                          : (studentInterval && studentInterval.created_at) 
-                            ? studentInterval.created_at 
-                            : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-                        const generatedDates = getDatesRange(intervalStartDate);
+                        const studentInterval = reportSelectedInterval === 'cumulative'
+                          ? null
+                          : (intervalsList.find(i => i.id === reportSelectedInterval) || studentIntervals.find(i => i.is_active) || studentIntervals[0]);
+
+                        const rawStartDate = studentInterval
+                          ? (studentInterval.start_date || studentInterval.created_at)
+                          : (studentIntervals.length > 0 
+                             ? (studentIntervals[0].start_date || studentIntervals[0].created_at)
+                             : null);
+
+                        const intervalStartDate: string = rawStartDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+                        let intervalEndDate: string | undefined = undefined;
+                        if (studentInterval) {
+                          const idx = studentIntervals.findIndex(i => i.id === studentInterval.id);
+                          if (idx !== -1 && idx < studentIntervals.length - 1) {
+                            const nextInterval = studentIntervals[idx + 1];
+                            const nextRawStart = nextInterval.start_date || nextInterval.created_at || '';
+                            if (nextRawStart) {
+                              const nextStart = new Date(nextRawStart);
+                              nextStart.setDate(nextStart.getDate() - 1);
+                              intervalEndDate = nextStart.toISOString().split('T')[0];
+                            }
+                          }
+                        }
+
+                        const generatedDates = getDatesRange(intervalStartDate, intervalEndDate);
                         const loggedDates = Object.keys(workGroupByDate);
                         const allDatesSet = new Set([...generatedDates, ...loggedDates]);
                         const workDatesSorted = Array.from(allDatesSet).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
