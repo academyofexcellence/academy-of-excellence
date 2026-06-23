@@ -59,6 +59,7 @@ interface Interval {
   total_hadithul_tasks: number;
   start_date?: string;
   created_at?: string;
+  end_date?: string;
 }
 
 interface LeaderboardEntry {
@@ -368,16 +369,20 @@ const StudentDashboard = () => {
     }
   };
 
-  const getDatesRange = (startDateStr: string) => {
+  const getDatesRange = (startDateStr: string, endDateStr?: string) => {
     const dates: string[] = [];
     const start = new Date(startDateStr);
     if (isNaN(start.getTime())) return dates;
     const current = new Date(start);
     current.setHours(0, 0, 0, 0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    while (current <= today) {
+    const end = endDateStr ? new Date(endDateStr) : new Date();
+    end.setHours(0, 0, 0, 0);
+
+    const boundary = end < new Date() ? end : new Date();
+    boundary.setHours(0, 0, 0, 0);
+
+    while (current <= boundary) {
       // Mon-Fri only
       const day = current.getDay();
       if (day !== 0 && day !== 6) {
@@ -1902,7 +1907,32 @@ const StudentDashboard = () => {
             intervalStartDate = currentIntervalObj.start_date || currentIntervalObj.created_at || new Date().toISOString();
           }
         }
-        const matrixDates = getDatesRange(intervalStartDate);
+
+        const sortedIntsForBound = [...intervals].sort((a, b) => {
+          const dateA = new Date(a.start_date || a.created_at || '').getTime();
+          const dateB = new Date(b.start_date || b.created_at || '').getTime();
+          return dateA - dateB;
+        });
+
+        const activeObj = selectedInterval === 'cumulative' 
+          ? null 
+          : (intervals.find(i => i.id === selectedInterval) || sortedIntsForBound.find(i => i.is_active) || sortedIntsForBound[0]);
+
+        let intervalEndDate: string | undefined = activeObj?.end_date || undefined;
+        if (!intervalEndDate && activeObj) {
+          const idx = sortedIntsForBound.findIndex(i => i.id === activeObj.id);
+          if (idx !== -1 && idx < sortedIntsForBound.length - 1) {
+            const nextInterval = sortedIntsForBound[idx + 1];
+            const nextRawStart = nextInterval.start_date || nextInterval.created_at || '';
+            if (nextRawStart) {
+              const nextStart = new Date(nextRawStart);
+              nextStart.setDate(nextStart.getDate() - 1);
+              intervalEndDate = nextStart.toISOString().split('T')[0];
+            }
+          }
+        }
+
+        const matrixDates = getDatesRange(intervalStartDate, intervalEndDate);
         
         return (
           <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginTop: '1.5rem' }}>

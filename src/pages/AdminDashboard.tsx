@@ -99,6 +99,7 @@ interface ScoringInterval {
   total_hadithul_tasks?: number;
   created_at?: string;
   start_date?: string;
+  end_date?: string;
 }
 
 interface LeaderboardEntry {
@@ -213,6 +214,7 @@ const AdminDashboard = () => {
   const [configReaction, setConfigReaction] = useState(4);
   const [configHadithul, setConfigHadithul] = useState(4);
   const [configStartDate, setConfigStartDate] = useState('');
+  const [configEndDate, setConfigEndDate] = useState('');
   
   // Synchronous lock to prevent penalty double-clicks
   const penaltyLockRef = useRef<Record<string, boolean>>({});
@@ -863,6 +865,7 @@ const AdminDashboard = () => {
         setConfigReaction(selected.total_reaction_tasks ?? 4);
         setConfigHadithul(selected.total_hadithul_tasks ?? 4);
         setConfigStartDate(selected.start_date ?? (selected.created_at ? selected.created_at.split('T')[0] : ''));
+        setConfigEndDate(selected.end_date ?? '');
       }
     }
   }, [selectedConfigIntervalId, intervalsList]);
@@ -1587,7 +1590,7 @@ const AdminDashboard = () => {
 
       const { data: intervals, error: intervalErr } = await supabase
         .from('scoring_intervals')
-        .select('id, name, start_date')
+        .select('id, name, start_date, end_date')
         .eq('course_id', filterCourse)
         .eq('batch_number', parseInt(filterBatch));
       if (intervalErr) throw intervalErr;
@@ -1641,6 +1644,7 @@ const AdminDashboard = () => {
           id: interval.id,
           name: interval.name,
           configuredStart: interval.start_date || 'N/A',
+          configuredEnd: interval.end_date || 'N/A',
           actualStart,
           actualEnd,
           totalPoints,
@@ -2104,7 +2108,8 @@ const AdminDashboard = () => {
           total_vlog_tasks: configVlog,
           total_reaction_tasks: configReaction,
           total_hadithul_tasks: configHadithul,
-          start_date: configStartDate || null
+          start_date: configStartDate || null,
+          end_date: configEndDate || null
         })
         .eq('id', selectedConfigIntervalId);
 
@@ -2118,7 +2123,8 @@ const AdminDashboard = () => {
         total_vlog_tasks: configVlog,
         total_reaction_tasks: configReaction,
         total_hadithul_tasks: configHadithul,
-        start_date: configStartDate
+        start_date: configStartDate,
+        end_date: configEndDate
       } : int));
 
       setMessage('⚙️ Period targets updated successfully.');
@@ -6012,14 +6018,23 @@ const AdminDashboard = () => {
 
                   <form onSubmit={handleSaveIntervalTargets} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Start Date (Course Commencement)</label>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Start Date (Commencement)</label>
                         <input 
                           type="date" 
                           value={configStartDate} 
                           onChange={(e) => setConfigStartDate(e.target.value)} 
                           className="form-input"
                           required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>End Date (Optional)</label>
+                        <input 
+                          type="date" 
+                          value={configEndDate} 
+                          onChange={(e) => setConfigEndDate(e.target.value)} 
+                          className="form-input"
                         />
                       </div>
                       <div className="form-group">
@@ -6807,6 +6822,7 @@ const AdminDashboard = () => {
                       <div key={int.id} style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', fontSize: '0.8rem', lineHeight: '1.5' }}>
                         <div style={{ fontWeight: 800, color: 'var(--primary-dark)', fontSize: '0.85rem', marginBottom: '0.4rem' }}>{int.name}</div>
                         <div><strong>Configured Start:</strong> {int.configuredStart}</div>
+                        <div><strong>Configured End:</strong> {int.configuredEnd}</div>
                         <div><strong>Actual Logged Range:</strong> {int.count > 0 ? `${int.actualStart} to ${int.actualEnd}` : <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No scores logged</span>}</div>
                         <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: 'var(--text-muted)', borderTop: '1px dashed rgba(0,0,0,0.05)', paddingTop: '0.25rem' }}>
                           {int.count} score records ({int.totalPoints} total XP)
@@ -7366,8 +7382,8 @@ const AdminDashboard = () => {
 
                         const intervalStartDate: string = rawStartDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-                        let intervalEndDate: string | undefined = undefined;
-                        if (studentInterval) {
+                        let intervalEndDate: string | undefined = studentInterval?.end_date || undefined;
+                        if (!intervalEndDate && studentInterval) {
                           const idx = studentIntervals.findIndex(i => i.id === studentInterval.id);
                           if (idx !== -1 && idx < studentIntervals.length - 1) {
                             const nextInterval = studentIntervals[idx + 1];

@@ -173,3 +173,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- 6. Add end_date column to scoring_intervals
+ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS end_date DATE;
+
+-- 7. (Optional Database Correction Query)
+-- If you had scores logged on Term 2 before June 22nd, you can run this query
+-- in your SQL Editor to shift those scores back into Term 1:
+--
+-- UPDATE public.scores
+-- SET interval_id = 'YOUR_TERM_1_INTERVAL_UUID'
+-- WHERE interval_id = 'YOUR_TERM_2_INTERVAL_UUID'
+--   AND logged_date < '2026-06-22';
+
