@@ -910,32 +910,43 @@ const AdminDashboard = () => {
       let scoresData: any[] = [];
       const studentIds = students.map(s => s.id);
 
-      if (intervalId === 'cumulative') {
-        const { data: intervals } = await supabase
-          .from('scoring_intervals')
-          .select('id')
-          .eq('course_id', courseId)
-          .eq('batch_number', batchNumber);
-        
-        const intervalIds = intervals?.map(i => i.id) || [];
-        if (intervalIds.length > 0 && studentIds.length > 0) {
-          const { data: scores } = await supabase
-            .from('scores')
-            .select('student_id, points')
-            .in('interval_id', intervalIds)
-            .in('student_id', studentIds)
-            .limit(100000);
-          if (scores) scoresData = scores;
+      if (studentIds.length > 0) {
+        let intervalIds: string[] = [];
+        if (intervalId === 'cumulative') {
+          const { data: intervals } = await supabase
+            .from('scoring_intervals')
+            .select('id')
+            .eq('course_id', courseId)
+            .eq('batch_number', batchNumber);
+          intervalIds = intervals?.map(i => i.id) || [];
+        } else {
+          intervalIds = [intervalId];
         }
-      } else {
-        if (studentIds.length > 0) {
-          const { data: scores } = await supabase
-            .from('scores')
-            .select('student_id, points')
-            .eq('interval_id', intervalId)
-            .in('student_id', studentIds)
-            .limit(100000);
-          if (scores) scoresData = scores;
+
+        if (intervalIds.length > 0) {
+          let from = 0;
+          const pageSize = 1000;
+          let hasMore = true;
+
+          while (hasMore) {
+            const { data: pageData, error } = await supabase
+              .from('scores')
+              .select('student_id, points')
+              .in('interval_id', intervalIds)
+              .in('student_id', studentIds)
+              .range(from, from + pageSize - 1);
+
+            if (error) throw error;
+            if (pageData && pageData.length > 0) {
+              scoresData = [...scoresData, ...pageData];
+              from += pageSize;
+              if (pageData.length < pageSize) {
+                hasMore = false;
+              }
+            } else {
+              hasMore = false;
+            }
+          }
         }
       }
 
@@ -1074,13 +1085,30 @@ const AdminDashboard = () => {
   const fetchBatchScores = async (intervalId: string) => {
     setLoadingBatchScores(true);
     try {
-      const { data, error } = await supabase
-        .from('scores')
-        .select('*')
-        .eq('interval_id', intervalId)
-        .limit(20000);
-      if (error) throw error;
-      setBatchScores(data || []);
+      let allScores: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('scores')
+          .select('*')
+          .eq('interval_id', intervalId)
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allScores = [...allScores, ...data];
+          from += pageSize;
+          if (data.length < pageSize) {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+      setBatchScores(allScores);
     } catch (err) {
       console.error(err);
     } finally {
@@ -1569,13 +1597,30 @@ const AdminDashboard = () => {
         return;
       }
 
-      const { data: allScores, error: scoreErr } = await supabase
-        .from('scores')
-        .select('student_id, interval_id, points')
-        .in('interval_id', intervalIds)
-        .in('student_id', students.map(s => s.id))
-        .limit(100000);
-      if (scoreErr) throw scoreErr;
+      let allScores: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data: pageData, error: scoreErr } = await supabase
+          .from('scores')
+          .select('student_id, interval_id, points')
+          .in('interval_id', intervalIds)
+          .in('student_id', students.map(s => s.id))
+          .range(from, from + pageSize - 1);
+
+        if (scoreErr) throw scoreErr;
+        if (pageData && pageData.length > 0) {
+          allScores = [...allScores, ...pageData];
+          from += pageSize;
+          if (pageData.length < pageSize) {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
 
       const report = students.map(student => {
         const termScores: { [termName: string]: number } = {};
