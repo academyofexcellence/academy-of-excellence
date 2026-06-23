@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, GraduationCap, ShieldAlert, CheckCircle2, Eye, EyeOff, X, Key } from 'lucide-react';
+import { LogIn, UserPlus, ShieldAlert, CheckCircle2, Eye, EyeOff, X, Key } from 'lucide-react';
 
 const AdminLogin = () => {
-  const [activeTab, setActiveTab] = useState<'login' | 'register_staff' | 'register_student'>('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [registerType, setRegisterType] = useState<'student' | 'staff'>('student');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -249,6 +250,7 @@ const AdminLogin = () => {
     setBatchNumber('');
     setRollNumber('');
     setIsAlumniSignup(false);
+    setRegisterType('student');
     
     // Reset address & contacts
     setMobileNumber('');
@@ -290,7 +292,7 @@ const AdminLogin = () => {
       <div className="hero-blob animate-float-1" style={{ top: '-10%', right: '-5%' }}></div>
       <div className="hero-blob animate-float-2" style={{ bottom: '-15%', left: '-10%' }}></div>
       
-      <div className="glass-card animate-fade-in" style={{ maxWidth: activeTab === 'register_student' ? '680px' : '480px', width: '90%', maxHeight: '85vh', overflowY: 'auto', zIndex: 10, border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 20px 50px rgba(201, 156, 51, 0.15)', padding: '2rem', transition: 'max-width 0.3s ease' }}>
+      <div className="glass-card animate-fade-in" style={{ maxWidth: (activeTab === 'register' && registerType === 'student') ? '680px' : '480px', width: '90%', maxHeight: '85vh', overflowY: 'auto', zIndex: 10, border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 20px 50px rgba(201, 156, 51, 0.15)', padding: '2rem', transition: 'max-width 0.3s ease' }}>
         
         {/* Toggle Tabs */}
         <div style={{ display: 'flex', background: 'rgba(0,0,0,0.03)', padding: '0.3rem', borderRadius: '50px', marginBottom: '2rem', flexWrap: 'wrap', gap: '0.2rem' }}>
@@ -307,35 +309,23 @@ const AdminLogin = () => {
           </button>
           
           <button 
-            onClick={() => { setActiveTab('register_staff'); setError(''); setSuccessMsg(''); resetForm(); }}
+            onClick={() => { setActiveTab('register'); setError(''); setSuccessMsg(''); resetForm(); }}
             style={{
               flex: 1, padding: '0.6rem', borderRadius: '50px', border: 'none',
-              background: activeTab === 'register_staff' ? 'white' : 'transparent',
-              color: activeTab === 'register_staff' ? 'var(--text-main)' : 'var(--text-muted)',
+              background: activeTab === 'register' ? 'white' : 'transparent',
+              color: activeTab === 'register' ? 'var(--text-main)' : 'var(--text-muted)',
               fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', transition: 'all 0.3s', fontSize: '0.85rem'
             }}
           >
-            <UserPlus size={14} /> Register Staff
-          </button>
-
-          <button 
-            onClick={() => { setActiveTab('register_student'); setError(''); setSuccessMsg(''); resetForm(); }}
-            style={{
-              flex: 1, padding: '0.6rem', borderRadius: '50px', border: 'none',
-              background: activeTab === 'register_student' ? 'white' : 'transparent',
-              color: activeTab === 'register_student' ? 'var(--text-main)' : 'var(--text-muted)',
-              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', transition: 'all 0.3s', fontSize: '0.85rem'
-            }}
-          >
-            <GraduationCap size={14} /> Register Student
+            <UserPlus size={14} /> Register
           </button>
         </div>
 
         <h2 className="heading-lg text-center mb-2" style={{ fontSize: '1.6rem' }}>
-          Operations <span className="text-primary">{activeTab === 'login' ? 'Portal' : activeTab === 'register_staff' ? 'Staff Signup' : 'Student Signup'}</span>
+          Operations <span className="text-primary">{activeTab === 'login' ? 'Portal' : 'Registration'}</span>
         </h2>
         <p className="text-center" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-          {activeTab === 'login' ? 'Sign in to access your student leaderboard or staff console.' : activeTab === 'register_staff' ? 'Create a staff account to join the roster.' : 'Sign up to access your gamified scorecard and track your performance.'}
+          {activeTab === 'login' ? 'Sign in to access your student leaderboard or staff console.' : 'Submit a registration request to access the platform.'}
         </p>
         
         {error && (
@@ -350,8 +340,27 @@ const AdminLogin = () => {
           </div>
         )}
         
-        <form onSubmit={activeTab === 'login' ? handleLogin : activeTab === 'register_staff' ? handleRegisterStaff : handleRegisterStudent} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {activeTab !== 'login' && (
+        <form onSubmit={activeTab === 'login' ? handleLogin : registerType === 'staff' ? handleRegisterStaff : handleRegisterStudent} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {activeTab === 'register' && (
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
+              <label style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block', color: 'var(--primary-dark)' }}>I want to register as a:</label>
+              <select
+                value={registerType}
+                onChange={(e) => {
+                  setRegisterType(e.target.value as any);
+                  setError('');
+                  setSuccessMsg('');
+                }}
+                className="form-input"
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white', fontWeight: 600 }}
+              >
+                <option value="student">Student or Alumnus / Graduate</option>
+                <option value="staff">Staff Member / Operations Office</option>
+              </select>
+            </div>
+          )}
+
+          {activeTab === 'register' && (
             <div className="form-group">
               <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Full Name</label>
               <input 
@@ -366,7 +375,7 @@ const AdminLogin = () => {
             </div>
           )}
 
-          {activeTab === 'register_staff' && (
+          {activeTab === 'register' && registerType === 'staff' && (
             <div className="form-group">
               <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Designation / Job Name</label>
               <input 
@@ -381,7 +390,7 @@ const AdminLogin = () => {
             </div>
           )}
 
-          {activeTab === 'register_student' && (
+          {activeTab === 'register' && registerType === 'student' && (
             <>
               <div className="form-group" style={{ marginBottom: '1.2rem' }}>
                 <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>I am registering as a:</label>
@@ -790,7 +799,7 @@ const AdminLogin = () => {
               onChange={(e) => setEmail(e.target.value)}
               className="form-input"
               style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
-              placeholder={activeTab === 'register_student' ? "student@gmail.com" : "name@aoeonline.net"}
+              placeholder={(activeTab === 'register' && registerType === 'student') ? "student@gmail.com" : "name@aoeonline.net"}
               required
             />
           </div>
