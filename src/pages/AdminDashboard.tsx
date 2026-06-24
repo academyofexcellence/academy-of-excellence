@@ -3650,7 +3650,7 @@ const AdminDashboard = () => {
   const isLeadership = currentUser.role !== 'staff';
 
   return (
-    <div style={{ paddingTop: '120px', paddingBottom: '60px', minHeight: '100vh', background: 'var(--bg-light)' }} className="bg-grid-pattern">
+    <div className="bg-grid-pattern admin-dashboard-layout">
       <div className="container" style={{ maxWidth: '1150px' }}>
         
         {/* Welcome Section */}

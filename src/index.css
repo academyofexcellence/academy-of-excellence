@@ -965,6 +965,20 @@ html {
   }
 }
 
+/* Admin Dashboard Layout Styles */
+.admin-dashboard-layout {
+  padding-top: 3rem;
+  padding-bottom: 60px;
+  min-height: 100vh;
+  background: var(--bg-light);
+}
+
+@media (max-width: 768px) {
+  .admin-dashboard-layout {
+    padding-top: 1.5rem !important;
+  }
+}
+
 
 
 
