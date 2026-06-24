@@ -204,6 +204,129 @@ const AdminDashboard = () => {
     }
   };
 
+  const [jobPosts, setJobPosts] = useState<any[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+
+  const fetchJobPosts = async () => {
+    setLoadingJobs(true);
+    try {
+      const { data, error } = await supabase
+        .from('job_posts')
+        .select(`
+          *,
+          job_contact_info (
+            contact_number
+          ),
+          job_applications (
+            id,
+            applicant_id,
+            applicant_name,
+            applicant_mobile,
+            message,
+            created_at
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setJobPosts(data || []);
+    } catch (err) {
+      console.error('Error fetching job posts:', err);
+    } finally {
+      setLoadingJobs(false);
+    }
+  };
+
+  const handleApproveJob = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('job_posts')
+        .update({ status: 'approved' })
+        .eq('id', id);
+
+      if (error) throw error;
+      setMessage('✅ Job post approved successfully!');
+      fetchJobPosts();
+      setTimeout(() => setMessage(''), 4000);
+    } catch (err: any) {
+      alert(`Error approving job: ${err.message}`);
+    }
+  };
+
+  const handleRejectJob = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('job_posts')
+        .update({ status: 'rejected' })
+        .eq('id', id);
+
+      if (error) throw error;
+      setMessage('❌ Job post rejected!');
+      fetchJobPosts();
+      setTimeout(() => setMessage(''), 4000);
+    } catch (err: any) {
+      alert(`Error rejecting job: ${err.message}`);
+    }
+  };
+
+  const handleDeleteJob = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this job post?')) return;
+    try {
+      const { error } = await supabase
+        .from('job_posts')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setMessage('🗑️ Job post deleted!');
+      fetchJobPosts();
+      setTimeout(() => setMessage(''), 4000);
+    } catch (err: any) {
+      alert(`Error deleting job: ${err.message}`);
+    }
+  };
+
+  const handleCreateJobAdmin = async (jobForm: any) => {
+    try {
+      const { data, error } = await supabase
+        .from('job_posts')
+        .insert([{
+          job_title: jobForm.jobTitle,
+          company_name: jobForm.companyName,
+          location: jobForm.location,
+          work_mode: jobForm.workMode,
+          salary: jobForm.salary,
+          description: jobForm.description,
+          posted_by: currentUser?.id || '00000000-0000-0000-0000-000000000000',
+          poster_name: currentUser?.name || 'Staff',
+          poster_role: 'staff'
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Failed to create job post.');
+
+      if (jobForm.contactNumber) {
+        const { error: contactErr } = await supabase
+          .from('job_contact_info')
+          .insert([{
+            job_id: data.id,
+            contact_number: jobForm.contactNumber
+          }]);
+        if (contactErr) throw contactErr;
+      }
+
+      setMessage('✅ Job post created successfully!');
+      fetchJobPosts();
+      setTimeout(() => setMessage(''), 4000);
+      return true;
+    } catch (err: any) {
+      alert(`Error creating job post: ${err.message}`);
+      return false;
+    }
+  };
+
   // Tab navigation states
   const [adminTab, setAdminTab] = useState<'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations'>('dashboard');
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
@@ -371,6 +494,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (adminTab === 'careers') {
       fetchAlumniProfiles();
+      fetchJobPosts();
     }
   }, [adminTab]);
 
@@ -4050,6 +4174,12 @@ const AdminDashboard = () => {
             courses={courses}
             loadingAlumni={loadingAlumni}
             handleExportAlumniCSV={handleExportAlumniCSV}
+            jobPosts={jobPosts}
+            loadingJobs={loadingJobs}
+            handleApproveJob={handleApproveJob}
+            handleRejectJob={handleRejectJob}
+            handleDeleteJob={handleDeleteJob}
+            handleCreateJobAdmin={handleCreateJobAdmin}
           />
         )}
 

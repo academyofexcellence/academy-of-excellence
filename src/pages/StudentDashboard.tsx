@@ -6,12 +6,14 @@ import {
   TrendingUp, 
   Award,
   HelpCircle,
-  GraduationCap
+  GraduationCap,
+  Briefcase
 } from 'lucide-react';
 import { StudentProgress } from '../components/student/StudentProgress';
 import { StudentLeaderboard } from '../components/student/StudentLeaderboard';
 import { StudentAppeals } from '../components/student/StudentAppeals';
 import { StudentProfile as StudentProfileView } from '../components/student/StudentProfile';
+import { StudentJobBoard } from '../components/student/StudentJobBoard';
 import { StudentProfile, Interval, LeaderboardEntry, ScoreLog } from '../lib/types';
 
 const StudentDashboard = () => {
@@ -41,7 +43,7 @@ const StudentDashboard = () => {
   };
 
   // Tab navigation state
-  const [activeTab, setActiveTab] = useState<'progress' | 'leaderboard' | 'appeals' | 'profile'>('progress');
+  const [activeTab, setActiveTab] = useState<'progress' | 'leaderboard' | 'appeals' | 'profile' | 'jobboard'>('progress');
   const [prefillAppeal, setPrefillAppeal] = useState<{
     date: string;
     type: 'attendance' | 'checklist' | 'scoring';
@@ -1139,6 +1141,12 @@ const StudentDashboard = () => {
                   Placement Profile
                 </button>
                 <button 
+                  onClick={() => setActiveTab('jobboard')} 
+                  className={`nav-tab-btn ${activeTab === 'jobboard' ? 'active' : ''}`}
+                >
+                  Job Board
+                </button>
+                <button 
                   onClick={() => setActiveTab('progress')} 
                   className={`nav-tab-btn ${activeTab === 'progress' ? 'active' : ''}`}
                 >
@@ -1164,6 +1172,12 @@ const StudentDashboard = () => {
                   className={`nav-tab-btn ${activeTab === 'appeals' ? 'active' : ''}`}
                 >
                   Appeals
+                </button>
+                <button 
+                  onClick={() => setActiveTab('jobboard')} 
+                  className={`nav-tab-btn ${activeTab === 'jobboard' ? 'active' : ''}`}
+                >
+                  Job Board
                 </button>
                 <button 
                   onClick={() => setActiveTab('profile')} 
@@ -1364,6 +1378,10 @@ const StudentDashboard = () => {
           />
         )}
 
+        {activeTab === 'jobboard' && (
+          <StudentJobBoard currentStudent={currentStudent} />
+        )}
+
         {/* Mobile Fixed Bottom Navigation Bar */}
         <div className="mobile-bottom-nav">
           {currentStudent.status === 'alumni' ? (
@@ -1374,6 +1392,13 @@ const StudentDashboard = () => {
               >
                 <GraduationCap size={22} />
                 <span>Placement Profile</span>
+              </button>
+              <button 
+                onClick={() => setActiveTab('jobboard')} 
+                className={`mobile-nav-item ${activeTab === 'jobboard' ? 'active' : ''}`}
+              >
+                <Briefcase size={22} />
+                <span>Job Board</span>
               </button>
               <button 
                 onClick={() => setActiveTab('progress')} 
@@ -1405,6 +1430,13 @@ const StudentDashboard = () => {
               >
                 <HelpCircle size={22} />
                 <span>Appeals</span>
+              </button>
+              <button 
+                onClick={() => setActiveTab('jobboard')} 
+                className={`mobile-nav-item ${activeTab === 'jobboard' ? 'active' : ''}`}
+              >
+                <Briefcase size={22} />
+                <span>Job Board</span>
               </button>
               <button 
                 onClick={() => setActiveTab('profile')} 
