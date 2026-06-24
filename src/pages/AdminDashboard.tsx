@@ -140,6 +140,27 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<StaffProfile | null>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+    setShowInstallBtn(!isStandalone);
+  }, []);
+
+  const handleInstallApp = () => {
+    const promptEvent = (window as any).deferredPrompt;
+    if (promptEvent) {
+      promptEvent.prompt();
+      promptEvent.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          setShowInstallBtn(false);
+        }
+        (window as any).deferredPrompt = null;
+      });
+    } else {
+      alert("To install this app on your home screen:\n\n📱 iOS (Safari):\n1. Tap the Share button at the bottom.\n2. Scroll down and select 'Add to Home Screen'.\n\n🤖 Android (Chrome):\n1. Tap the 3 dots in the top right.\n2. Select 'Install app' or 'Add to Home Screen'.");
+    }
+  };
 
   // Tab navigation states
   const [adminTab, setAdminTab] = useState<'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations'>('dashboard');
@@ -3726,9 +3747,29 @@ const AdminDashboard = () => {
               Title: <strong>{currentUser.designation || 'Staff Member'}</strong> • System ID: <code style={{ fontSize: '0.8rem' }}>{currentUser.id.substring(0,8)}</code>
             </p>
           </div>
-          <button onClick={handleLogout} className="btn btn-outline" style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem', color: '#dc2626', borderColor: '#fca5a5' }}>
-            <LogOut size={16} /> Logout
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+            {showInstallBtn && (
+              <button
+                onClick={handleInstallApp}
+                className="btn btn-primary"
+                style={{ 
+                  padding: '0.6rem 1.2rem', 
+                  fontSize: '0.9rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.4rem',
+                  cursor: 'pointer',
+                  borderRadius: '50px',
+                  boxShadow: '0 4px 10px rgba(201, 156, 51, 0.2)'
+                }}
+              >
+                📥 Install App
+              </button>
+            )}
+            <button onClick={handleLogout} className="btn btn-outline" style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem', color: '#dc2626', borderColor: '#fca5a5' }}>
+              <LogOut size={16} /> Logout
+            </button>
+          </div>
         </div>
 
         {/* Global Toast Message */}

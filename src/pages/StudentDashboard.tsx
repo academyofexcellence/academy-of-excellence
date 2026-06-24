@@ -18,6 +18,27 @@ const StudentDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [currentStudent, setCurrentStudent] = useState<StudentProfile | null>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+    setShowInstallBtn(!isStandalone);
+  }, []);
+
+  const handleInstallApp = () => {
+    const promptEvent = (window as any).deferredPrompt;
+    if (promptEvent) {
+      promptEvent.prompt();
+      promptEvent.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          setShowInstallBtn(false);
+        }
+        (window as any).deferredPrompt = null;
+      });
+    } else {
+      alert("To install this app on your home screen:\n\n📱 iOS (Safari):\n1. Tap the Share button at the bottom.\n2. Scroll down and select 'Add to Home Screen'.\n\n🤖 Android (Chrome):\n1. Tap the 3 dots in the top right.\n2. Select 'Install app' or 'Add to Home Screen'.");
+    }
+  };
 
   // Tab navigation state
   const [activeTab, setActiveTab] = useState<'progress' | 'leaderboard' | 'appeals' | 'profile'>('progress');
@@ -1197,7 +1218,25 @@ const StudentDashboard = () => {
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+           <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+            {showInstallBtn && (
+              <button
+                onClick={handleInstallApp}
+                className="btn btn-primary"
+                style={{ 
+                  padding: '0.35rem 0.75rem', 
+                  fontSize: '0.75rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.3rem',
+                  cursor: 'pointer',
+                  borderRadius: '50px',
+                  boxShadow: '0 2px 5px rgba(201, 156, 51, 0.2)'
+                }}
+              >
+                📥 Install App
+              </button>
+            )}
             <span className="desktop-nav" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
               {currentStudent.name}
             </span>

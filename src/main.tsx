@@ -17,3 +17,10 @@ if ('serviceWorker' in navigator) {
       .catch((err) => console.error('Service Worker registration failed:', err));
   });
 }
+
+// Listen for PWA Install Prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  (window as any).deferredPrompt = e;
+  window.dispatchEvent(new Event('pwa-prompt-available'));
+});
