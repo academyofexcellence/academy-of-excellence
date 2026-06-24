@@ -51,7 +51,7 @@ export const StudentLeaderboard: React.FC<StudentLeaderboardProps> = ({
   };
 
   return (
-    <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem', width: '100%', maxWidth: '780px', margin: '0 auto' }}>
+    <div className="glass-card leaderboard-wrapper-card">
       
       {/* Leaderboard Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(201,156,51,0.12)', paddingBottom: '1rem', marginBottom: '1.2rem', gap: '1rem', flexWrap: 'wrap' }}>
@@ -111,33 +111,14 @@ export const StudentLeaderboard: React.FC<StudentLeaderboardProps> = ({
             return (
               <div 
                 key={entry.student_id}
-                className={`rank-card ${isSelf ? 'rank-card-self' : ''}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '1rem 1.2rem',
-                  background: 'white',
-                  borderRadius: '16px',
-                  border: isSelf ? '2px solid var(--primary)' : '1px solid rgba(0, 0, 0, 0.05)',
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.01)',
-                  gap: '1rem',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
+                className={`student-rank-card ${isSelf ? 'student-rank-card-self' : ''}`}
               >
                 {/* Rank Pill */}
                 <div 
-                  className="rank-badge"
+                  className="student-rank-badge"
                   style={{
                     background: rankBadge.bg,
-                    color: rankBadge.color,
-                    padding: '0.35rem 0.75rem',
-                    borderRadius: '50px',
-                    fontWeight: 800,
-                    fontSize: '0.75rem',
-                    minWidth: '52px',
-                    textAlign: 'center',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                    color: rankBadge.color
                   }}
                 >
                   {rankBadge.text}
@@ -145,28 +126,22 @@ export const StudentLeaderboard: React.FC<StudentLeaderboardProps> = ({
 
                 {/* Avatar Bubble */}
                 <div 
-                  className="avatar-bubble"
+                  className="student-avatar-bubble"
                   style={{
-                    background: getAvatarGradient(entry.student_id, isSelf),
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    boxShadow: '0 3px 8px rgba(0,0,0,0.05)'
+                    background: getAvatarGradient(entry.student_id, isSelf)
                   }}
                 >
                   {initials}
                 </div>
 
                 {/* Name & Gamified Level progress bar */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 750, fontSize: '0.95rem', color: isSelf ? 'var(--primary-dark)' : 'var(--text-main)' }}>
+                <div className="student-name-container">
+                  <div className="student-name-row">
+                    <span 
+                      className="student-name-text" 
+                      style={{ color: isSelf ? 'var(--primary-dark)' : 'var(--text-main)' }}
+                      title={entry.name}
+                    >
                       {entry.name}
                     </span>
                     {isSelf && (
@@ -176,17 +151,22 @@ export const StudentLeaderboard: React.FC<StudentLeaderboardProps> = ({
                     )}
                   </div>
                   
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <span style={{ fontSize: '0.7rem', background: isSelf ? 'rgba(201,156,51,0.2)' : 'rgba(0,0,0,0.06)', color: isSelf ? 'var(--primary-dark)' : 'var(--text-muted)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                  <div className="student-level-row">
+                    <span 
+                      className="student-level-badge" 
+                      style={{ 
+                        background: isSelf ? 'rgba(201,156,51,0.2)' : 'rgba(0,0,0,0.06)', 
+                        color: isSelf ? 'var(--primary-dark)' : 'var(--text-muted)' 
+                      }}
+                    >
                       Lvl {entry.level}
                     </span>
-                    <div style={{ height: '6px', flex: 1, background: 'rgba(0,0,0,0.05)', borderRadius: '10px', overflow: 'hidden', maxWidth: '250px' }}>
+                    <div className="student-progress-container">
                       <div 
+                        className="student-progress-bar"
                         style={{ 
-                          height: '100%', 
                           width: `${relativePercent}%`, 
-                          background: isSelf ? 'linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%)' : 'linear-gradient(90deg, #64748b 0%, #94a3b8 100%)', 
-                          borderRadius: '10px' 
+                          background: isSelf ? 'linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%)' : 'linear-gradient(90deg, #64748b 0%, #94a3b8 100%)'
                         }}
                       ></div>
                     </div>
@@ -194,11 +174,11 @@ export const StudentLeaderboard: React.FC<StudentLeaderboardProps> = ({
                 </div>
 
                 {/* Total points XP */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '45px' }}>
-                  <span className="xp-badge" style={{ color: isSelf ? 'var(--primary-dark)' : 'var(--text-main)', fontWeight: 850, fontSize: '1.15rem', lineHeight: '1' }}>
+                <div className="student-xp-container">
+                  <span className="student-xp-value" style={{ color: isSelf ? 'var(--primary-dark)' : 'var(--text-main)' }}>
                     {entry.total_score}
                   </span>
-                  <span className="xp-label" style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginTop: '0.15rem' }}>
+                  <span className="student-xp-label">
                     XP
                   </span>
                 </div>
