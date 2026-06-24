@@ -55,11 +55,48 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
+    checkActiveSession();
     fetchCourses();
   }, []);
+
+  const checkActiveSession = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        // 1. Check if user is staff
+        const { data: staffProfile } = await supabase
+          .from('staff_profiles')
+          .select('status')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (staffProfile && staffProfile.status === 'active') {
+          navigate('/admin/dashboard');
+          return;
+        }
+
+        // 2. Check if user is student
+        const { data: studentProfile } = await supabase
+          .from('student_profiles')
+          .select('status')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (studentProfile && (studentProfile.status === 'active' || studentProfile.status === 'alumni')) {
+          navigate('/student/dashboard');
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Error checking active session:', err);
+    } finally {
+      setCheckingSession(false);
+    }
+  };
 
   const fetchCourses = async () => {
     try {
@@ -286,6 +323,30 @@ const AdminLogin = () => {
 
     if (courses.length > 0) setSelectedCourse(courses[0].id);
   };
+
+  if (checkingSession) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'var(--bg-light)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <img 
+            src="https://rcppfmlyvackmemjousp.supabase.co/storage/v1/object/public/gallery-images/academylogom.svg" 
+            alt="Academy of Excellence" 
+            style={{ height: '90px', display: 'block', margin: '0 auto 1.5rem auto', objectFit: 'contain' }}
+          />
+          <div style={{ 
+            width: '40px', 
+            height: '40px', 
+            border: '3px solid rgba(201, 156, 51, 0.15)', 
+            borderTop: '3px solid var(--primary)', 
+            borderRadius: '50%', 
+            animation: 'spin 1s linear infinite', 
+            margin: '0 auto 1.5rem auto' 
+          }}></div>
+          <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 600 }}>Loading Academy Portal...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ paddingTop: '130px', paddingBottom: '60px', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' }} className="bg-grid-pattern">

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { StudentProfile as StudentType } from '../../lib/types';
 import { Briefcase } from 'lucide-react';
+import { requestAndSubscribePush, unsubscribePush } from '../../lib/pushNotifications';
 
 interface StudentProfileProps {
   currentStudent: StudentType;
@@ -16,6 +17,10 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [savingCareer, setSavingCareer] = useState(false);
   const [careerMessage, setCareerMessage] = useState('');
+  
+  // Notification states
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(false);
 
   // Address & Contacts States
   const [hometown, setHometown] = useState(currentStudent.hometown || '');
@@ -51,7 +56,37 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
 
   useEffect(() => {
     fetchCareerProfile();
+    checkNotificationState();
   }, [currentStudent.id]);
+
+  const checkNotificationState = async () => {
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        setPushSubscribed(!!sub);
+      } catch (err) {
+        console.error('Error checking subscription:', err);
+      }
+    }
+  };
+
+  const handleToggleNotifications = async () => {
+    setNotificationLoading(true);
+    try {
+      if (pushSubscribed) {
+        const success = await unsubscribePush(currentStudent.id);
+        if (success) setPushSubscribed(false);
+      } else {
+        const success = await requestAndSubscribePush(currentStudent.id);
+        if (success) setPushSubscribed(true);
+      }
+    } catch (err) {
+      console.error('Error toggling push notifications:', err);
+    } finally {
+      setNotificationLoading(false);
+    }
+  };
 
   const fetchCareerProfile = async () => {
     setLoading(true);
@@ -181,6 +216,48 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
   return (
     <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', maxWidth: '880px', margin: '0 auto' }}>
       
+      {/* 🔔 Push Notification Toggle Card */}
+      <div style={{ 
+        background: 'rgba(201, 156, 51, 0.03)', 
+        border: '1px solid rgba(201, 156, 51, 0.15)', 
+        borderRadius: '12px', 
+        padding: '1.2rem', 
+        marginBottom: '1.5rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '1rem'
+      }}>
+        <div style={{ flex: 1, minWidth: '240px' }}>
+          <h4 style={{ margin: '0 0 0.2rem 0', fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            🔔 Mobile & Desktop Alerts
+          </h4>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Get notified instantly when scores are updated, appeals are resolved, or announcements are made.
+          </p>
+        </div>
+        <button
+          onClick={handleToggleNotifications}
+          disabled={notificationLoading}
+          className="btn"
+          style={{
+            padding: '0.5rem 1.2rem',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            background: pushSubscribed ? 'rgba(239, 68, 68, 0.1)' : 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
+            color: pushSubscribed ? '#dc2626' : 'white',
+            border: pushSubscribed ? '1px solid rgba(239, 68, 68, 0.2)' : 'none',
+            borderRadius: '50px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            boxShadow: pushSubscribed ? 'none' : '0 4px 10px rgba(201, 156, 51, 0.2)'
+          }}
+        >
+          {notificationLoading ? 'Processing...' : pushSubscribed ? 'Disable Alerts' : 'Enable Alerts'}
+        </button>
+      </div>
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
