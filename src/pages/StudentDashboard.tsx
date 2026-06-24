@@ -3,89 +3,32 @@ import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { 
   LogOut, 
-  Calendar, 
   TrendingUp, 
-  Clock, 
-  BookOpen,
-  MessageSquare,
-  Video,
   Award,
-  FileText,
-  Volume2,
-  AlertTriangle,
-  Globe,
-  Sparkles,
-  Compass,
-  Printer,
   HelpCircle,
-  Plus,
-  Grid,
-  Briefcase,
   GraduationCap
 } from 'lucide-react';
-
-interface StudentProfile {
-  id: string;
-  email: string;
-  name: string;
-  course_id: string;
-  batch_number: number;
-  roll_number?: string;
-  status: 'pending' | 'active' | 'inactive' | 'alumni';
-  courses?: {
-    name: string;
-  };
-  is_alumni_signup?: boolean;
-  hometown?: string;
-  house_name?: string;
-  street?: string;
-  locality?: string;
-  district?: string;
-  state?: string;
-  pincode?: string;
-  mobile_number?: string;
-  whatsapp_number?: string;
-}
-
-interface Interval {
-  id: string;
-  name: string;
-  is_active: boolean;
-  total_working_days: number;
-  total_vocab_tasks: number;
-  total_sentences_tasks: number;
-  total_vlog_tasks: number;
-  total_reaction_tasks: number;
-  total_hadithul_tasks: number;
-  start_date?: string;
-  created_at?: string;
-  end_date?: string;
-}
-
-interface LeaderboardEntry {
-  student_id: string;
-  name: string;
-  total_score: number;
-  rank: number;
-  level: number;
-}
-
-interface ScoreLog {
-  id: string;
-  activity_name: string;
-  score_type: 'daily_vocab' | 'daily_sentences' | 'weekly_vlog' | 'video_reaction' | 'hadithul_arabia' | 'exam' | 'penalty' | 'custom' | 'attendance';
-  points: number;
-  max_points: number;
-  logged_date: string;
-  created_at: string;
-}
+import { StudentProgress } from '../components/student/StudentProgress';
+import { StudentLeaderboard } from '../components/student/StudentLeaderboard';
+import { StudentAppeals } from '../components/student/StudentAppeals';
+import { StudentProfile as StudentProfileView } from '../components/student/StudentProfile';
+import { StudentProfile, Interval, LeaderboardEntry, ScoreLog } from '../lib/types';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [currentStudent, setCurrentStudent] = useState<StudentProfile | null>(null);
 
-  // Interval selection for leaderboard
+  // Tab navigation state
+  const [activeTab, setActiveTab] = useState<'progress' | 'leaderboard' | 'appeals' | 'profile'>('progress');
+  const [prefillAppeal, setPrefillAppeal] = useState<{
+    date: string;
+    type: 'attendance' | 'checklist' | 'scoring';
+    activity: string;
+    currentValue: string;
+  } | null>(null);
+
+  // Interval selection for data queries
   const [intervals, setIntervals] = useState<Interval[]>([]);
   const [selectedInterval, setSelectedInterval] = useState<string>('');
 
@@ -111,237 +54,6 @@ const StudentDashboard = () => {
     industrial_visit_mark: number | null;
     industrial_visit_remark: string;
   } | null>(null);
-
-  // Appeals / Correction Requests State
-  const [appeals, setAppeals] = useState<any[]>([]);
-  const [loadingAppeals, setLoadingAppeals] = useState(false);
-  const [showAppealModal, setShowAppealModal] = useState(false);
-  const [submittingAppeal, setSubmittingAppeal] = useState(false);
-
-  // Form State
-  const [appealType, setAppealType] = useState<'attendance' | 'scoring' | 'checklist'>('attendance');
-  const [appealDate, setAppealDate] = useState(new Date().toISOString().split('T')[0]);
-  const [appealActivity, setAppealActivity] = useState('Attendance');
-  const [appealCurrentValue, setAppealCurrentValue] = useState('Absent');
-  const [appealExpectedValue, setAppealExpectedValue] = useState('Present');
-  const [appealReason, setAppealReason] = useState('');
-
-  // Address & Contacts States
-  const [hometown, setHometown] = useState('');
-  const [houseName, setHouseName] = useState('');
-  const [street, setStreet] = useState('');
-  const [locality, setLocality] = useState('');
-  const [district, setDistrict] = useState('');
-  const [stateStr, setStateStr] = useState('Kerala');
-  const [pincode, setPincode] = useState('');
-  const [mobileNumber, setMobileNumber] = useState('');
-  const [whatsappNumber, setWhatsAppNumber] = useState('');
-
-  // Experience States
-  const [totalExperienceYears, setTotalExperienceYears] = useState('');
-  const [experienceDetails, setExperienceDetails] = useState('');
-
-  // Career States
-  const [employmentStatus, setEmploymentStatus] = useState<'unemployed_looking' | 'unemployed_not_looking' | 'employed' | 'employed_looking' | 'higher_studies'>('unemployed_looking');
-  const [preferredLocation, setPreferredLocation] = useState<'near_home' | 'india' | 'abroad' | 'anywhere'>('anywhere');
-  const [preferredRoles, setPreferredRoles] = useState('');
-  const [currentJobTitle, setCurrentJobTitle] = useState('');
-  const [currentCompany, setCurrentCompany] = useState('');
-  const [currentWorkLocation, setCurrentWorkLocation] = useState('');
-  const [skillsLearned, setSkillsLearned] = useState('');
-  const [linkedinUrl, setLinkedinUrl] = useState('');
-
-  // Spouse & Family States
-  const [maritalStatus, setMaritalStatus] = useState<'single' | 'married'>('single');
-  const [spouseName, setSpouseName] = useState('');
-  const [spouseProfession, setSpouseProfession] = useState('');
-  const [spouseCompany, setSpouseCompany] = useState('');
-  const [spouseWorkLocation, setSpouseWorkLocation] = useState('');
-
-  const [savingCareer, setSavingCareer] = useState(false);
-  const [careerMessage, setCareerMessage] = useState('');
-  const [showProfileForm, setShowProfileForm] = useState(false);
-
-  const fetchCareerProfile = async (studentId: string, studentData: any) => {
-    setHometown(studentData.hometown || '');
-    setHouseName(studentData.house_name || '');
-    setStreet(studentData.street || '');
-    setLocality(studentData.locality || '');
-    setDistrict(studentData.district || '');
-    setStateStr(studentData.state || 'Kerala');
-    setPincode(studentData.pincode || '');
-    setMobileNumber(studentData.mobile_number || '');
-    setWhatsAppNumber(studentData.whatsapp_number || '');
-    setTotalExperienceYears(studentData.total_experience_years || '');
-    setExperienceDetails(studentData.experience_details || '');
-
-    try {
-      const { data, error } = await supabase
-        .from('alumni_profiles')
-        .select('*')
-        .eq('student_id', studentId)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        setEmploymentStatus(data.employment_status || 'unemployed_looking');
-        setPreferredLocation(data.preferred_location || 'anywhere');
-        setPreferredRoles(data.preferred_roles || '');
-        setCurrentJobTitle(data.current_job_title || '');
-        setCurrentCompany(data.current_company || '');
-        setCurrentWorkLocation(data.current_work_location || '');
-        setSkillsLearned(data.skills_learned || '');
-        setLinkedinUrl(data.linkedin_url || '');
-        setMaritalStatus(data.marital_status || 'single');
-        setSpouseName(data.spouse_name || '');
-        setSpouseProfession(data.spouse_profession || '');
-        setSpouseCompany(data.spouse_company || '');
-        setSpouseWorkLocation(data.spouse_work_location || '');
-      }
-    } catch (err) {
-      console.error('Error fetching alumni career profile:', err);
-    }
-  };
-
-  const handleSaveCareerProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentStudent) return;
-    setSavingCareer(true);
-    setCareerMessage('');
-
-    try {
-      const { error: profileErr } = await supabase
-        .from('student_profiles')
-        .update({
-          hometown,
-          house_name: houseName,
-          street,
-          locality,
-          district,
-          state: stateStr,
-          pincode,
-          mobile_number: mobileNumber,
-          whatsapp_number: whatsappNumber,
-          total_experience_years: totalExperienceYears,
-          experience_details: experienceDetails
-        })
-        .eq('id', currentStudent.id);
-
-      if (profileErr) throw profileErr;
-
-      setCurrentStudent(prev => prev ? {
-        ...prev,
-        hometown,
-        house_name: houseName,
-        street,
-        locality,
-        district,
-        state: stateStr,
-        pincode,
-        mobile_number: mobileNumber,
-        whatsapp_number: whatsappNumber,
-        total_experience_years: totalExperienceYears,
-        experience_details: experienceDetails
-      } : null);
-
-      const { error: careerErr } = await supabase
-        .from('alumni_profiles')
-        .upsert({
-          student_id: currentStudent.id,
-          employment_status: employmentStatus,
-          preferred_location: preferredLocation,
-          preferred_roles: preferredRoles,
-          current_job_title: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentJobTitle : null,
-          current_company: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentCompany : null,
-          current_work_location: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentWorkLocation : null,
-          skills_learned: skillsLearned,
-          linkedin_url: linkedinUrl,
-          marital_status: maritalStatus,
-          spouse_name: maritalStatus === 'married' ? spouseName : null,
-          spouse_profession: maritalStatus === 'married' ? spouseProfession : null,
-          spouse_company: maritalStatus === 'married' ? spouseCompany : null,
-          spouse_work_location: maritalStatus === 'married' ? spouseWorkLocation : null,
-          updated_at: new Date().toISOString()
-        });
-
-      if (careerErr) throw careerErr;
-
-      setCareerMessage('✅ Profile updated successfully!');
-    } catch (err: any) {
-      console.error(err);
-      setCareerMessage(`❌ Save failed: ${err.message}`);
-    } finally {
-      setSavingCareer(false);
-      setTimeout(() => setCareerMessage(''), 4000);
-    }
-  };
-
-  const fetchStudentAppeals = async (studentId: string) => {
-    try {
-      setLoadingAppeals(true);
-      const { data, error } = await supabase
-        .from('correction_requests')
-        .select('*')
-        .eq('student_id', studentId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setAppeals(data || []);
-    } catch (err) {
-      console.error('Error fetching appeals:', err);
-    } finally {
-      setLoadingAppeals(false);
-    }
-  };
-
-  const handleAppealTypeChange = (type: 'attendance' | 'scoring' | 'checklist') => {
-    setAppealType(type);
-    if (type === 'attendance') {
-      setAppealActivity('Attendance');
-      setAppealCurrentValue('Absent');
-      setAppealExpectedValue('Present');
-    } else if (type === 'checklist') {
-      setAppealActivity('Daily Vocab');
-      setAppealCurrentValue('Incomplete');
-      setAppealExpectedValue('Completed');
-    } else {
-      setAppealActivity('Exam: ');
-      setAppealCurrentValue('');
-      setAppealExpectedValue('');
-    }
-  };
-
-  const handleSubmitAppeal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentStudent) return;
-    try {
-      setSubmittingAppeal(true);
-      const { error } = await supabase
-        .from('correction_requests')
-        .insert({
-          student_id: currentStudent.id,
-          request_type: appealType,
-          logged_date: appealDate,
-          activity_name: appealActivity,
-          current_value: appealCurrentValue,
-          expected_value: appealExpectedValue,
-          reason: appealReason,
-          status: 'pending'
-        });
-
-      if (error) throw error;
-      
-      // Reset form and reload
-      setAppealReason('');
-      setShowAppealModal(false);
-      await fetchStudentAppeals(currentStudent.id);
-    } catch (err) {
-      console.error('Error submitting appeal:', err);
-      alert('Failed to submit appeal. Please try again.');
-    } finally {
-      setSubmittingAppeal(false);
-    }
-  };
 
   const fetchStudentRemarks = async (studentId: string) => {
     try {
@@ -394,25 +106,13 @@ const StudentDashboard = () => {
   };
 
   const handleOpenAppealForDate = (dateStr: string, type: 'attendance' | 'checklist' | 'scoring', activity?: string, currentVal?: string) => {
-    setAppealDate(dateStr);
-    setAppealType(type);
-    
-    if (type === 'attendance') {
-      setAppealActivity('Attendance');
-      setAppealCurrentValue(currentVal || 'Absent');
-      setAppealExpectedValue('On Time');
-    } else if (type === 'checklist') {
-      setAppealActivity(activity || 'Daily Vocab');
-      setAppealCurrentValue(currentVal || 'Incomplete');
-      setAppealExpectedValue('Completed');
-    } else {
-      setAppealActivity(activity || '');
-      setAppealCurrentValue(currentVal || '');
-      setAppealExpectedValue('');
-    }
-    
-    setAppealReason('');
-    setShowAppealModal(true);
+    setPrefillAppeal({
+      date: dateStr,
+      type,
+      activity: activity || (type === 'attendance' ? 'Attendance' : type === 'checklist' ? 'Daily Vocab' : ''),
+      currentValue: currentVal || (type === 'attendance' ? 'Absent' : type === 'checklist' ? 'Incomplete' : '')
+    });
+    setActiveTab('appeals');
   };
 
   const printHtml = (htmlContent: string) => {
@@ -451,7 +151,6 @@ const StudentDashboard = () => {
   };
 
   const handlePrintReport = (student: StudentProfile, scores: any[]) => {
-    
     // Format the date
     const printDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -959,18 +658,15 @@ const StudentDashboard = () => {
       }
 
       setCurrentStudent(student);
+      if (student.status === 'alumni') {
+        setActiveTab('profile');
+      }
       
       // Load student data
       await fetchIntervalsAndData(student.course_id, student.batch_number, student.id);
 
       // Load counseling remarks
       await fetchStudentRemarks(student.id);
-
-      // Load correction requests / appeals
-      await fetchStudentAppeals(student.id);
-
-      // Load career and contact profile details
-      await fetchCareerProfile(student.id, student);
     } catch (err) {
       console.error(err);
       await supabase.auth.signOut();
@@ -1060,7 +756,6 @@ const StudentDashboard = () => {
       // Format & Rank entries
       const entries: LeaderboardEntry[] = students.map(s => {
         const total = scoreMap[s.id];
-        // Gamified level: 1 level per 100 points, starting at Level 1 (caps at Level 100)
         const computedLevel = Math.max(1, Math.floor(total / 100) + 1);
         return {
           student_id: s.id,
@@ -1091,7 +786,6 @@ const StudentDashboard = () => {
 
   const fetchLogsAndWeeklyCheckins = async (studentId: string, intervalId: string) => {
     try {
-      // Fetch recent score adjustments for this student (all intervals, to align with UNIQUE constraint and weekly checklist)
       const { data: logs } = await supabase
         .from('scores')
         .select('*')
@@ -1099,17 +793,15 @@ const StudentDashboard = () => {
         .order('created_at', { ascending: false });
 
       if (logs) {
-        // Show only the selected interval's audit logs in history (or show all if cumulative)
         if (intervalId === 'cumulative') {
           setRecentLogs(logs);
         } else {
           setRecentLogs(logs.filter(log => log.interval_id === intervalId));
         }
 
-        // Calculate weekly status (Mon-Fri checkins + weekly vlog)
-        // Get start of current week (Monday)
+        // Calculate weekly status
         const today = new Date();
-        const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
+        const dayOfWeek = today.getDay();
         const mondayDiff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
         const monday = new Date(today.setDate(mondayDiff));
         monday.setHours(0, 0, 0, 0);
@@ -1139,7 +831,6 @@ const StudentDashboard = () => {
             if (log.score_type === 'daily_sentences') sentenceMap[logDateStr] = true;
           }
           const logDateObj = new Date(log.logged_date);
-          // Vlog is checked weekly, check if any vlog is logged in current week (last 7 days)
           if (log.score_type === 'weekly_vlog' && logDateObj >= monday) {
             hasVlog = true;
           }
@@ -1187,11 +878,11 @@ const StudentDashboard = () => {
   const myScore = selfEntry ? selfEntry.total_score : 0;
   const myLevel = selfEntry ? selfEntry.level : 1;
 
-  // XP level calculations (assuming 100 XP per level)
+  // XP level calculations
   const xpInCurrentLevel = myScore % 100;
   const levelProgressPercent = Math.min(100, Math.max(0, xpInCurrentLevel));
 
-  // Determine Badge Ring styling based on Rank
+  // Badge Ring styling
   const getBadgeStyle = (rank: number) => {
     if (rank === 1) return { text: '🥇 Gold Roster', border: 'linear-gradient(135deg, #fbbf24, #d97706)', shadow: 'rgba(251, 191, 36, 0.4)' };
     if (rank >= 2 && rank <= 3) return { text: '🥈 Silver Roster', border: 'linear-gradient(135deg, #cbd5e1, #64748b)', shadow: 'rgba(148, 163, 184, 0.4)' };
@@ -1227,7 +918,7 @@ const StudentDashboard = () => {
   const hadithulArabiaCount = recentLogs.filter(log => log.score_type === 'hadithul_arabia').length;
 
   const talkLogs = recentLogs.filter(log => log.score_type === 'custom' && log.activity_name === 'One Minute Talk');
-  const talkAvg = talkLogs.length > 0 ? (talkLogs.reduce((sum, log) => sum + log.points, 0) / talkLogs.length).toFixed(1) : 'N/A';
+  const talkAvg = talkLogs.length > 0 ? parseFloat((talkLogs.reduce((sum, log) => sum + log.points, 0) / talkLogs.length).toFixed(1)) : 'N/A';
 
   const examLogs = recentLogs.filter(log => log.score_type === 'exam');
   const examAvg = examLogs.length > 0 
@@ -1238,7 +929,7 @@ const StudentDashboard = () => {
   const totalPenaltiesCount = penaltyLogs.reduce((sum, log) => sum + Math.round(Math.abs(log.points) / 2), 0);
 
   return (
-    <div style={{ paddingTop: '120px', paddingBottom: '60px', minHeight: '100vh', background: 'var(--bg-light)' }} className="bg-grid-pattern">
+    <div style={{ paddingTop: '90px', paddingBottom: '80px', minHeight: '100vh', background: 'var(--bg-light)' }} className="bg-grid-pattern">
       <div className="container" style={{ maxWidth: '1080px' }}>
         
         {/* Style block for gaming and layout classes */}
@@ -1319,25 +1010,6 @@ const StudentDashboard = () => {
             gap: 0.75rem;
             padding-right: 0.25rem;
           }
-          @media (max-width: 991px) {
-            .student-dash-grid {
-              grid-template-columns: 1fr;
-            }
-          }
-          @media (max-width: 480px) {
-            .rank-card {
-              padding: 0.8rem 1rem;
-              gap: 0.75rem;
-            }
-            .avatar-bubble {
-              width: 36px;
-              height: 36px;
-              font-size: 0.8rem;
-            }
-            .xp-badge {
-              font-size: 1rem;
-            }
-          }
           .remarks-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -1371,1349 +1043,385 @@ const StudentDashboard = () => {
             font-style: italic;
             color: var(--text-muted);
           }
+          .desktop-nav {
+            display: flex;
+          }
+          .mobile-bottom-nav {
+            display: none;
+          }
+          .nav-tab-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          .nav-tab-btn:hover {
+            color: var(--primary-dark);
+            background: rgba(201, 156, 51, 0.05);
+          }
+          .nav-tab-btn.active {
+            color: var(--primary-dark);
+            background: rgba(201, 156, 51, 0.12);
+          }
+          @media (max-width: 991px) {
+            .student-dash-grid {
+              grid-template-columns: 1fr;
+            }
+          }
           @media (max-width: 768px) {
+            .desktop-nav {
+              display: none !important;
+            }
+            .mobile-bottom-nav {
+              display: flex !important;
+              position: fixed;
+              bottom: 0;
+              left: 0;
+              right: 0;
+              height: 64px;
+              background: rgba(255, 255, 255, 0.95);
+              backdrop-filter: blur(12px);
+              border-top: 1px solid rgba(0, 0, 0, 0.08);
+              z-index: 100;
+              align-items: center;
+              justify-content: space-around;
+              padding-bottom: env(safe-area-inset-bottom);
+            }
+            .mobile-nav-item {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              gap: 0.2rem;
+              color: var(--text-muted);
+              font-size: 0.7rem;
+              font-weight: 700;
+              background: transparent;
+              border: none;
+              cursor: pointer;
+              flex: 1;
+            }
+            .mobile-nav-item.active {
+              color: var(--primary-dark);
+            }
             .remarks-grid {
               grid-template-columns: 1fr;
             }
           }
+          @media (max-width: 480px) {
+            .rank-card {
+              padding: 0.8rem 1rem;
+              gap: 0.75rem;
+            }
+            .avatar-bubble {
+              width: 36px;
+              height: 36px;
+              font-size: 0.8rem;
+            }
+            .xp-badge {
+              font-size: 1rem;
+            }
+          }
         `}</style>
 
-        {/* Welcome & Gamified Badge Banner */}
-        <div className="glass-card" style={{ padding: '2.5rem', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 15px 35px rgba(201, 156, 51, 0.1)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
-          <div className="hero-blob" style={{ width: '300px', height: '300px', top: '-50px', right: '-50px', background: 'radial-gradient(circle, rgba(201,156,51,0.15) 0%, rgba(253,251,247,0) 70%)' }}></div>
+        {/* Global top bar */}
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '70px',
+          background: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+          zIndex: 100,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 1.5rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <GraduationCap className="text-primary" size={26} />
+            <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-main)' }}>Academy of Excellence</span>
+          </div>
           
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '2rem', position: 'relative', zIndex: 10 }}>
-            <div style={{ flex: '1 1 500px' }}>
-              <span className="badge" style={{ background: 'rgba(201,156,51,0.15)', color: 'var(--primary-dark)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>
-                {currentStudent.courses?.name} • Batch {currentStudent.batch_number}
-              </span>
-              <h1 className="heading-xl" style={{ margin: '0.5rem 0 0.8rem 0', fontSize: '2.2rem', lineHeight: '1.1' }}>
-                Hello, <span className="text-gradient">{currentStudent.name}</span>
-              </h1>
-              
-              {/* Gamified Level & XP bar */}
-              {currentStudent.status !== 'alumni' && (
-                <div style={{ marginTop: '1.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-                    <span>Level {myLevel} Scholar</span>
-                    <span style={{ color: 'var(--text-muted)' }}>{xpInCurrentLevel}/100 XP to Level {myLevel + 1}</span>
-                  </div>
-                  <div style={{ height: '12px', background: 'rgba(0,0,0,0.06)', borderRadius: '10px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${levelProgressPercent}%`, background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%)', borderRadius: '10px', transition: 'width 0.5s ease-out' }}></div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Profile Rank Ring / Alumni Badge */}
-            {currentStudent.status !== 'alumni' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '160px', gap: '0.5rem' }}>
-                <div 
-                  style={{
-                    width: '110px', height: '110px', borderRadius: '50%',
-                    background: 'white', border: '6px solid',
-                    borderImageSource: myBadge.border, borderImageSlice: 1,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `0 10px 25px ${myBadge.shadow}`, position: 'relative',
-                    borderStyle: 'solid'
-                  }}
-                >
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Rank</span>
-                  <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-main)', lineHeight: '1' }}>#{myRank || '-'}</span>
-                </div>
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary-dark)', textAlign: 'center' }}>{myBadge.text}</span>
-                
+          {/* Desktop Tab Selector */}
+          <div className="desktop-nav" style={{ gap: '0.4rem', alignItems: 'center' }}>
+            {currentStudent.status === 'alumni' ? (
+              <>
                 <button 
-                  onClick={handleLogout} 
-                  className="btn btn-outline" 
-                  style={{ 
-                    padding: '0.35rem 0.8rem', 
-                    fontSize: '0.75rem', 
-                    color: '#dc2626', 
-                    borderColor: '#fca5a5',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                    marginTop: '0.4rem',
-                    cursor: 'pointer'
-                  }}
+                  onClick={() => setActiveTab('profile')} 
+                  className={`nav-tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
                 >
-                  <LogOut size={12} /> Sign Out
+                  Placement Profile
                 </button>
-              </div>
+                <button 
+                  onClick={() => setActiveTab('progress')} 
+                  className={`nav-tab-btn ${activeTab === 'progress' ? 'active' : ''}`}
+                >
+                  Academic Archive
+                </button>
+              </>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '160px', gap: '0.5rem' }}>
-                <div 
-                  style={{
-                    width: '110px', height: '110px', borderRadius: '50%',
-                    background: 'white', border: '6px solid var(--primary)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    zIndex: 10,
-                    boxShadow: '0 10px 25px rgba(201, 156, 51, 0.15)', position: 'relative'
-                  }}
-                >
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Status</span>
-                  <GraduationCap size={36} style={{ color: 'var(--primary)', marginTop: '0.2rem' }} />
-                </div>
-                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary-dark)', textAlign: 'center' }}>Academy Alumnus</span>
-                
+              <>
                 <button 
-                  onClick={handleLogout} 
-                  className="btn btn-outline" 
-                  style={{ 
-                    padding: '0.35rem 0.8rem', 
-                    fontSize: '0.75rem', 
-                    color: '#dc2626', 
-                    borderColor: '#fca5a5',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.3rem',
-                    marginTop: '0.4rem',
-                    cursor: 'pointer'
-                  }}
+                  onClick={() => setActiveTab('progress')} 
+                  className={`nav-tab-btn ${activeTab === 'progress' ? 'active' : ''}`}
                 >
-                  <LogOut size={12} /> Sign Out
+                  Progress
                 </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* --- TWO-COLUMN GAMIFIED LAYOUT (SCOREBOARD IS MAIN FOCUS) --- */}
-        {currentStudent.status !== 'alumni' && (
-          <div className="student-dash-grid">
-          
-          {/* COLUMN 1: Live Leaderboard (Left Side - Large Focus Card) */}
-          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem', width: '100%' }}>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(201,156,51,0.12)', paddingBottom: '1rem', marginBottom: '1.2rem', gap: '1rem', flexWrap: 'wrap' }}>
-              <h2 style={{ fontSize: '1.35rem', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <TrendingUp size={20} className="text-primary" /> Batch Leaderboard
-              </h2>
-              
-              {/* Period Select Dropdown */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Period:</label>
-                <select
-                  value={selectedInterval}
-                  onChange={(e) => handleIntervalChange(e.target.value)}
-                  style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: '1px solid rgba(201,156,51,0.3)', outline: 'none', background: 'white', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+                <button 
+                  onClick={() => setActiveTab('leaderboard')} 
+                  className={`nav-tab-btn ${activeTab === 'leaderboard' ? 'active' : ''}`}
                 >
-                  <option value="cumulative">All Terms (Cumulative)</option>
-                  {intervals.map(int => (
-                    <option key={int.id} value={int.id}>
-                      {int.name} {int.is_active ? '(Active)' : '(Archived)'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="leaderboard-list">
-              {leaderboard.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  No student rankings logged for this period.
-                </div>
-              ) : (
-                leaderboard.map(entry => {
-                  const isSelf = entry.student_id === currentStudent.id;
-                  // Calculate relative percent to top score
-                  const topScore = leaderboard[0]?.total_score || 100;
-                  const relativePercent = topScore > 0 ? Math.min(100, Math.max(0, (entry.total_score / topScore) * 100)) : 0;
-                  
-                  // Get Rank styling
-                  const getRankBadge = (rank: number) => {
-                    if (rank === 1) return { bg: 'linear-gradient(135deg, #fbbf24, #d97706)', text: '👑 1st', color: 'white' };
-                    if (rank === 2) return { bg: 'linear-gradient(135deg, #e2e8f0, #94a3b8)', text: '🥈 2nd', color: '#1e293b' };
-                    if (rank === 3) return { bg: 'linear-gradient(135deg, #ffedd5, #b45309)', text: '🥉 3rd', color: '#78350f' };
-                    return { bg: '#f1f5f9', text: `#${rank}`, color: '#64748b' };
-                  };
-                  
-                  const rankBadge = getRankBadge(entry.rank);
-                  const initials = entry.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?';
-
-                  // Dynamic Avatar Gradient
-                  const getAvatarGradient = (id: string, isMe: boolean) => {
-                    if (isMe) return 'linear-gradient(135deg, var(--primary), var(--primary-dark))';
-                    const colors = [
-                      'linear-gradient(135deg, #3b82f6, #1d4ed8)', // Blue
-                      'linear-gradient(135deg, #10b981, #047857)', // Green
-                      'linear-gradient(135deg, #8b5cf6, #5b21b6)', // Purple
-                      'linear-gradient(135deg, #ec4899, #be185d)', // Pink
-                      'linear-gradient(135deg, #f97316, #c2410c)'  // Orange
-                    ];
-                    // Simple hash based on student_id to choose consistent color
-                    const charCodeSum = id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-                    return colors[charCodeSum % colors.length];
-                  };
-
-                  return (
-                    <div 
-                      key={entry.student_id}
-                      className={`rank-card ${isSelf ? 'rank-card-self' : ''}`}
-                    >
-                      {/* Rank Pill */}
-                      <div 
-                        className="rank-badge"
-                        style={{
-                          background: rankBadge.bg,
-                          color: rankBadge.color,
-                        }}
-                      >
-                        {rankBadge.text}
-                      </div>
-
-                      {/* Avatar Bubble */}
-                      <div 
-                        className="avatar-bubble"
-                        style={{
-                          background: getAvatarGradient(entry.student_id, isSelf)
-                        }}
-                      >
-                        {initials}
-                      </div>
-
-                      {/* Name & Gamified Level progress bar */}
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 750, fontSize: '0.95rem', color: isSelf ? 'var(--primary-dark)' : 'var(--text-main)' }}>
-                            {entry.name}
-                          </span>
-                          {isSelf && (
-                            <span style={{ background: 'var(--primary-dark)', color: 'white', fontSize: '0.6rem', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 800, textTransform: 'uppercase' }}>
-                              You
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <span style={{ fontSize: '0.7rem', background: isSelf ? 'rgba(201,156,51,0.2)' : 'rgba(0,0,0,0.06)', color: isSelf ? 'var(--primary-dark)' : 'var(--text-muted)', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
-                            Lvl {entry.level}
-                          </span>
-                          <div style={{ height: '6px', flex: 1, background: 'rgba(0,0,0,0.05)', borderRadius: '10px', overflow: 'hidden', maxWidth: '200px' }}>
-                            <div 
-                              style={{ 
-                                height: '100%', 
-                                width: `${relativePercent}%`, 
-                                background: isSelf ? 'linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%)' : 'linear-gradient(90deg, #64748b 0%, #94a3b8 100%)', 
-                                borderRadius: '10px' 
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Total points XP */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '45px' }}>
-                        <span className="xp-badge" style={{ color: isSelf ? 'var(--primary-dark)' : 'var(--text-main)' }}>
-                          {entry.total_score}
-                        </span>
-                        <span className="xp-label">
-                          XP
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* COLUMN 2: Sidebar (Checklists & Logs - Right Side) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
-            
-            {/* 1. Weekly checklist */}
-            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem' }}>
-              <h3 style={{ fontSize: '1.15rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 750 }}>
-                <Calendar size={18} className="text-primary" /> Weekly Checklist
-              </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.2rem' }}>Mon-Fri WhatsApp & Weekly Vlog tasks checkoffs.</p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                
-                {/* Vocab row */}
-                <div style={{ background: 'white', padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                  <h4 style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-dark)', marginBottom: '0.6rem', fontWeight: 750 }}>
-                    <BookOpen size={14} /> WhatsApp Vocab
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.75rem' }}>
-                    {Object.keys(weeklyStatus.vocab).map(dateStr => {
-                      const dateObj = new Date(dateStr);
-                      const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-                      const done = weeklyStatus.vocab[dateStr];
-                      return (
-                        <div key={dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>{dayName} ({dateStr.substring(8, 10)})</span>
-                          <span style={{ color: done ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>{done ? '✓ Logged' : 'Pending'}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Sentences row */}
-                <div style={{ background: 'white', padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                  <h4 style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--primary-dark)', marginBottom: '0.6rem', fontWeight: 750 }}>
-                    <MessageSquare size={14} /> WhatsApp Sentences
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.75rem' }}>
-                    {Object.keys(weeklyStatus.sentences).map(dateStr => {
-                      const dateObj = new Date(dateStr);
-                      const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-                      const done = weeklyStatus.sentences[dateStr];
-                      return (
-                        <div key={dateStr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>{dayName} ({dateStr.substring(8, 10)})</span>
-                          <span style={{ color: done ? '#16a34a' : 'var(--text-muted)', fontWeight: 700 }}>{done ? '✓ Logged' : 'Pending'}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Vlog item */}
-                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <Video size={20} style={{ color: weeklyStatus.vlog ? '#16a34a' : 'var(--text-muted)' }} />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Weekly Vlog Upload</span>
-                  </div>
-                  <span style={{ fontSize: '0.7rem', color: weeklyStatus.vlog ? '#16a34a' : '#ea580c', fontWeight: 700, padding: '0.2rem 0.5rem', background: weeklyStatus.vlog ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', borderRadius: '50px' }}>
-                    {weeklyStatus.vlog ? 'Approved' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* Video Reaction item */}
-                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <MessageSquare size={20} style={{ color: weeklyStatus.videoReaction ? '#16a34a' : 'var(--text-muted)' }} />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Video Reaction Task</span>
-                  </div>
-                  <span style={{ fontSize: '0.7rem', color: weeklyStatus.videoReaction ? '#16a34a' : '#ea580c', fontWeight: 700, padding: '0.2rem 0.5rem', background: weeklyStatus.videoReaction ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', borderRadius: '50px' }}>
-                    {weeklyStatus.videoReaction ? 'Approved' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* Hadithul Arabia item */}
-                <div style={{ background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <Globe size={20} style={{ color: weeklyStatus.hadithulArabia ? '#16a34a' : 'var(--text-muted)' }} />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Hadithul Arabia Attendance</span>
-                  </div>
-                  <span style={{ fontSize: '0.7rem', color: weeklyStatus.hadithulArabia ? '#16a34a' : '#ea580c', fontWeight: 700, padding: '0.2rem 0.5rem', background: weeklyStatus.hadithulArabia ? 'rgba(34,197,94,0.1)' : 'rgba(234,88,12,0.1)', borderRadius: '50px' }}>
-                    {weeklyStatus.hadithulArabia ? 'Approved' : 'Pending'}
-                  </span>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Academic Performance Report Card */}
-            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', gap: '1rem', flexWrap: 'wrap' }}>
-                <h3 style={{ fontSize: '1.15rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 750 }}>
-                  <Award size={18} className="text-primary" /> Performance Report
-                </h3>
-                <button
-                  onClick={() => handlePrintReport(currentStudent, recentLogs)}
-                  className="btn btn-outline"
-                  style={{ 
-                    padding: '0.35rem 0.75rem', 
-                    fontSize: '0.75rem', 
-                    fontWeight: 700, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '0.3rem', 
-                    borderColor: 'var(--primary)',
-                    color: 'var(--primary-dark)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Printer size={12} /> Print Report
+                  Leaderboard
                 </button>
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.2rem' }}>A complete academic summary for this period.</p>
-
-              {/* Grid of Metrics */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
-                {/* Attendance Rate */}
-                <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Attendance Rate</span>
-                  <div style={{ margin: '0.4rem 0' }}>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--primary-dark)' }}>{attendanceRate}%</span>
-                  </div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    On Time: {onTimeCount} | Late: {lateCount} | Half Day: {halfDayCount} | Absent: {absentCount} (Present: {presentDays} / {totalWorkingDays} Days)
-                  </span>
-                </div>
-
-                {/* Malayalam Penalties */}
-                <div style={{ background: totalPenaltiesCount > 0 ? 'rgba(239,68,68,0.02)' : 'white', padding: '0.8rem', borderRadius: '12px', border: totalPenaltiesCount > 0 ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.7rem', color: totalPenaltiesCount > 0 ? '#b91c1c' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                    {totalPenaltiesCount > 0 && <AlertTriangle size={12} style={{ color: '#dc2626' }} />} Malayalam Penalties
-                  </span>
-                  <div style={{ margin: '0.4rem 0' }}>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: totalPenaltiesCount > 0 ? '#dc2626' : 'var(--text-main)' }}>{totalPenaltiesCount}</span>
-                  </div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    Total Term Count
-                  </span>
-                </div>
-
-                {/* Exam Average */}
-                <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Exam Average</span>
-                  <div style={{ margin: '0.4rem 0' }}>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--text-main)' }}>{examAvg !== null ? `${examAvg}%` : 'N/A'}</span>
-                  </div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    Across {examLogs.length} Exams
-                  </span>
-                </div>
-
-                {/* One Minute Talk Average */}
-                <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                    <Volume2 size={12} className="text-primary" /> One Minute Talk
-                  </span>
-                  <div style={{ margin: '0.4rem 0' }}>
-                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--text-main)' }}>{talkAvg}</span>
-                    {talkAvg !== 'N/A' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>/10</span>}
-                  </div>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    Average Oral Score
-                  </span>
-                </div>
-              </div>
-
-              {/* Checklist Tasks Breakdown */}
-              <div style={{ background: 'rgba(201,156,51,0.03)', padding: '0.8rem 1rem', borderRadius: '12px', border: '1px solid rgba(201,156,51,0.1)', display: 'flex', justifyContent: 'space-around', alignItems: 'center', marginBottom: '1.2rem', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vocabulary</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vocabCount} / {totalVocab}</span>
-                </div>
-                <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Sentences</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{sentencesCount} / {totalSentences}</span>
-                </div>
-                <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Vlogs</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{vlogCount} / {totalVlog}</span>
-                </div>
-                <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Reactions</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{videoReactionCount} / {totalReaction}</span>
-                </div>
-                <div style={{ width: '1px', height: '20px', background: 'rgba(201,156,51,0.2)' }} />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hadithul A.</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--primary-dark)' }}>{hadithulArabiaCount} / {totalHadithul}</span>
-                </div>
-              </div>
-
-              {/* Exams details */}
-              {examLogs.length > 0 && (
-                <div style={{ marginTop: '1rem' }}>
-                  <h4 style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <FileText size={14} className="text-primary" /> Exam Breakdown
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '0.2rem' }}>
-                    {examLogs.map(exam => {
-                      const examNameFormatted = exam.activity_name.replace(/^exam:\s*/i, '');
-                      const percent = Math.round((exam.points / exam.max_points) * 100);
-                      return (
-                        <div key={exam.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.03)', fontSize: '0.75rem' }}>
-                          <span style={{ fontWeight: 650, color: 'var(--text-main)', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1, marginRight: '0.5rem' }}>{examNameFormatted}</span>
-                          <span style={{ color: 'var(--text-muted)' }}>{exam.points}/{exam.max_points} ({percent}%)</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 2. Recent Logs Card */}
-            <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.8rem' }}>
-              <h3 style={{ fontSize: '1.15rem', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 750 }}>
-                <Clock size={18} className="text-primary" /> Score Audits
-              </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.2rem' }}>Audit trail of your point credits/debits.</p>
-
-              <div className="logs-scroll-container">
-                {recentLogs.length === 0 ? (
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>No point logs recorded.</p>
-                ) : (
-                  recentLogs.slice(0, 15).map(log => {
-                    const isPenalty = log.points < 0;
-                    return (
-                      <div 
-                        key={log.id} 
-                        style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          alignItems: 'center', 
-                          padding: '0.75rem', 
-                          background: isPenalty ? 'rgba(239,68,68,0.04)' : 'rgba(34,197,94,0.04)', 
-                          borderLeft: isPenalty ? '3px solid #dc2626' : '3px solid #16a34a',
-                          borderRadius: '0 8px 8px 0',
-                          fontSize: '0.8rem'
-                        }}
-                      >
-                        <div style={{ flex: 1, paddingRight: '0.5rem' }}>
-                          <strong style={{ display: 'block', color: 'var(--text-main)' }}>{log.activity_name}</strong>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                            {new Date(log.logged_date).toLocaleDateString()}
-                          </span>
-                        </div>
-                        
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                          <span style={{ 
-                            fontWeight: 800, 
-                            color: isPenalty ? '#dc2626' : '#16a34a',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {isPenalty ? '' : '+'}{log.points} XP
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- MY DAILY MARKS MATRIX --- */}
-      {currentStudent.status !== 'alumni' ? (() => {
-        let intervalStartDate = new Date().toISOString();
-        if (selectedInterval === 'cumulative') {
-          const sortedInts = [...intervals].sort((a, b) => {
-            const dateA = new Date(a.start_date || a.created_at || '').getTime();
-            const dateB = new Date(b.start_date || b.created_at || '').getTime();
-            return dateA - dateB;
-          });
-          const earliest = sortedInts[0];
-          if (earliest) {
-            intervalStartDate = earliest.start_date || earliest.created_at || new Date().toISOString();
-          }
-        } else {
-          const currentIntervalObj = intervals.find(i => i.id === selectedInterval);
-          if (currentIntervalObj) {
-            intervalStartDate = currentIntervalObj.start_date || currentIntervalObj.created_at || new Date().toISOString();
-          }
-        }
-
-        const sortedIntsForBound = [...intervals].sort((a, b) => {
-          const dateA = new Date(a.start_date || a.created_at || '').getTime();
-          const dateB = new Date(b.start_date || b.created_at || '').getTime();
-          return dateA - dateB;
-        });
-
-        const activeObj = selectedInterval === 'cumulative' 
-          ? null 
-          : (intervals.find(i => i.id === selectedInterval) || sortedIntsForBound.find(i => i.is_active) || sortedIntsForBound[0]);
-
-        let intervalEndDate: string | undefined = activeObj?.end_date || undefined;
-        if (!intervalEndDate && activeObj) {
-          const idx = sortedIntsForBound.findIndex(i => i.id === activeObj.id);
-          if (idx !== -1 && idx < sortedIntsForBound.length - 1) {
-            const nextInterval = sortedIntsForBound[idx + 1];
-            const nextRawStart = nextInterval.start_date || nextInterval.created_at || '';
-            if (nextRawStart) {
-              const nextStart = new Date(nextRawStart);
-              nextStart.setDate(nextStart.getDate() - 1);
-              intervalEndDate = nextStart.toISOString().split('T')[0];
-            }
-          }
-        }
-
-        const matrixDates = getDatesRange(intervalStartDate, intervalEndDate);
-        
-        return (
-          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginTop: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
-              <Grid size={20} className="text-primary" /> My Daily Marks Matrix
-            </h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
-              Your comprehensive day-by-day record of attendance, daily tasks, and XP allocations starting from the first day of this period. Click the <strong>"Appeal"</strong> button next to any date to submit a correction request.
-            </p>
-
-            <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.06)' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left', minWidth: '850px' }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1' }}>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700 }}>Date</th>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Attendance</th>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Vocab</th>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>WhatsApp Sentences</th>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Weekly Vlog</th>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Video Reaction</th>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Hadithul Arabia</th>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Daily XP</th>
-                    <th style={{ padding: '0.75rem 1rem', fontWeight: 700, textAlign: 'center' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrixDates.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                        No dates available for this interval.
-                      </td>
-                    </tr>
-                  ) : (
-                    matrixDates.map(dateStr => {
-                      const attObj = recentLogs.find(s => s.logged_date === dateStr && s.score_type === 'attendance');
-                      const attVal = attObj ? attObj.activity_name.replace('Attendance: ', '') : '';
-                      
-                      let attDisplay = '-';
-                      let attColor = '#64748b';
-                      if (attVal === 'On Time') { attDisplay = 'OT'; attColor = '#16a34a'; }
-                      else if (attVal === 'Late') { attDisplay = 'L'; attColor = '#b45309'; }
-                      else if (attVal === 'Half Day') { attDisplay = 'HD'; attColor = '#3b82f6'; }
-                      else if (attVal === 'Absent') { attDisplay = 'A'; attColor = '#dc2626'; }
-
-                      const checkItem = (scoreType: string) => {
-                        const exists = recentLogs.some(s => s.logged_date === dateStr && s.score_type === scoreType);
-                        return exists ? (
-                          <span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓</span>
-                        ) : (
-                          <span style={{ color: '#cbd5e1' }}>-</span>
-                        );
-                      };
-
-                      const dayLogs = recentLogs.filter(s => s.logged_date === dateStr);
-                      const dayXP = dayLogs.reduce((sum, s) => sum + s.points, 0);
-
-                      return (
-                        <tr key={dateStr} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', background: 'white' }}>
-                          <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
-                            {new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 'bold', color: attColor }}>
-                            {attDisplay}
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                            {checkItem('daily_vocab')}
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                            {checkItem('daily_sentences')}
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                            {checkItem('weekly_vlog')}
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                            {checkItem('video_reaction')}
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                            {checkItem('hadithul_arabia')}
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 'bold', color: dayXP > 0 ? '#16a34a' : dayXP < 0 ? '#dc2626' : 'inherit' }}>
-                            {dayXP > 0 ? `+${dayXP}` : dayXP} XP
-                          </td>
-                          <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                            <button
-                              onClick={() => {
-                                let prefillType: 'attendance' | 'checklist' | 'scoring' = 'attendance';
-                                let prefillActivity = 'Attendance';
-                                let prefillCurrent = 'Absent';
-                                if (!attObj || attVal === 'Absent') {
-                                  prefillType = 'attendance';
-                                  prefillActivity = 'Attendance';
-                                  prefillCurrent = attVal || 'Absent';
-                                } else {
-                                  const hasVocab = recentLogs.some(s => s.logged_date === dateStr && s.score_type === 'daily_vocab');
-                                  const hasSentences = recentLogs.some(s => s.logged_date === dateStr && s.score_type === 'daily_sentences');
-                                  if (!hasVocab) {
-                                    prefillType = 'checklist';
-                                    prefillActivity = 'Daily Vocab';
-                                    prefillCurrent = 'Incomplete';
-                                  } else if (!hasSentences) {
-                                    prefillType = 'checklist';
-                                    prefillActivity = 'Daily Sentences';
-                                    prefillCurrent = 'Incomplete';
-                                  } else {
-                                    prefillType = 'checklist';
-                                    prefillActivity = 'Daily Vocab';
-                                    prefillCurrent = 'Incomplete';
-                                  }
-                                }
-                                handleOpenAppealForDate(dateStr, prefillType, prefillActivity, prefillCurrent);
-                              }}
-                              className="btn btn-outline"
-                              style={{
-                                padding: '0.2rem 0.5rem',
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                                borderColor: 'var(--primary)',
-                                color: 'var(--primary-dark)',
-                                borderRadius: '6px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Appeal
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ display: 'flex', gap: '15px', fontSize: '0.75rem', marginTop: '1rem', color: '#64748b', flexWrap: 'wrap' }}>
-              <strong>Attendance Legend:</strong>
-              <div><span style={{ color: '#16a34a', fontWeight: 'bold' }}>OT:</span> On Time</div>
-              <div><span style={{ color: '#b45309', fontWeight: 'bold' }}>L:</span> Late</div>
-              <div><span style={{ color: '#3b82f6', fontWeight: 'bold' }}>HD:</span> Half Day</div>
-              <div><span style={{ color: '#dc2626', fontWeight: 'bold' }}>A:</span> Absent</div>
-              <div style={{ marginLeft: '10px' }}>• <strong>Checklist Legend:</strong> <span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓</span> Completed / Approved | <span style={{ color: '#cbd5e1' }}>-</span> Pending / Incomplete</div>
-            </div>
-          </div>
-        );
-      })() : null}
-
-      {/* --- INSTRUCTOR REMARKS & COUNSELING --- */}
-      {currentStudent.status !== 'alumni' && (
-        <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginTop: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.25rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
-            <MessageSquare size={20} className="text-primary" /> Instructor Remarks & Counseling
-          </h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.2rem' }}>
-            Personalized guidance, performance feedback, and career counseling remarks from the academy instructors.
-          </p>
-
-          {(() => {
-            const hasAnyRemarks = remarks && (
-              remarks.strengths?.trim() ||
-              remarks.weaknesses?.trim() ||
-              remarks.career_path?.trim() ||
-              remarks.general_remarks?.trim() ||
-              (remarks.mock_interview_mark !== null && remarks.mock_interview_mark !== undefined) ||
-              remarks.mock_interview_remark?.trim() ||
-              (remarks.industrial_visit_mark !== null && remarks.industrial_visit_mark !== undefined) ||
-              remarks.industrial_visit_remark?.trim()
-            );
-
-            if (hasAnyRemarks) {
-              return (
-                <div className="remarks-grid">
-                  {/* Strengths */}
-                  <div className="remarks-card" style={{ background: 'rgba(16, 185, 129, 0.015)', borderColor: 'rgba(16, 185, 129, 0.12)' }}>
-                    <div className="remarks-title" style={{ color: '#047857' }}>
-                      <Sparkles size={16} /> 💪 Strengths
-                    </div>
-                    <div className="remarks-content">
-                      {remarks.strengths?.trim() ? remarks.strengths : <span className="remarks-empty">No strengths recorded yet.</span>}
-                    </div>
-                  </div>
-
-                  {/* Weaknesses */}
-                  <div className="remarks-card" style={{ background: 'rgba(239, 68, 68, 0.015)', borderColor: 'rgba(239, 68, 68, 0.12)' }}>
-                    <div className="remarks-title" style={{ color: '#b91c1c' }}>
-                      <AlertTriangle size={16} /> ⚠️ Areas for Improvement
-                    </div>
-                    <div className="remarks-content">
-                      {remarks.weaknesses?.trim() ? remarks.weaknesses : <span className="remarks-empty">No improvement areas recorded yet.</span>}
-                    </div>
-                  </div>
-
-                  {/* Career Path */}
-                  <div className="remarks-card" style={{ background: 'rgba(59, 130, 246, 0.015)', borderColor: 'rgba(59, 130, 246, 0.12)' }}>
-                    <div className="remarks-title" style={{ color: '#1d4ed8' }}>
-                      <Compass size={16} /> 🎯 Apt Career Path
-                    </div>
-                    <div className="remarks-content">
-                      {remarks.career_path?.trim() ? remarks.career_path : <span className="remarks-empty">No career path recommendations recorded yet.</span>}
-                    </div>
-                  </div>
-
-                  {/* General Remarks */}
-                  <div className="remarks-card" style={{ background: 'rgba(201, 156, 51, 0.015)', borderColor: 'rgba(201, 156, 51, 0.12)' }}>
-                    <div className="remarks-title" style={{ color: 'var(--primary-dark)' }}>
-                      <MessageSquare size={16} /> 📝 General Remarks
-                    </div>
-                    <div className="remarks-content">
-                      {remarks.general_remarks?.trim() ? remarks.general_remarks : <span className="remarks-empty">No general remarks recorded yet.</span>}
-                    </div>
-                  </div>
-
-                  {/* Mock Interview */}
-                  <div className="remarks-card" style={{ background: 'rgba(201, 156, 51, 0.015)', borderColor: 'rgba(201, 156, 51, 0.12)' }}>
-                    <div className="remarks-title" style={{ color: 'var(--primary-dark)' }}>
-                      <Award size={16} /> 👔 Mock Interview (Score: {remarks.mock_interview_mark !== null && remarks.mock_interview_mark !== undefined ? `${remarks.mock_interview_mark}` : 'N/A'})
-                    </div>
-                    <div className="remarks-content">
-                      {remarks.mock_interview_remark?.trim() ? remarks.mock_interview_remark : <span className="remarks-empty">No feedback recorded yet.</span>}
-                    </div>
-                  </div>
-
-                  {/* Industrial Visit */}
-                  <div className="remarks-card" style={{ background: 'rgba(201, 156, 51, 0.015)', borderColor: 'rgba(201, 156, 51, 0.12)' }}>
-                    <div className="remarks-title" style={{ color: 'var(--primary-dark)' }}>
-                      <Compass size={16} /> 🚌 Industrial Visit (Score: {remarks.industrial_visit_mark !== null && remarks.industrial_visit_mark !== undefined ? `${remarks.industrial_visit_mark}` : 'N/A'})
-                    </div>
-                    <div className="remarks-content">
-                      {remarks.industrial_visit_remark?.trim() ? remarks.industrial_visit_remark : <span className="remarks-empty">No feedback recorded yet.</span>}
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1.5rem', textAlign: 'center', background: 'rgba(201, 156, 51, 0.02)', borderRadius: '16px', border: '1px dashed rgba(201, 156, 51, 0.2)', marginTop: '1rem' }}>
-                <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(201, 156, 51, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
-                  <MessageSquare size={28} className="text-primary" />
-                </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 0.4rem 0', color: 'var(--text-main)' }}>Remarks will appear here</h4>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '400px', margin: 0 }}>
-                  Once logged by your course instructors, your strengths, weaknesses, and career counseling remarks will be shown here.
-                </p>
-              </div>
-            );
-          })()}
-
-        </div>
-      )}
-
-        {/* --- CAREER & CONTACT PROFILE --- */}
-        <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
-                <Briefcase size={20} className="text-primary" /> Career & Contact Profile
-              </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
-                Keep your contact info and career status updated for placement tracking and coordination.
-              </p>
-            </div>
-            {!showProfileForm && (
-              <button 
-                onClick={() => setShowProfileForm(true)} 
-                className="btn btn-outline" 
-                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', borderColor: 'var(--primary)', color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Edit Profile Info
-              </button>
+                <button 
+                  onClick={() => setActiveTab('appeals')} 
+                  className={`nav-tab-btn ${activeTab === 'appeals' ? 'active' : ''}`}
+                >
+                  Appeals
+                </button>
+                <button 
+                  onClick={() => setActiveTab('profile')} 
+                  className={`nav-tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
+                >
+                  Profile
+                </button>
+              </>
             )}
           </div>
 
-          {careerMessage && (
-            <div style={{ 
-              padding: '0.75rem', 
-              borderRadius: '8px', 
-              marginBottom: '1rem', 
-              fontSize: '0.85rem', 
-              background: careerMessage.includes('❌') ? 'rgba(220,38,38,0.1)' : 'rgba(34,197,94,0.1)', 
-              color: careerMessage.includes('❌') ? '#dc2626' : '#16a34a',
-              fontWeight: 600
-            }}>
-              {careerMessage}
-            </div>
-          )}
-
-          {!showProfileForm ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', fontSize: '0.85rem' }}>
-              {/* Contact & Address Summary */}
-              <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, color: 'var(--primary-dark)' }}>📞 Contact & Address</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div><strong>Mobile:</strong> {mobileNumber || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not provided</span>}</div>
-                  <div><strong>WhatsApp:</strong> {whatsappNumber || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not provided</span>}</div>
-                  <div>
-                    <strong>Address:</strong>
-                    {(houseName || street || locality || district || stateStr || pincode) ? (
-                      <div style={{ marginTop: '0.2rem', paddingLeft: '0.5rem', borderLeft: '2px solid rgba(201,156,51,0.2)', color: 'var(--text-main)' }}>
-                        {houseName && <p style={{ margin: 0 }}>{houseName}</p>}
-                        {street && <p style={{ margin: 0 }}>{street}</p>}
-                        {locality && <p style={{ margin: 0 }}>{locality}</p>}
-                        {(district || stateStr) && <p style={{ margin: 0 }}>{[district, stateStr].filter(Boolean).join(', ')}</p>}
-                        {pincode && <p style={{ margin: 0 }}>PIN: {pincode}</p>}
-                        {hometown && <p style={{ margin: 0 }}>Hometown: {hometown}</p>}
-                      </div>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginLeft: '0.2rem' }}>Not provided</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Prior Work Experience Summary */}
-              <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, color: 'var(--primary-dark)' }}>💼 Prior Work Experience</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div><strong>Total Experience:</strong> {totalExperienceYears || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not specified</span>}</div>
-                  <div>
-                    <strong>Experience Details:</strong>
-                    {experienceDetails ? (
-                      <div style={{ marginTop: '0.2rem', paddingLeft: '0.5rem', borderLeft: '2px solid rgba(201,156,51,0.2)', color: 'var(--text-main)' }}>
-                        {experienceDetails}
-                      </div>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginLeft: '0.2rem' }}>None logged</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Career Status Summary */}
-              <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, color: 'var(--primary-dark)' }}>💼 Career Status</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div>
-                    <strong>Employment Status:</strong>{' '}
-                    <span style={{
-                      padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700,
-                      background: employmentStatus === 'employed' || employmentStatus === 'employed_looking' ? 'rgba(34,197,94,0.1)' : 'rgba(0,0,0,0.05)',
-                      color: employmentStatus === 'employed' || employmentStatus === 'employed_looking' ? '#16a34a' : 'var(--text-main)'
-                    }}>
-                      {({
-                        unemployed_looking: 'Unemployed (Seeking Job)',
-                        unemployed_not_looking: 'Unemployed (Not Seeking)',
-                        employed: 'Employed / Self-Employed (Not Seeking)',
-                        employed_looking: 'Employed (Looking for Opportunities)',
-                        higher_studies: 'Higher Studies'
-                      })[employmentStatus] || employmentStatus}
-                    </span>
-                  </div>
-
-                  {(employmentStatus === 'employed' || employmentStatus === 'employed_looking') && (
-                    <>
-                      <div><strong>Job Title:</strong> {currentJobTitle || <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
-                      <div><strong>Company:</strong> {currentCompany || <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
-                      <div><strong>Work Location:</strong> {currentWorkLocation || <span style={{ color: 'var(--text-muted)' }}>-</span>}</div>
-                    </>
-                  )}
-
-                  <div>
-                    <strong>Preferred Work Location:</strong>{' '}
-                    {({
-                      near_home: 'Near Home / Local',
-                      india: 'Anywhere in India',
-                      abroad: 'Abroad / GCC',
-                      anywhere: 'Anywhere / Flexible'
-                    })[preferredLocation] || preferredLocation}
-                  </div>
-                  <div><strong>Preferred Roles:</strong> {preferredRoles || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not specified</span>}</div>
-                  <div><strong>Key Skills:</strong> {skillsLearned || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not specified</span>}</div>
-                  <div>
-                    <strong>LinkedIn Profile:</strong>{' '}
-                    {linkedinUrl ? (
-                      <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-dark)', fontWeight: 600 }}>
-                        View Profile
-                      </a>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not linked</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Marital & Spouse Details Summary */}
-              <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, color: 'var(--primary-dark)' }}>💍 Marital & Family</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <div><strong>Marital Status:</strong> <span style={{ textTransform: 'capitalize' }}>{maritalStatus}</span></div>
-                  {maritalStatus === 'married' && (
-                    <>
-                      <div><strong>Spouse Name:</strong> {spouseName || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not provided</span>}</div>
-                      <div><strong>Spouse Work:</strong> {spouseProfession || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not provided</span>}</div>
-                      <div><strong>Spouse Company:</strong> {spouseCompany || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not provided</span>}</div>
-                      <div><strong>Spouse Work Place:</strong> {spouseWorkLocation || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not provided</span>}</div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-            </div>
-          ) : (
-            <form onSubmit={handleSaveCareerProfile} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                <div className="form-group">
-                  <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Mobile Number *</label>
-                  <input type="tel" required value={mobileNumber} onChange={e => setMobileNumber(e.target.value)} style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }} />
-                </div>
-                <div className="form-group">
-                  <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>WhatsApp Number *</label>
-                  <input type="tel" required value={whatsappNumber} onChange={e => setWhatsAppNumber(e.target.value)} style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }} />
-                </div>
-                <div className="form-group">
-                  <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Hometown</label>
-                  <input type="text" value={hometown} onChange={e => setHometown(e.target.value)} style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }} placeholder="e.g. Kozhikode" />
-                </div>
-              </div>
-
-              {/* Address Fields */}
-              <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem' }}>📬 Complete Address Details</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>House Name/No.</label>
-                    <input type="text" value={houseName} onChange={e => setHouseName(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Street/Road</label>
-                    <input type="text" value={street} onChange={e => setStreet(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Locality/City</label>
-                    <input type="text" value={locality} onChange={e => setLocality(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>District</label>
-                    <input type="text" value={district} onChange={e => setDistrict(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>State</label>
-                    <input type="text" value={stateStr} onChange={e => setStateStr(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Pincode</label>
-                    <input type="text" value={pincode} onChange={e => setPincode(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Prior Work Experience */}
-              <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem' }}>💼 Prior Work Experience</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 650, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Total Experience *</label>
-                    <select value={totalExperienceYears} onChange={e => setTotalExperienceYears(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: 'white' }} required>
-                      <option value="">Select Experience...</option>
-                      <option value="None / Fresher">None / Fresher</option>
-                      <option value="6 Months">6 Months</option>
-                      <option value="1 Year">1 Year</option>
-                      <option value="2 Years">2 Years</option>
-                      <option value="3-5 Years">3-5 Years</option>
-                      <option value="5+ Years">5+ Years</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Prior Experience Details</label>
-                    <textarea value={experienceDetails} onChange={e => setExperienceDetails(e.target.value)} rows={2} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', resize: 'vertical' }} placeholder="e.g. 1 year as Arabic Translator, freelancer..." />
-                  </div>
-                </div>
-              </div>
-
-              {/* Marital & Spouse Details */}
-              <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem' }}>💍 Marital & Family Details</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: maritalStatus === 'married' ? '1rem' : '0' }}>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 650, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Marital Status</label>
-                    <select value={maritalStatus} onChange={e => setMaritalStatus(e.target.value as any)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: 'white' }}>
-                      <option value="single">Single / Unmarried</option>
-                      <option value="married">Married</option>
-                    </select>
-                  </div>
-                  
-                  {maritalStatus === 'married' && (
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Spouse's Name</label>
-                      <input type="text" value={spouseName} onChange={e => setSpouseName(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="Spouse's full name" />
-                    </div>
-                  )}
-                </div>
-
-                {maritalStatus === 'married' && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Spouse's Occupation/Work</label>
-                      <input type="text" value={spouseProfession} onChange={e => setSpouseProfession(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. Teacher, Software Engineer" />
-                    </div>
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Spouse's Employer / Company</label>
-                      <input type="text" value={spouseCompany} onChange={e => setSpouseCompany(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. Government School, TCS" />
-                    </div>
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Spouse's Working Place (City/Country)</label>
-                      <input type="text" value={spouseWorkLocation} onChange={e => setSpouseWorkLocation(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. Calicut, Dubai" />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Career Fields */}
-              <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
-                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem' }}>💼 Placement & Career Details</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 650, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Employment Status</label>
-                    <select value={employmentStatus} onChange={e => setEmploymentStatus(e.target.value as any)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: 'white' }}>
-                      <option value="unemployed_looking">Unemployed (Actively Looking)</option>
-                      <option value="unemployed_not_looking">Unemployed (Not Looking)</option>
-                      <option value="employed">Employed (Not Looking for Job)</option>
-                      <option value="employed_looking">Employed (Looking for Opportunities)</option>
-                      <option value="higher_studies">Higher Studies</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 650, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Work Location Preference</label>
-                    <select value={preferredLocation} onChange={e => setPreferredLocation(e.target.value as any)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', background: 'white' }}>
-                      <option value="near_home">Near Home / Local Area</option>
-                      <option value="india">Anywhere in India</option>
-                      <option value="abroad">Abroad / GCC / International</option>
-                      <option value="anywhere">Anywhere (Flexible)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {(employmentStatus === 'employed' || employmentStatus === 'employed_looking') && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Job Title</label>
-                      <input type="text" value={currentJobTitle} onChange={e => setCurrentJobTitle(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. Arabic Translator" />
-                    </div>
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Employer / Company Name</label>
-                      <input type="text" value={currentCompany} onChange={e => setCurrentCompany(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. Global Tech Solutions" />
-                    </div>
-                    <div className="form-group">
-                      <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Work Location (City/Country)</label>
-                      <input type="text" value={currentWorkLocation} onChange={e => setCurrentWorkLocation(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. Bangalore, India" />
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Preferred Roles / Fields</label>
-                    <input type="text" value={preferredRoles} onChange={e => setPreferredRoles(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. Translation, Web Development, Teaching" />
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>LinkedIn Profile URL</label>
-                    <input type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="https://linkedin.com/in/username" />
-                  </div>
-                </div>
-
-                <div className="form-group" style={{ marginTop: '1rem' }}>
-                  <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Skills & Specializations</label>
-                  <textarea value={skillsLearned} onChange={e => setSkillsLearned(e.target.value)} rows={2} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', resize: 'vertical' }} placeholder="e.g. Content writing, public speaking, React.js, translation" />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.8rem', borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: '1rem' }}>
-                <button 
-                  type="button" 
-                  onClick={() => setShowProfileForm(false)} 
-                  className="btn btn-outline" 
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', color: '#64748b', borderColor: '#cbd5e1', cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={savingCareer} 
-                  className="btn btn-primary" 
-                  style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  {savingCareer ? 'Saving...' : 'Save Profile'}
-                </button>
-              </div>
-            </form>
-          )}
-        </div>
-
-        {/* --- APPEALS & CORRECTION REQUESTS --- */}
-        {currentStudent.status !== 'alumni' && (
-          <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '2rem', marginTop: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
-                <HelpCircle size={20} className="text-primary" /> Appeals & Correction Requests
-              </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
-                Submit a request if you notice any discrepancies in your attendance, daily checklist tasks, or exam scores.
-              </p>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+            <span className="desktop-nav" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+              {currentStudent.name}
+            </span>
             <button 
-              onClick={() => {
-                setAppealDate(new Date().toISOString().split('T')[0]);
-                handleAppealTypeChange('attendance');
-                setAppealReason('');
-                setShowAppealModal(true);
-              }} 
+              onClick={handleLogout} 
               className="btn btn-outline" 
-              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', borderColor: 'var(--primary)', color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, cursor: 'pointer' }}
+              style={{ 
+                padding: '0.35rem 0.75rem', 
+                fontSize: '0.75rem', 
+                color: '#dc2626', 
+                borderColor: '#fca5a5',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                cursor: 'pointer'
+              }}
             >
-              <Plus size={16} /> New Appeal Request
+              <LogOut size={12} /> Sign Out
             </button>
           </div>
-
-          {loadingAppeals ? (
-            <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>Loading appeals...</div>
-          ) : appeals.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', background: 'rgba(0,0,0,0.02)', borderRadius: '12px', color: 'var(--text-muted)', fontSize: '0.85rem', fontStyle: 'italic' }}>
-              No correction requests submitted yet.
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto', background: 'white', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.05)' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-light)', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700 }}>Date</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700 }}>Category</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700 }}>Activity Name</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 700 }}>Current</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 700 }}>Expected</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700 }}>Reason</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 700 }}>Status</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700 }}>Response Feedback</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {appeals.map((app) => {
-                    let statusColor = '#eab308'; // yellow for pending
-                    let statusBg = 'rgba(234, 179, 8, 0.1)';
-                    if (app.status === 'approved') {
-                      statusColor = '#16a34a'; // green
-                      statusBg = 'rgba(22, 163, 74, 0.1)';
-                    } else if (app.status === 'rejected') {
-                      statusColor = '#dc2626'; // red
-                      statusBg = 'rgba(220, 38, 38, 0.1)';
-                    }
-
-                    return (
-                      <tr key={app.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                        <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>{new Date(app.logged_date).toLocaleDateString()}</td>
-                        <td style={{ padding: '0.75rem 1rem', textTransform: 'capitalize', fontWeight: 600 }}>{app.request_type}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{app.activity_name}</td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', color: '#64748b' }}>{app.current_value}</td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center', fontWeight: 700, color: 'var(--primary-dark)' }}>{app.expected_value}</td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={app.reason}>{app.reason}</td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                          <span style={{ display: 'inline-block', padding: '0.2rem 0.5rem', borderRadius: '50px', fontSize: '0.75rem', fontWeight: 700, color: statusColor, background: statusBg }}>
-                            {app.status}
-                          </span>
-                        </td>
-                        <td style={{ padding: '0.75rem 1rem', color: '#334155', fontStyle: app.admin_remark ? 'normal' : 'italic' }}>
-                          {app.admin_remark || <span style={{ color: '#94a3b8' }}>Pending review...</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
+
+        {/* Alumni Global Welcome Banner */}
+        {currentStudent.status === 'alumni' && (
+          <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 15px 35px rgba(201, 156, 51, 0.1)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
+            <div className="hero-blob" style={{ width: '300px', height: '300px', top: '-50px', right: '-50px', background: 'radial-gradient(circle, rgba(201,156,51,0.15) 0%, rgba(253,251,247,0) 70%)' }}></div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', position: 'relative', zIndex: 10 }}>
+              <div style={{ flex: '1 1 500px' }}>
+                <span className="badge" style={{ background: 'rgba(201,156,51,0.15)', color: 'var(--primary-dark)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                  {currentStudent.courses?.name} • Batch {currentStudent.batch_number} {currentStudent.roll_number && `• Roll #${currentStudent.roll_number}`}
+                </span>
+                <h1 className="heading-xl" style={{ margin: '0.5rem 0 0.3rem 0', fontSize: '2rem', lineHeight: '1.1' }}>
+                  Hello, <span className="text-gradient">{currentStudent.name}</span>
+                </h1>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                  Email: <strong>{currentStudent.email}</strong>
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '140px', gap: '0.4rem' }}>
+                <div 
+                  style={{
+                    width: '100px', height: '100px', borderRadius: '50%',
+                    background: 'white', border: '5px solid var(--primary)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 8px 20px rgba(201, 156, 51, 0.15)', position: 'relative'
+                  }}
+                >
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Status</span>
+                  <GraduationCap size={32} style={{ color: 'var(--primary)', marginTop: '0.2rem' }} />
+                </div>
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary-dark)', textAlign: 'center' }}>Academy Alumnus</span>
+              </div>
+            </div>
+          </div>
         )}
 
-      </div>
+        {/* Tab Contents */}
+        {activeTab === 'progress' && (
+          <div>
+            {/* Welcome & Gamified Badge Banner (specific to progress tab) */}
+            {currentStudent.status !== 'alumni' && (
+              <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 15px 35px rgba(201, 156, 51, 0.1)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
+                <div className="hero-blob" style={{ width: '300px', height: '300px', top: '-50px', right: '-50px', background: 'radial-gradient(circle, rgba(201,156,51,0.15) 0%, rgba(253,251,247,0) 70%)' }}></div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', position: 'relative', zIndex: 10 }}>
+                  <div style={{ flex: '1 1 500px' }}>
+                    <span className="badge" style={{ background: 'rgba(201,156,51,0.15)', color: 'var(--primary-dark)', fontWeight: 700, fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                      {currentStudent.courses?.name} • Batch {currentStudent.batch_number}
+                    </span>
+                    <h1 className="heading-xl" style={{ margin: '0.5rem 0 0.8rem 0', fontSize: '2rem', lineHeight: '1.1' }}>
+                      Hello, <span className="text-gradient">{currentStudent.name}</span>
+                    </h1>
+                    
+                    <div style={{ marginTop: '1.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                        <span>Level {myLevel} Scholar</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{xpInCurrentLevel}/100 XP to Level {myLevel + 1}</span>
+                      </div>
+                      <div style={{ height: '10px', background: 'rgba(0,0,0,0.06)', borderRadius: '10px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${levelProgressPercent}%`, background: 'linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%)', borderRadius: '10px', transition: 'width 0.5s ease-out' }}></div>
+                      </div>
+                    </div>
+                  </div>
 
-      {/* --- APPEAL SUBMISSION MODAL --- */}
-      {showAppealModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '500px', padding: '2rem', position: 'relative', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 20px 40px rgba(0,0,0,0.15)', background: 'white' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: '0.8rem', marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <HelpCircle className="text-primary" /> Request Correction / Appeal
-            </h3>
-
-            <form onSubmit={handleSubmitAppeal} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div className="form-group">
-                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Request Category</label>
-                <select 
-                  value={appealType} 
-                  onChange={(e) => handleAppealTypeChange(e.target.value as any)} 
-                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.9rem', background: 'white' }}
-                >
-                  <option value="attendance">Attendance Correction</option>
-                  <option value="checklist">Weekly Checklist Task (Vocab/Sentences/etc)</option>
-                  <option value="scoring">Scoring / Marks (Exam/Talk/etc)</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Date of Activity</label>
-                <input 
-                  type="date" 
-                  required 
-                  value={appealDate} 
-                  onChange={(e) => setAppealDate(e.target.value)} 
-                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.9rem' }}
-                />
-              </div>
-
-              <div className="form-group">
-                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Activity / Exam Name</label>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="e.g. Attendance, Daily Vocab, Exam: Grammar 1" 
-                  value={appealActivity} 
-                  onChange={(e) => setAppealActivity(e.target.value)} 
-                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.9rem' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Recorded Status</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="e.g. Absent, Incomplete, 0/10" 
-                    value={appealCurrentValue} 
-                    onChange={(e) => setAppealCurrentValue(e.target.value)} 
-                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.9rem' }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Correct Expected Value</label>
-                  <input 
-                    type="text" 
-                    required 
-                    placeholder="e.g. Present, Completed, 8/10" 
-                    value={appealExpectedValue} 
-                    onChange={(e) => setAppealExpectedValue(e.target.value)} 
-                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.9rem' }}
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '140px', gap: '0.4rem' }}>
+                    <div 
+                      style={{
+                        width: '100px', height: '100px', borderRadius: '50%',
+                        background: 'white', border: '5px solid',
+                        borderImageSource: myBadge.border, borderImageSlice: 1,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: `0 8px 20px ${myBadge.shadow}`, position: 'relative',
+                        borderStyle: 'solid'
+                      }}
+                    >
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Rank</span>
+                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-main)', lineHeight: '1' }}>#{myRank || '-'}</span>
+                    </div>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary-dark)', textAlign: 'center' }}>{myBadge.text}</span>
+                  </div>
                 </div>
               </div>
+            )}
 
-              <div className="form-group">
-                <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.3rem' }}>Reason for Correction</label>
-                <textarea 
-                  required 
-                  placeholder="Explain why this needs correction (e.g. 'I uploaded it on time but it is marked pending' or 'I was present but marked absent')" 
-                  value={appealReason} 
-                  onChange={(e) => setAppealReason(e.target.value)} 
-                  rows={3} 
-                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.9rem', resize: 'vertical' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.8rem', marginTop: '1rem', borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: '1rem' }}>
-                <button 
-                  type="button" 
-                  onClick={() => setShowAppealModal(false)} 
-                  className="btn btn-outline" 
-                  style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', color: '#64748b', borderColor: '#cbd5e1', cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={submittingAppeal} 
-                  className="btn btn-primary" 
-                  style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  {submittingAppeal ? 'Submitting...' : 'Submit Request'}
-                </button>
-              </div>
-            </form>
+            <StudentProgress
+              currentStudent={currentStudent}
+              recentLogs={recentLogs}
+              weeklyStatus={weeklyStatus}
+              remarks={remarks}
+              intervals={intervals}
+              selectedInterval={selectedInterval}
+              handleIntervalChange={handleIntervalChange}
+              attendanceRate={attendanceRate}
+              onTimeCount={onTimeCount}
+              lateCount={lateCount}
+              halfDayCount={halfDayCount}
+              absentCount={absentCount}
+              presentDays={presentDays}
+              totalWorkingDays={totalWorkingDays}
+              totalPenaltiesCount={totalPenaltiesCount}
+              examAvg={examAvg}
+              examLogs={examLogs}
+              talkAvg={talkAvg}
+              vocabCount={vocabCount}
+              totalVocab={totalVocab}
+              sentencesCount={sentencesCount}
+              totalSentences={totalSentences}
+              vlogCount={vlogCount}
+              totalVlog={totalVlog}
+              videoReactionCount={videoReactionCount}
+              totalReaction={totalReaction}
+              hadithulArabiaCount={hadithulArabiaCount}
+              totalHadithul={totalHadithul}
+              handleOpenAppealForDate={handleOpenAppealForDate}
+              handlePrintReport={handlePrintReport}
+              getDatesRange={getDatesRange}
+            />
           </div>
+        )}
+
+        {activeTab === 'leaderboard' && (
+          <StudentLeaderboard
+            currentStudent={currentStudent}
+            leaderboard={leaderboard}
+            intervals={intervals}
+            selectedInterval={selectedInterval}
+            handleIntervalChange={handleIntervalChange}
+          />
+        )}
+
+        {activeTab === 'appeals' && currentStudent.status !== 'alumni' && (
+          <StudentAppeals
+            studentId={currentStudent.id}
+            studentName={currentStudent.name}
+            prefillData={prefillAppeal}
+            onClearPrefill={() => setPrefillAppeal(null)}
+          />
+        )}
+
+        {activeTab === 'profile' && (
+          <StudentProfileView
+            currentStudent={currentStudent}
+            onProfileUpdate={(updatedStudent) => {
+              setCurrentStudent(updatedStudent);
+            }}
+          />
+        )}
+
+        {/* Mobile Fixed Bottom Navigation Bar */}
+        <div className="mobile-bottom-nav">
+          {currentStudent.status === 'alumni' ? (
+            <>
+              <button 
+                onClick={() => setActiveTab('profile')} 
+                className={`mobile-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
+              >
+                <GraduationCap size={22} />
+                <span>Placement Profile</span>
+              </button>
+              <button 
+                onClick={() => setActiveTab('progress')} 
+                className={`mobile-nav-item ${activeTab === 'progress' ? 'active' : ''}`}
+              >
+                <TrendingUp size={22} />
+                <span>Academic Archive</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button 
+                onClick={() => setActiveTab('progress')} 
+                className={`mobile-nav-item ${activeTab === 'progress' ? 'active' : ''}`}
+              >
+                <TrendingUp size={22} />
+                <span>Progress</span>
+              </button>
+              <button 
+                onClick={() => setActiveTab('leaderboard')} 
+                className={`mobile-nav-item ${activeTab === 'leaderboard' ? 'active' : ''}`}
+              >
+                <Award size={22} />
+                <span>Leaderboard</span>
+              </button>
+              <button 
+                onClick={() => setActiveTab('appeals')} 
+                className={`mobile-nav-item ${activeTab === 'appeals' ? 'active' : ''}`}
+              >
+                <HelpCircle size={22} />
+                <span>Appeals</span>
+              </button>
+              <button 
+                onClick={() => setActiveTab('profile')} 
+                className={`mobile-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
+              >
+                <GraduationCap size={22} />
+                <span>Profile</span>
+              </button>
+            </>
+          )}
         </div>
-      )}
+
+      </div>
     </div>
   );
 };
