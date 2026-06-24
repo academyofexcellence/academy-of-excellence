@@ -322,7 +322,7 @@ const AdminLogin = () => {
         </div>
 
         <h2 className="heading-lg text-center mb-2" style={{ fontSize: '1.6rem' }}>
-          Operations <span className="text-primary">{activeTab === 'login' ? 'Portal' : 'Registration'}</span>
+          Academy <span className="text-primary">{activeTab === 'login' ? 'Portal' : 'Registration'}</span>
         </h2>
         <p className="text-center" style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
           {activeTab === 'login' ? 'Sign in to access your student leaderboard or staff console.' : 'Submit a registration request to access the platform.'}
@@ -859,7 +859,7 @@ const AdminLogin = () => {
           )}
 
           <button type="submit" className="btn btn-primary mt-2" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
-            {loading ? 'Processing...' : activeTab === 'login' ? 'Sign In' : 'Request Roster Access'}
+            {loading ? 'Processing...' : activeTab === 'login' ? 'Sign In' : 'Submit Registration Request'}
           </button>
         </form>
       </div>
