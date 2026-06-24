@@ -581,7 +581,7 @@ const Home = () => {
                   </div>
                   <div>
                     <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.6 }}>Campus Location</p>
-                    <p style={{ margin: 0, fontWeight: 600 }}>2nd Floor, Excellency Plaza, Calicut, Kerala</p>
+                    <p style={{ margin: 0, fontWeight: 600 }}>3rd floor, Rf property, near Lulu Mall, Bypass Junction, Mankave, Kozhikode, Kerala 673007</p>
                   </div>
                 </div>
               </div>
