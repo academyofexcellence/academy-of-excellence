@@ -737,6 +737,74 @@ html {
   }
 }
 
+/* Responsive registration form grids */
+.reg-grid-course-batch-roll {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+
+.reg-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.reg-grid-3col {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.reg-grid-address-3col {
+  display: grid;
+  grid-template-columns: 1.5fr 1.5fr 1fr;
+  gap: 0.8rem;
+}
+
+.reg-grid-experience {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 0.8rem;
+}
+
+.reg-grid-skills-linkedin {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.reg-grid-marital-married {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.reg-grid-spouse-job {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 1fr;
+  gap: 0.8rem;
+}
+
+@media (max-width: 768px) {
+  .reg-grid-course-batch-roll,
+  .reg-grid-2col,
+  .reg-grid-3col,
+  .reg-grid-address-3col,
+  .reg-grid-experience,
+  .reg-grid-skills-linkedin,
+  .reg-grid-marital-married,
+  .reg-grid-spouse-job {
+    grid-template-columns: 1fr !important;
+    gap: 0.8rem !important;
+  }
+}
+
 
 
 

@@ -405,7 +405,7 @@ const AdminLogin = () => {
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+              <div className="reg-grid-course-batch-roll">
                 <div className="form-group">
                   <label style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.3rem', display: 'block' }}>Select Course</label>
                   <select
@@ -454,7 +454,7 @@ const AdminLogin = () => {
               <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
                 <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>🏠 Contact & Address Details</h4>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                <div className="reg-grid-2col">
                   <div className="form-group">
                     <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Mobile Number *</label>
                     <input 
@@ -481,7 +481,7 @@ const AdminLogin = () => {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                <div className="reg-grid-3col">
                   <div className="form-group">
                     <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Hometown *</label>
                     <input 
@@ -518,7 +518,7 @@ const AdminLogin = () => {
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr', gap: '0.8rem' }}>
+                <div className="reg-grid-address-3col">
                   <div className="form-group">
                     <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Locality/PO *</label>
                     <input 
@@ -562,7 +562,7 @@ const AdminLogin = () => {
               <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
                 <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>💼 Prior Work Experience</h4>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.8rem' }}>
+                <div className="reg-grid-experience">
                   <div className="form-group">
                     <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Total Experience *</label>
                     <select
@@ -601,7 +601,7 @@ const AdminLogin = () => {
                   <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
                     <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>🚀 Career & Placement Details</h4>
                     
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                    <div className="reg-grid-2col">
                       <div className="form-group">
                         <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Employment Status *</label>
                         <select
@@ -636,7 +636,7 @@ const AdminLogin = () => {
                     </div>
 
                     {employmentStatus === 'employed' && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                      <div className="reg-grid-3col">
                         <div className="form-group">
                           <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Current Job Title *</label>
                           <input 
@@ -676,7 +676,7 @@ const AdminLogin = () => {
                       </div>
                     )}
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
+                    <div className="reg-grid-skills-linkedin">
                       <div className="form-group">
                         <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Skills & Specializations</label>
                         <input 
@@ -718,7 +718,10 @@ const AdminLogin = () => {
                   <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
                     <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>❤️ Family & Spouse Details</h4>
                     
-                    <div style={{ display: 'grid', gridTemplateColumns: maritalStatus === 'married' ? '1fr 1.5fr' : '1fr', gap: '0.8rem', marginBottom: maritalStatus === 'married' ? '0.8rem' : '0' }}>
+                    <div 
+                      className={maritalStatus === 'married' ? "reg-grid-marital-married" : ""}
+                      style={{ marginBottom: maritalStatus === 'married' ? '0.8rem' : '0' }}
+                    >
                       <div className="form-group">
                         <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Marital Status *</label>
                         <select
@@ -750,7 +753,7 @@ const AdminLogin = () => {
                     </div>
 
                     {maritalStatus === 'married' && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 1fr', gap: '0.8rem' }}>
+                      <div className="reg-grid-spouse-job">
                         <div className="form-group">
                           <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Spouse's Occupation</label>
                           <input 
