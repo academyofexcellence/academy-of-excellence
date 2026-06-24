@@ -9,7 +9,7 @@
       "type": "image/svg+xml"
     },
     {
-      "src": "https://rcppfmlyvackmemjousp.supabase.co/storage/v1/object/public/gallery-images/academylogom.svg",
+      "src": "/pwa-icon.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
