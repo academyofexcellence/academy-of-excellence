@@ -928,97 +928,14 @@ const AdminDashboard = () => {
 
   const fetchLeaderboardData = async (intervalId: string, courseId: string, batchNumber: number): Promise<LeaderboardEntry[]> => {
     try {
-      // Fetch all active students in batch
-      const { data: students } = await supabase
-        .from('student_profiles')
-        .select('id, name')
-        .eq('course_id', courseId)
-        .eq('batch_number', batchNumber)
-        .eq('status', 'active');
-
-      if (!students) return [];
-
-      // Fetch all scores for this interval (or query all intervals if cumulative)
-      let scoresData: any[] = [];
-      const studentIds = students.map(s => s.id);
-
-      if (studentIds.length > 0) {
-        let intervalIds: string[] = [];
-        if (intervalId === 'cumulative') {
-          const { data: intervals } = await supabase
-            .from('scoring_intervals')
-            .select('id')
-            .eq('course_id', courseId)
-            .eq('batch_number', batchNumber);
-          intervalIds = intervals?.map(i => i.id) || [];
-        } else {
-          intervalIds = [intervalId];
-        }
-
-        if (intervalIds.length > 0) {
-          let from = 0;
-          const pageSize = 1000;
-          let hasMore = true;
-
-          while (hasMore) {
-            const { data: pageData, error } = await supabase
-              .from('scores')
-              .select('student_id, points')
-              .in('interval_id', intervalIds)
-              .in('student_id', studentIds)
-              .range(from, from + pageSize - 1);
-
-            if (error) throw error;
-            if (pageData && pageData.length > 0) {
-              scoresData = [...scoresData, ...pageData];
-              from += pageSize;
-              if (pageData.length < pageSize) {
-                hasMore = false;
-              }
-            } else {
-              hasMore = false;
-            }
-          }
-        }
-      }
-
-      const scoreMap: { [key: string]: number } = {};
-      students.forEach(s => { scoreMap[s.id] = 0; });
-
-      if (scoresData.length > 0) {
-        scoresData.forEach(s => {
-          if (scoreMap[s.student_id] !== undefined) {
-            scoreMap[s.student_id] += s.points;
-          }
-        });
-      }
-
-      // Format & Rank entries
-      const entries: LeaderboardEntry[] = students.map(s => {
-        const total = scoreMap[s.id];
-        const computedLevel = Math.max(1, Math.floor(total / 100) + 1);
-        return {
-          student_id: s.id,
-          name: s.name,
-          total_score: total,
-          level: computedLevel,
-          rank: 0
-        };
+      const { data, error } = await supabase.rpc('get_leaderboard', {
+        p_interval_id: intervalId,
+        p_course_id: courseId,
+        p_batch_number: batchNumber
       });
 
-      // Sort by score desc
-      entries.sort((a, b) => b.total_score - a.total_score);
-
-      // Assign ranks (handle ties)
-      let currentRank = 1;
-      for (let i = 0; i < entries.length; i++) {
-        if (i > 0 && entries[i].total_score < entries[i - 1].total_score) {
-          currentRank += 1;
-        }
-        entries[i].rank = currentRank;
-      }
-
-      return entries;
+      if (error) throw error;
+      return data || [];
     } catch (err) {
       console.error('Error fetching leaderboard data:', err);
       return [];

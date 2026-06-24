@@ -726,80 +726,14 @@ const StudentDashboard = () => {
 
   const fetchLeaderboard = async (intervalId: string, courseId: string, batchNumber: number) => {
     try {
-      // Fetch all students in batch
-      const { data: students } = await supabase
-        .from('student_profiles')
-        .select('id, name')
-        .eq('course_id', courseId)
-        .eq('batch_number', batchNumber)
-        .eq('status', 'active');
-
-      if (!students) return;
-
-      // Fetch all scores for this interval (or query all intervals if cumulative)
-      let scoresData: any[] = [];
-      if (intervalId === 'cumulative') {
-        const { data: intervals } = await supabase
-          .from('scoring_intervals')
-          .select('id')
-          .eq('course_id', courseId)
-          .eq('batch_number', batchNumber);
-        
-        const intervalIds = intervals?.map(i => i.id) || [];
-        if (intervalIds.length > 0) {
-          const { data: scores } = await supabase
-            .from('scores')
-            .select('student_id, points')
-            .in('interval_id', intervalIds)
-            .limit(20000);
-          if (scores) scoresData = scores;
-        }
-      } else {
-        const { data: scores } = await supabase
-          .from('scores')
-          .select('student_id, points')
-          .eq('interval_id', intervalId)
-          .limit(20000);
-        if (scores) scoresData = scores;
-      }
-
-      const scoreMap: { [key: string]: number } = {};
-      students.forEach(s => { scoreMap[s.id] = 0; });
-
-      if (scoresData.length > 0) {
-        scoresData.forEach(s => {
-          if (scoreMap[s.student_id] !== undefined) {
-            scoreMap[s.student_id] += s.points;
-          }
-        });
-      }
-
-      // Format & Rank entries
-      const entries: LeaderboardEntry[] = students.map(s => {
-        const total = scoreMap[s.id];
-        const computedLevel = Math.max(1, Math.floor(total / 100) + 1);
-        return {
-          student_id: s.id,
-          name: s.name,
-          total_score: total,
-          level: computedLevel,
-          rank: 0 // Will assign below
-        };
+      const { data, error } = await supabase.rpc('get_leaderboard', {
+        p_interval_id: intervalId,
+        p_course_id: courseId,
+        p_batch_number: batchNumber
       });
 
-      // Sort by score desc
-      entries.sort((a, b) => b.total_score - a.total_score);
-
-      // Assign ranks (handle ties)
-      let currentRank = 1;
-      for (let i = 0; i < entries.length; i++) {
-        if (i > 0 && entries[i].total_score < entries[i - 1].total_score) {
-          currentRank += 1;
-        }
-        entries[i].rank = currentRank;
-      }
-
-      setLeaderboard(entries);
+      if (error) throw error;
+      setLeaderboard(data || []);
     } catch (err) {
       console.error(err);
     }
@@ -807,17 +741,38 @@ const StudentDashboard = () => {
 
   const fetchLogsAndWeeklyCheckins = async (studentId: string, intervalId: string) => {
     try {
-      const { data: logs } = await supabase
-        .from('scores')
-        .select('*')
-        .eq('student_id', studentId)
-        .order('created_at', { ascending: false });
+      let allLogs: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (logs) {
-        if (intervalId === 'cumulative') {
-          setRecentLogs(logs);
+      while (hasMore) {
+        const { data: pageData, error } = await supabase
+          .from('scores')
+          .select('*')
+          .eq('student_id', studentId)
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+        if (pageData && pageData.length > 0) {
+          allLogs = [...allLogs, ...pageData];
+          from += pageSize;
+          if (pageData.length < pageSize) {
+            hasMore = false;
+          }
         } else {
-          setRecentLogs(logs.filter(log => log.interval_id === intervalId));
+          hasMore = false;
+        }
+      }
+
+      if (allLogs.length > 0) {
+        allLogs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        if (intervalId === 'cumulative') {
+          setRecentLogs(allLogs);
+        } else {
+          setRecentLogs(allLogs.filter(log => log.interval_id === intervalId));
         }
 
         // Calculate weekly status
@@ -845,7 +800,7 @@ const StudentDashboard = () => {
           sentenceMap[d] = false;
         });
 
-        logs.forEach(log => {
+        allLogs.forEach(log => {
           const logDateStr = log.logged_date;
           if (weekDates.includes(logDateStr)) {
             if (log.score_type === 'daily_vocab') vocabMap[logDateStr] = true;
@@ -870,6 +825,8 @@ const StudentDashboard = () => {
           videoReaction: hasVideoReaction,
           hadithulArabia: hasHadithulArabia
         });
+      } else {
+        setRecentLogs([]);
       }
     } catch (err) {
       console.error(err);
