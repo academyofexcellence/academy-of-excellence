@@ -128,20 +128,13 @@ const Home = () => {
     };
 
     const fetchVisitors = async () => {
-      const mockVisitors = [
-        { id: '1', name: 'Dr. Faisal Basheer', designation: 'Native Arab Professor', organization: 'University of Riyadh', image_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80' },
-        { id: '2', name: 'Sheikh Hamdan', designation: 'Operations Director', organization: 'Al Thewakkal Group, Dubai', image_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&h=150&q=80' },
-        { id: '3', name: 'Ahmed Al Mansoor', designation: 'Chief Quality Analyst', organization: 'Amazon Middle East', image_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150&q=80' }
-      ];
       try {
         const { data } = await supabase.from('visitors').select('*');
-        if (data && data.length > 0) {
+        if (data) {
           setVisitors(data);
-        } else {
-          setVisitors(mockVisitors);
         }
       } catch (err) {
-        setVisitors(mockVisitors);
+        console.error('Error fetching visitors:', err);
       } finally {
         setLoadingVisitors(false);
       }
@@ -514,17 +507,15 @@ const Home = () => {
       </section>
 
       {/* Guests, Leaders & Mentors Section */}
-      <section className="section-padding" style={{ backgroundColor: 'rgba(255, 255, 255, 0.4)' }}>
-        <div className="container">
-          <div className="text-center mb-4">
-            <span className="badge">Esteemed Guests</span>
-            <h2 className="heading-lg">Guests, Leaders & <span className="text-gradient">Mentors</span></h2>
-            <p className="subtitle">Inspiring personalities and industry leaders who visited our academy to guide students</p>
-          </div>
+      {!loadingVisitors && visitors.length > 0 && (
+        <section className="section-padding" style={{ backgroundColor: 'rgba(255, 255, 255, 0.4)' }}>
+          <div className="container">
+            <div className="text-center mb-4">
+              <span className="badge">Esteemed Guests</span>
+              <h2 className="heading-lg">Guests, Leaders & <span className="text-gradient">Mentors</span></h2>
+              <p className="subtitle">Inspiring personalities and industry leaders who visited our academy to guide students</p>
+            </div>
 
-          {loadingVisitors ? (
-            <div className="text-center py-4" style={{ color: 'var(--text-muted)' }}>Loading visitors...</div>
-          ) : (
             <div className="grid grid-3" style={{ marginTop: '3rem', gap: '2rem' }}>
               {visitors.map(visitor => (
                 <div key={visitor.id} className="glass-card text-center visitor-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.3s ease' }}>
@@ -542,9 +533,9 @@ const Home = () => {
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
       {/* Enquiry Form Section */}
       <section id="enquiry" className="section-padding" style={{ backgroundColor: 'var(--bg-dark)', color: 'white', position: 'relative', overflow: 'hidden' }}>
