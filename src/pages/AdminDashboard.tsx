@@ -223,7 +223,13 @@ const AdminDashboard = () => {
             applicant_name,
             applicant_mobile,
             message,
-            created_at
+            created_at,
+            student_profiles (
+              batch_number,
+              courses: course_id (
+                name
+              )
+            )
           )
         `)
         .order('created_at', { ascending: false });
@@ -3815,6 +3821,10 @@ const AdminDashboard = () => {
 
   const isLeadership = currentUser.role !== 'staff';
 
+  const pendingJobsCount = jobPosts.filter(j => j.status === 'pending').length;
+  const totalApplicationsCount = jobPosts.reduce((acc, job) => acc + (job.job_applications?.length || 0), 0);
+  const careersNotificationCount = pendingJobsCount + totalApplicationsCount;
+
   return (
     <div className="bg-grid-pattern admin-dashboard-layout">
       <div className="container" style={{ maxWidth: '1150px' }}>
@@ -3943,10 +3953,21 @@ const AdminDashboard = () => {
               padding: '0.8rem 1.2rem', background: 'none', border: 'none',
               borderBottom: adminTab === 'careers' ? '3px solid var(--primary)' : '3px solid transparent',
               color: adminTab === 'careers' ? 'var(--primary-dark)' : 'var(--text-muted)',
-              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem',
+              position: 'relative'
             }}
           >
             <Briefcase size={16} /> Careers & Alumni
+            {careersNotificationCount > 0 && (
+              <span style={{
+                position: 'absolute', top: '0.2rem', right: '0.2rem',
+                background: '#dc2626', color: 'white', fontSize: '0.65rem',
+                fontWeight: 800, padding: '0.15rem 0.35rem', borderRadius: '50px',
+                lineHeight: 1
+              }}>
+                {careersNotificationCount}
+              </span>
+            )}
           </button>
 
           {isLeadership && (

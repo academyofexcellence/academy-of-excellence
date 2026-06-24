@@ -756,6 +756,11 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
                                 <div style={{ flex: 1, minWidth: '200px' }}>
                                   <div style={{ fontWeight: 700, fontSize: '0.8rem' }}>
                                     {app.applicant_name}
+                                    {app.student_profiles && (
+                                      <span style={{ fontSize: '0.72rem', color: 'var(--primary-dark)', marginLeft: '0.4rem', fontWeight: 650 }}>
+                                        (Batch {app.student_profiles.batch_number} • {app.student_profiles.courses?.name})
+                                      </span>
+                                    )}
                                     {app.applicant_mobile && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: '0.5rem' }}>📞 {app.applicant_mobile}</span>}
                                   </div>
                                   {app.message && (

@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS public.job_contact_info (
 CREATE TABLE IF NOT EXISTS public.job_applications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID REFERENCES public.job_posts(id) ON DELETE CASCADE NOT NULL,
-    applicant_id UUID NOT NULL,
+    applicant_id UUID REFERENCES public.student_profiles(id) ON DELETE CASCADE NOT NULL,
     applicant_name TEXT NOT NULL,
     applicant_mobile TEXT,
     message TEXT,
