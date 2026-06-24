@@ -24,8 +24,11 @@ import {
   Award,
   Printer,
   HelpCircle,
-  Download
+  Download,
+  Bell,
+  BellOff
 } from 'lucide-react';
+import { requestAndSubscribePush, unsubscribePush } from '../lib/pushNotifications';
 import { AnalyticsHub } from '../components/dashboard/AnalyticsHub';
 import { ClassroomGrading } from '../components/dashboard/ClassroomGrading';
 import { DirectoryHub } from '../components/dashboard/DirectoryHub';
@@ -159,6 +162,45 @@ const AdminDashboard = () => {
       });
     } else {
       alert("To install this app on your home screen:\n\n📱 iOS (Safari):\n1. Tap the Share button at the bottom.\n2. Scroll down and select 'Add to Home Screen'.\n\n🤖 Android (Chrome):\n1. Tap the 3 dots in the top right.\n2. Select 'Install app' or 'Add to Home Screen'.");
+    }
+  };
+
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      checkNotificationState();
+    }
+  }, [currentUser?.id]);
+
+  const checkNotificationState = async () => {
+    if ('serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        setPushSubscribed(!!sub);
+      } catch (err) {
+        console.error('Error checking subscription:', err);
+      }
+    }
+  };
+
+  const handleToggleNotifications = async () => {
+    if (!currentUser) return;
+    setNotificationLoading(true);
+    try {
+      if (pushSubscribed) {
+        const success = await unsubscribePush(currentUser.id);
+        if (success) setPushSubscribed(false);
+      } else {
+        const success = await requestAndSubscribePush(currentUser.id);
+        if (success) setPushSubscribed(true);
+      }
+    } catch (err) {
+      console.error('Error toggling push notifications:', err);
+    } finally {
+      setNotificationLoading(false);
     }
   };
 
@@ -3664,7 +3706,7 @@ const AdminDashboard = () => {
               Title: <strong>{currentUser.designation || 'Staff Member'}</strong> • System ID: <code style={{ fontSize: '0.8rem' }}>{currentUser.id.substring(0,8)}</code>
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
             {showInstallBtn && (
               <button
                 onClick={handleInstallApp}
@@ -3683,7 +3725,29 @@ const AdminDashboard = () => {
                 📥 Install App
               </button>
             )}
-            <button onClick={handleLogout} className="btn btn-outline" style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem', color: '#dc2626', borderColor: '#fca5a5' }}>
+            <button
+              onClick={handleToggleNotifications}
+              disabled={notificationLoading}
+              className="btn btn-outline"
+              style={{
+                padding: '0.6rem 1.2rem',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontWeight: 700,
+                background: pushSubscribed ? 'rgba(239, 68, 68, 0.1)' : 'rgba(201, 156, 51, 0.1)',
+                color: pushSubscribed ? '#dc2626' : 'var(--primary-dark)',
+                border: pushSubscribed ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(201, 156, 51, 0.3)',
+                borderRadius: '50px',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              {pushSubscribed ? <BellOff size={16} /> : <Bell size={16} />}
+              {notificationLoading ? 'Processing...' : pushSubscribed ? 'Disable Alerts' : 'Enable Alerts'}
+            </button>
+            <button onClick={handleLogout} className="btn btn-outline" style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem', color: '#dc2626', borderColor: '#fca5a5', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <LogOut size={16} /> Logout
             </button>
           </div>
