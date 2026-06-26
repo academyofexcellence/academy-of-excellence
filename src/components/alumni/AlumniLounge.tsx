@@ -9,7 +9,7 @@ interface AlumniLoungeProps {
 }
 
 export const AlumniLounge: React.FC<AlumniLoungeProps> = ({ currentUserId, isStaffOrAdmin }) => {
-  const [subTab, setSubTab] = useState<'directory' | 'feed'>('directory');
+  const [subTab, setSubTab] = useState<'directory' | 'feed'>('feed');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -36,28 +36,6 @@ export const AlumniLounge: React.FC<AlumniLoungeProps> = ({ currentUserId, isSta
         }}
       >
         <button
-          onClick={() => setSubTab('directory')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            padding: '0.5rem 1.2rem',
-            borderRadius: '8px',
-            border: 'none',
-            background: subTab === 'directory' ? 'white' : 'transparent',
-            boxShadow: subTab === 'directory' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-            color: subTab === 'directory' ? 'var(--primary-dark)' : 'var(--text-muted)',
-            fontWeight: 700,
-            fontSize: '0.82rem',
-            cursor: 'pointer',
-            transition: 'background 0.2s, color 0.2s'
-          }}
-        >
-          <Users size={16} />
-          <span>Alumni Directory</span>
-        </button>
-
-        <button
           onClick={() => setSubTab('feed')}
           style={{
             display: 'flex',
@@ -77,6 +55,28 @@ export const AlumniLounge: React.FC<AlumniLoungeProps> = ({ currentUserId, isSta
         >
           <MessagesSquare size={16} />
           <span>Discussion Board</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('directory')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            padding: '0.5rem 1.2rem',
+            borderRadius: '8px',
+            border: 'none',
+            background: subTab === 'directory' ? 'white' : 'transparent',
+            boxShadow: subTab === 'directory' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+            color: subTab === 'directory' ? 'var(--primary-dark)' : 'var(--text-muted)',
+            fontWeight: 700,
+            fontSize: '0.82rem',
+            cursor: 'pointer',
+            transition: 'background 0.2s, color 0.2s'
+          }}
+        >
+          <Users size={16} />
+          <span>Alumni Directory</span>
         </button>
       </div>
 

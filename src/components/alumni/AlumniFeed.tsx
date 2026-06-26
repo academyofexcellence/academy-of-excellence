@@ -14,6 +14,9 @@ export const AlumniFeed: React.FC<AlumniFeedProps> = ({ currentUserId, isStaffOr
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryType>('general');
   
+  // Server-side pagination limit for post feeds
+  const [postsLimit, setPostsLimit] = useState(15);
+  
   // New Post Form
   const [postContent, setPostContent] = useState('');
   const [submittingPost, setSubmittingPost] = useState(false);
@@ -26,7 +29,7 @@ export const AlumniFeed: React.FC<AlumniFeedProps> = ({ currentUserId, isStaffOr
 
   useEffect(() => {
     fetchPosts();
-  }, [activeCategory]);
+  }, [activeCategory, postsLimit]);
 
   const fetchPosts = async () => {
     setLoadingPosts(true);
@@ -48,7 +51,7 @@ export const AlumniFeed: React.FC<AlumniFeedProps> = ({ currentUserId, isStaffOr
         `)
         .eq('category', activeCategory)
         .order('created_at', { ascending: false })
-        .limit(50); // Keep result set small to minimize server payload
+        .limit(postsLimit);
 
       if (error) throw error;
       setPosts(data || []);
@@ -279,7 +282,7 @@ export const AlumniFeed: React.FC<AlumniFeedProps> = ({ currentUserId, isStaffOr
         ].map(cat => (
           <button
             key={cat.id}
-            onClick={() => setActiveCategory(cat.id as CategoryType)}
+            onClick={() => { setActiveCategory(cat.id as CategoryType); setPostsLimit(15); }}
             style={{
               padding: '0.6rem 1rem',
               background: 'none',
@@ -350,7 +353,8 @@ export const AlumniFeed: React.FC<AlumniFeedProps> = ({ currentUserId, isStaffOr
           No conversations here yet. Be the first to start the discussion!
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {posts.map((post) => {
             const author = post.author || {};
             const isAuthor = post.author_id === currentUserId;
@@ -566,7 +570,27 @@ export const AlumniFeed: React.FC<AlumniFeedProps> = ({ currentUserId, isStaffOr
               </div>
             );
           })}
-        </div>
+          </div>
+          {posts.length === postsLimit && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+              <button
+                onClick={() => setPostsLimit(prev => prev + 15)}
+                className="btn btn-outline"
+                style={{
+                  borderColor: 'var(--primary-dark)',
+                  color: 'var(--primary-dark)',
+                  padding: '0.5rem 1.5rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  borderRadius: '50px',
+                  cursor: 'pointer'
+                }}
+              >
+                Load More Posts
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

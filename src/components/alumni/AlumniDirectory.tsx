@@ -16,6 +16,13 @@ export const AlumniDirectory: React.FC<AlumniDirectoryProps> = ({ currentUserId 
   const [courseFilter, setCourseFilter] = useState('');
   const [mentoringOnly, setMentoringOnly] = useState(false);
   
+  // Client-side pagination limit to avoid DOM overloading
+  const [visibleCount, setVisibleCount] = useState(24);
+
+  useEffect(() => {
+    setVisibleCount(24);
+  }, [search, batchFilter, courseFilter, mentoringOnly]);
+  
   // Available batches and courses for filter dropdowns
   const [batches, setBatches] = useState<number[]>([]);
   const [courses, setCourses] = useState<string[]>([]);
@@ -193,14 +200,15 @@ export const AlumniDirectory: React.FC<AlumniDirectoryProps> = ({ currentUserId 
           No alumni profiles match your search criteria.
         </div>
       ) : (
-        <div 
-          style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
-            gap: '1.2rem' 
-          }}
-        >
-          {filteredAlumni.map((item) => {
+        <>
+          <div 
+            style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', 
+              gap: '1.2rem' 
+            }}
+          >
+          {filteredAlumni.slice(0, visibleCount).map((item) => {
             const student = item.student || {};
             const isEmployed = item.employment_status === 'employed' || item.employment_status === 'employed_looking';
             
@@ -392,7 +400,27 @@ export const AlumniDirectory: React.FC<AlumniDirectoryProps> = ({ currentUserId 
               </div>
             );
           })}
-        </div>
+          </div>
+          {filteredAlumni.length > visibleCount && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem' }}>
+              <button
+                onClick={() => setVisibleCount(prev => prev + 24)}
+                className="btn btn-outline"
+                style={{
+                  borderColor: 'var(--primary-dark)',
+                  color: 'var(--primary-dark)',
+                  padding: '0.6rem 2rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  borderRadius: '50px',
+                  cursor: 'pointer'
+                }}
+              >
+                Load More Alumni ({filteredAlumni.length - visibleCount} remaining)
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
