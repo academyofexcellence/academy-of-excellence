@@ -26,7 +26,8 @@ import {
   HelpCircle,
   Download,
   Bell,
-  BellOff
+  BellOff,
+  MessageSquare
 } from 'lucide-react';
 import { requestAndSubscribePush, unsubscribePush } from '../lib/pushNotifications';
 import { AnalyticsHub } from '../components/dashboard/AnalyticsHub';
@@ -34,6 +35,7 @@ import { ClassroomGrading } from '../components/dashboard/ClassroomGrading';
 import { DirectoryHub } from '../components/dashboard/DirectoryHub';
 import { PlacementsHub } from '../components/dashboard/PlacementsHub';
 import { OperationsHub } from '../components/dashboard/OperationsHub';
+import { AlumniLounge } from '../components/alumni/AlumniLounge';
 
 interface StaffProfile {
   id: string;
@@ -334,7 +336,7 @@ const AdminDashboard = () => {
   };
 
   // Tab navigation states
-  const [adminTab, setAdminTab] = useState<'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations'>('dashboard');
+  const [adminTab, setAdminTab] = useState<'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge'>('dashboard');
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
 
   // UI State Messages
@@ -3970,6 +3972,18 @@ const AdminDashboard = () => {
             )}
           </button>
 
+          <button 
+            onClick={() => setAdminTab('alumnilounge')}
+            style={{
+              padding: '0.8rem 1.2rem', background: 'none', border: 'none',
+              borderBottom: adminTab === 'alumnilounge' ? '3px solid var(--primary)' : '3px solid transparent',
+              color: adminTab === 'alumnilounge' ? 'var(--primary-dark)' : 'var(--text-muted)',
+              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+            }}
+          >
+            <MessageSquare size={16} /> Alumni Lounge
+          </button>
+
           {isLeadership && (
             <>
               <button 
@@ -4202,6 +4216,10 @@ const AdminDashboard = () => {
             handleDeleteJob={handleDeleteJob}
             handleCreateJobAdmin={handleCreateJobAdmin}
           />
+        )}
+
+        {adminTab === 'alumnilounge' && (
+          <AlumniLounge currentUserId={currentUser?.id || ''} isStaffOrAdmin={true} />
         )}
 
         {isLeadership && adminTab === 'operations' && (

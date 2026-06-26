@@ -46,6 +46,8 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
   const [currentWorkLocation, setCurrentWorkLocation] = useState('');
   const [skillsLearned, setSkillsLearned] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [isOpenToMentoring, setIsOpenToMentoring] = useState(false);
+  const [showContactLinks, setShowContactLinks] = useState(true);
 
   // Spouse & Family States
   const [maritalStatus, setMaritalStatus] = useState<'single' | 'married'>('single');
@@ -120,6 +122,8 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
         setCurrentWorkLocation(data.current_work_location || '');
         setSkillsLearned(data.skills_learned || '');
         setLinkedinUrl(data.linkedin_url || '');
+        setIsOpenToMentoring(!!data.is_open_to_mentoring);
+        setShowContactLinks(data.show_contact_links !== false);
         setMaritalStatus(data.marital_status || 'single');
         setSpouseName(data.spouse_name || '');
         setSpouseProfession(data.spouse_profession || '');
@@ -188,6 +192,8 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
           current_work_location: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentWorkLocation : null,
           skills_learned: skillsLearned,
           linkedin_url: linkedinUrl,
+          is_open_to_mentoring: isOpenToMentoring,
+          show_contact_links: showContactLinks,
           marital_status: maritalStatus,
           spouse_name: maritalStatus === 'married' ? spouseName : null,
           spouse_profession: maritalStatus === 'married' ? spouseProfession : null,
@@ -388,6 +394,8 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
                   <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not linked</span>
                 )}
               </div>
+              <div><strong>Available for Mentoring:</strong> {isOpenToMentoring ? '✅ Yes' : '❌ No'}</div>
+              <div><strong>Show Contact Links:</strong> {showContactLinks ? '✅ Yes' : '❌ No'}</div>
             </div>
           </div>
 
@@ -574,6 +582,30 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
             <div style={{ marginTop: '1rem' }}>
               <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Skills & Specializations</label>
               <textarea value={skillsLearned} onChange={e => setSkillsLearned(e.target.value)} rows={2} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', resize: 'vertical' }} placeholder="e.g. Arabic translation, React, public speaking..." />
+            </div>
+
+            {/* Mentoring & Contact privacy settings */}
+            <div style={{ marginTop: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', background: 'rgba(0,0,0,0.01)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: 700, fontSize: '0.95rem', color: 'var(--primary-dark)' }}>💬 Networking & Mentoring Toggles</h4>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none' }}>
+                <input 
+                  type="checkbox" 
+                  checked={isOpenToMentoring} 
+                  onChange={e => setIsOpenToMentoring(e.target.checked)} 
+                  style={{ accentColor: 'var(--primary-dark)', cursor: 'pointer' }}
+                />
+                <strong>Available for Mentoring & Guidance</strong> (Shows a 🎓 Mentor badge on your profile card)
+              </label>
+              
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none' }}>
+                <input 
+                  type="checkbox" 
+                  checked={showContactLinks} 
+                  onChange={e => setShowContactLinks(e.target.checked)} 
+                  style={{ accentColor: 'var(--primary-dark)', cursor: 'pointer' }}
+                />
+                <strong>Show connection links (WhatsApp/LinkedIn)</strong> to other verified alumni/students
+              </label>
             </div>
           </div>
 
