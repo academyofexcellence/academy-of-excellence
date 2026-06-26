@@ -36,6 +36,8 @@ import { DirectoryHub } from '../components/dashboard/DirectoryHub';
 import { PlacementsHub } from '../components/dashboard/PlacementsHub';
 import { OperationsHub } from '../components/dashboard/OperationsHub';
 import { AlumniLounge } from '../components/alumni/AlumniLounge';
+import { PlacementTracker } from '../components/dashboard/PlacementTracker';
+import { MeetingMinutes } from '../components/dashboard/MeetingMinutes';
 
 interface StaffProfile {
   id: string;
@@ -336,8 +338,9 @@ const AdminDashboard = () => {
   };
 
   // Tab navigation states
-  const [adminTab, setAdminTab] = useState<'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge'>('dashboard');
+  const [adminTab, setAdminTab] = useState<'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge' | 'management'>('dashboard');
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
+  const [managementSubTab, setManagementSubTab] = useState<'tracker' | 'minutes'>('tracker');
 
   // UI State Messages
   const [message, setMessage] = useState('');
@@ -3950,6 +3953,18 @@ const AdminDashboard = () => {
           </button>
 
           <button 
+            onClick={() => setAdminTab('management')}
+            style={{
+              padding: '0.8rem 1.2rem', background: 'none', border: 'none',
+              borderBottom: adminTab === 'management' ? '3px solid var(--primary)' : '3px solid transparent',
+              color: adminTab === 'management' ? 'var(--primary-dark)' : 'var(--text-muted)',
+              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+            }}
+          >
+            <ClipboardList size={16} /> Management Board
+          </button>
+
+          <button 
             onClick={() => setAdminTab('careers')}
             style={{
               padding: '0.8rem 1.2rem', background: 'none', border: 'none',
@@ -4201,6 +4216,55 @@ const AdminDashboard = () => {
             handleGraduateBatch={handleGraduateBatch}
             graduatingBatch={graduatingBatch}
           />
+        )}
+
+        {adminTab === 'management' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '2.5rem' }}>
+            <div style={{ display: 'flex', borderBottom: '1px solid rgba(201,156,51,0.2)', marginBottom: '0.5rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setManagementSubTab('tracker')}
+                style={{
+                  padding: '0.6rem 1.2rem',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: managementSubTab === 'tracker' ? '3px solid var(--primary)' : '3px solid transparent',
+                  color: managementSubTab === 'tracker' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+              >
+                <ClipboardList size={16} /> Task & Follow-up Tracker
+              </button>
+              <button
+                onClick={() => setManagementSubTab('minutes')}
+                style={{
+                  padding: '0.6rem 1.2rem',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: managementSubTab === 'minutes' ? '3px solid var(--primary)' : '3px solid transparent',
+                  color: managementSubTab === 'minutes' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+              >
+                <MessageSquare size={16} /> Meeting Minutes
+              </button>
+            </div>
+
+            {managementSubTab === 'tracker' ? (
+              <PlacementTracker currentUserId={currentUser.id} />
+            ) : (
+              <MeetingMinutes />
+            )}
+          </div>
         )}
 
         {adminTab === 'careers' && (

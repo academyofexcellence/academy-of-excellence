@@ -219,10 +219,10 @@ export const PlacementTracker: React.FC<PlacementTrackerProps> = ({ currentUserI
       {/* 📋 Column 1: Placement Task Checklist */}
       <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.5rem', alignSelf: 'start' }}>
         <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <ClipboardList size={18} className="text-primary" /> Placement To-Do List
+          <ClipboardList size={18} className="text-primary" /> Admin To-Do List
         </h3>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '0 0 1.2rem 0' }}>
-          Checklist for coordination items (interview setups, employer contacts).
+          General checklist for tracking tasks, coordination items, and follow-ups.
         </p>
 
         {/* Task Creation Form */}
