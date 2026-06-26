@@ -18,6 +18,9 @@ import {
   Clock
 } from 'lucide-react';
 import { Course } from '../../lib/types';
+import { PlacementTracker } from './PlacementTracker';
+import { MeetingMinutes } from './MeetingMinutes';
+import { ClipboardList, FileText } from 'lucide-react';
 
 interface PlacementsHubProps {
   alumniProfiles: any[];
@@ -44,7 +47,7 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
   handleDeleteJob,
   handleCreateJobAdmin
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'jobboard'>('directory');
+  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'jobboard' | 'tracker' | 'minutes'>('directory');
   
   // Directory state
   const [placementSearch, setPlacementSearch] = useState('');
@@ -228,6 +231,46 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
           }}
         >
           💼 Job Board Management
+        </button>
+        
+        <button
+          onClick={() => setActiveSubTab('tracker')}
+          style={{
+            padding: '0.5rem 1.2rem',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            background: activeSubTab === 'tracker' ? 'var(--primary)' : 'transparent',
+            color: activeSubTab === 'tracker' ? 'white' : 'var(--text-muted)',
+            border: activeSubTab === 'tracker' ? 'none' : '1px solid rgba(201, 156, 51, 0.2)',
+            borderRadius: '50px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.3rem'
+          }}
+        >
+          <ClipboardList size={14} /> Follow-up Tracker
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('minutes')}
+          style={{
+            padding: '0.5rem 1.2rem',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            background: activeSubTab === 'minutes' ? 'var(--primary)' : 'transparent',
+            color: activeSubTab === 'minutes' ? 'white' : 'var(--text-muted)',
+            border: activeSubTab === 'minutes' ? 'none' : '1px solid rgba(201, 156, 51, 0.2)',
+            borderRadius: '50px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.3rem'
+          }}
+        >
+          <FileText size={14} /> Meeting Minutes
         </button>
       </div>
 
@@ -808,6 +851,14 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
           )}
 
         </div>
+      )}
+
+      {activeSubTab === 'tracker' && (
+        <PlacementTracker currentUserId="" />
+      )}
+
+      {activeSubTab === 'minutes' && (
+        <MeetingMinutes />
       )}
 
     </div>
