@@ -448,6 +448,23 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
                                   {alumnus.experience_details && <div style={{ fontSize: '0.7rem', marginTop: '0.1rem', color: '#4b5563' }}>{alumnus.experience_details}</div>}
                                 </div>
                               )}
+                              {(alumnus.education_degree || alumnus.education_pg) && (
+                                <div style={{ fontSize: '0.75rem', marginTop: '0.3rem', background: '#eff6ff', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(59,130,246,0.1)' }}>
+                                  <div style={{ fontWeight: 700, color: '#1d4ed8' }}>🎓 Education</div>
+                                  {alumnus.education_degree && (
+                                    <div style={{ fontSize: '0.7rem' }}>
+                                      <strong>Degree:</strong> {alumnus.education_degree} {alumnus.education_degree_year ? `(${alumnus.education_degree_year})` : ''}
+                                      {alumnus.education_degree_college && <div style={{ color: '#4b5563', paddingLeft: '0.3rem' }}>at {alumnus.education_degree_college}</div>}
+                                    </div>
+                                  )}
+                                  {alumnus.education_pg && (
+                                    <div style={{ fontSize: '0.7rem', marginTop: '0.2rem', paddingTop: '0.2rem', borderTop: '1px dashed rgba(59,130,246,0.15)' }}>
+                                      <strong>PG:</strong> {alumnus.education_pg} {alumnus.education_pg_year ? `(${alumnus.education_pg_year})` : ''}
+                                      {alumnus.education_pg_college && <div style={{ color: '#4b5563', paddingLeft: '0.3rem' }}>at {alumnus.education_pg_college}</div>}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               {alumnus.career?.skills_learned && (
                                 <div style={{ fontSize: '0.75rem', marginTop: '0.3rem', background: '#f8fafc', padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.02)' }}>
                                   <strong>Skills:</strong> {alumnus.career.skills_learned}

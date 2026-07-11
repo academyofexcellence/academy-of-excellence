@@ -33,6 +33,14 @@ const AdminLogin = () => {
   const [totalExperienceYears, setTotalExperienceYears] = useState('');
   const [experienceDetails, setExperienceDetails] = useState('');
 
+  // Educational background states
+  const [educationDegree, setEducationDegree] = useState('');
+  const [educationDegreeCollege, setEducationDegreeCollege] = useState('');
+  const [educationDegreeYear, setEducationDegreeYear] = useState('');
+  const [educationPg, setEducationPg] = useState('');
+  const [educationPgCollege, setEducationPgCollege] = useState('');
+  const [educationPgYear, setEducationPgYear] = useState('');
+
   // Career states (Alumni only)
   const [employmentStatus, setEmploymentStatus] = useState<'unemployed_looking' | 'unemployed_not_looking' | 'employed' | 'employed_looking' | 'higher_studies'>('unemployed_looking');
   const [preferredLocation, setPreferredLocation] = useState<'near_home' | 'india' | 'abroad' | 'anywhere'>('anywhere');
@@ -245,6 +253,13 @@ const AdminLogin = () => {
             // Experience
             total_experience_years: totalExperienceYears,
             experience_details: experienceDetails,
+            // Education Details
+            education_degree: educationDegree || null,
+            education_degree_college: educationDegreeCollege || null,
+            education_degree_year: educationDegreeYear || null,
+            education_pg: educationPg || null,
+            education_pg_college: educationPgCollege || null,
+            education_pg_year: educationPgYear || null,
             // Career Details (if Alumnus)
             employment_status: isAlumniSignup ? employmentStatus : 'unemployed_looking',
             preferred_location: isAlumniSignup ? preferredLocation : 'anywhere',
@@ -303,6 +318,14 @@ const AdminLogin = () => {
     // Reset experience
     setTotalExperienceYears('');
     setExperienceDetails('');
+
+    // Reset education
+    setEducationDegree('');
+    setEducationDegreeCollege('');
+    setEducationDegreeYear('');
+    setEducationPg('');
+    setEducationPgCollege('');
+    setEducationPgYear('');
 
     // Reset career
     setEmploymentStatus('unemployed_looking');
@@ -651,6 +674,87 @@ const AdminLogin = () => {
                       rows={2}
                       style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white', fontSize: '0.8rem', resize: 'vertical' }}
                       placeholder="e.g. 1 year as Arabic Content Writer, freelancer..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 🎓 Educational Status */}
+              <div style={{ background: 'rgba(201, 156, 51, 0.02)', border: '1px solid rgba(201, 156, 51, 0.1)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
+                <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary-dark)' }}>🎓 Educational Status</h4>
+                
+                {/* Degree Section */}
+                <h5 style={{ margin: '0 0 0.5rem 0', fontWeight: 650, fontSize: '0.8rem', color: 'var(--text-main)' }}>Undergraduate Degree / Graduation</h5>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.8rem', marginBottom: '1rem' }}>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Degree Completed</label>
+                    <input 
+                      type="text" 
+                      value={educationDegree}
+                      onChange={(e) => setEducationDegree(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. B.Com, B.A. Arabic"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>College Name</label>
+                    <input 
+                      type="text" 
+                      value={educationDegreeCollege}
+                      onChange={(e) => setEducationDegreeCollege(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. MES College"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Year of Passing</label>
+                    <input 
+                      type="text" 
+                      value={educationDegreeYear}
+                      onChange={(e) => setEducationDegreeYear(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. 2023"
+                    />
+                  </div>
+                </div>
+
+                {/* PG Section */}
+                <h5 style={{ margin: '0.5rem 0 0.5rem 0', fontWeight: 650, fontSize: '0.8rem', color: 'var(--text-main)' }}>Post Graduation / PG (If Completed)</h5>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.8rem' }}>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>PG Completed (Optional)</label>
+                    <input 
+                      type="text" 
+                      value={educationPg}
+                      onChange={(e) => setEducationPg(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. M.A. Arabic, MBA"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>College Name</label>
+                    <input 
+                      type="text" 
+                      value={educationPgCollege}
+                      onChange={(e) => setEducationPgCollege(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. Calicut University Campus"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 600, fontSize: '0.75rem', marginBottom: '0.2rem', display: 'block' }}>Year of Passing</label>
+                    <input 
+                      type="text" 
+                      value={educationPgYear}
+                      onChange={(e) => setEducationPgYear(e.target.value)}
+                      className="form-input"
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}
+                      placeholder="e.g. 2025"
                     />
                   </div>
                 </div>

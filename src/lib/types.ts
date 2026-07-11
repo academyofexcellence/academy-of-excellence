@@ -54,6 +54,12 @@ export interface StudentProfile {
   whatsapp_number?: string;
   total_experience_years?: string;
   experience_details?: string;
+  education_degree?: string;
+  education_degree_college?: string;
+  education_degree_year?: string;
+  education_pg?: string;
+  education_pg_college?: string;
+  education_pg_year?: string;
 }
 
 export interface ScoringInterval {

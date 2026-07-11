@@ -37,6 +37,14 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
   const [totalExperienceYears, setTotalExperienceYears] = useState(currentStudent.total_experience_years || '');
   const [experienceDetails, setExperienceDetails] = useState(currentStudent.experience_details || '');
 
+  // Educational background States
+  const [educationDegree, setEducationDegree] = useState(currentStudent.education_degree || '');
+  const [educationDegreeCollege, setEducationDegreeCollege] = useState(currentStudent.education_degree_college || '');
+  const [educationDegreeYear, setEducationDegreeYear] = useState(currentStudent.education_degree_year || '');
+  const [educationPg, setEducationPg] = useState(currentStudent.education_pg || '');
+  const [educationPgCollege, setEducationPgCollege] = useState(currentStudent.education_pg_college || '');
+  const [educationPgYear, setEducationPgYear] = useState(currentStudent.education_pg_year || '');
+
   // Career States
   const [employmentStatus, setEmploymentStatus] = useState<'unemployed_looking' | 'unemployed_not_looking' | 'employed' | 'employed_looking' | 'higher_studies'>('unemployed_looking');
   const [preferredLocation, setPreferredLocation] = useState<'near_home' | 'india' | 'abroad' | 'anywhere'>('anywhere');
@@ -104,6 +112,12 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
     setWhatsAppNumber(currentStudent.whatsapp_number || '');
     setTotalExperienceYears(currentStudent.total_experience_years || '');
     setExperienceDetails(currentStudent.experience_details || '');
+    setEducationDegree(currentStudent.education_degree || '');
+    setEducationDegreeCollege(currentStudent.education_degree_college || '');
+    setEducationDegreeYear(currentStudent.education_degree_year || '');
+    setEducationPg(currentStudent.education_pg || '');
+    setEducationPgCollege(currentStudent.education_pg_college || '');
+    setEducationPgYear(currentStudent.education_pg_year || '');
 
     try {
       const { data, error } = await supabase
@@ -157,7 +171,13 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
           mobile_number: mobileNumber,
           whatsapp_number: whatsappNumber,
           total_experience_years: totalExperienceYears,
-          experience_details: experienceDetails
+          experience_details: experienceDetails,
+          education_degree: educationDegree || null,
+          education_degree_college: educationDegreeCollege || null,
+          education_degree_year: educationDegreeYear || null,
+          education_pg: educationPg || null,
+          education_pg_college: educationPgCollege || null,
+          education_pg_year: educationPgYear || null
         })
         .eq('id', currentStudent.id);
 
@@ -176,7 +196,13 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
         mobile_number: mobileNumber,
         whatsapp_number: whatsappNumber,
         total_experience_years: totalExperienceYears,
-        experience_details: experienceDetails
+        experience_details: experienceDetails,
+        education_degree: educationDegree,
+        education_degree_college: educationDegreeCollege,
+        education_degree_year: educationDegreeYear,
+        education_pg: educationPg,
+        education_pg_college: educationPgCollege,
+        education_pg_year: educationPgYear
       });
 
       // 2. Upsert Alumni Placement details
@@ -344,6 +370,35 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
             </div>
           </div>
 
+          {/* Academic Background Card */}
+          <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+            <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, color: 'var(--primary-dark)' }}>🎓 Academic Background</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div>
+                <strong>Undergraduate Degree:</strong>{' '}
+                {educationDegree ? (
+                  <span>{educationDegree} {educationDegreeYear ? `(${educationDegreeYear})` : ''}</span>
+                ) : (
+                  <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not specified</span>
+                )}
+              </div>
+              {educationDegreeCollege && (
+                <div><strong>Degree College:</strong> {educationDegreeCollege}</div>
+              )}
+              <div style={{ borderTop: '1px dashed rgba(0,0,0,0.06)', marginTop: '0.3rem', paddingTop: '0.3rem' }}>
+                <strong>Post Graduation (PG):</strong>{' '}
+                {educationPg ? (
+                  <span>{educationPg} {educationPgYear ? `(${educationPgYear})` : ''}</span>
+                ) : (
+                  <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>None logged</span>
+                )}
+              </div>
+              {educationPgCollege && (
+                <div><strong>PG College:</strong> {educationPgCollege}</div>
+              )}
+            </div>
+          </div>
+
           {/* Employment/Placement status */}
           <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
             <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, color: 'var(--primary-dark)' }}>💼 Career Status</h4>
@@ -483,6 +538,45 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
               <div>
                 <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Prior Experience Details</label>
                 <textarea value={experienceDetails} onChange={e => setExperienceDetails(e.target.value)} rows={2} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', resize: 'vertical' }} placeholder="e.g. 1 year as Arabic Translator..." />
+              </div>
+            </div>
+          </div>
+
+          {/* Educational Status */}
+          <div style={{ background: 'rgba(0,0,0,0.01)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)' }}>
+            <h4 style={{ margin: '0 0 0.8rem 0', fontWeight: 700, fontSize: '0.9rem' }}>🎓 Educational Background</h4>
+            
+            {/* Degree Section */}
+            <h5 style={{ margin: '0 0 0.5rem 0', fontWeight: 650, fontSize: '0.8rem', color: 'var(--text-main)' }}>Undergraduate Degree / Graduation</h5>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Degree Completed</label>
+                <input type="text" value={educationDegree} onChange={e => setEducationDegree(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. B.Com, B.A. Arabic" />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>College Name</label>
+                <input type="text" value={educationDegreeCollege} onChange={e => setEducationDegreeCollege(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. MES College" />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Year of Passing</label>
+                <input type="text" value={educationDegreeYear} onChange={e => setEducationDegreeYear(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. 2023" />
+              </div>
+            </div>
+
+            {/* PG Section */}
+            <h5 style={{ margin: '0.5rem 0 0.5rem 0', fontWeight: 650, fontSize: '0.8rem', color: 'var(--text-main)' }}>Post Graduation / PG (If Applicable)</h5>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>PG Course Name</label>
+                <input type="text" value={educationPg} onChange={e => setEducationPg(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. M.A. Arabic, MBA" />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>College Name</label>
+                <input type="text" value={educationPgCollege} onChange={e => setEducationPgCollege(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. Calicut University Campus" />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8rem', marginBottom: '0.2rem' }}>Year of Passing</label>
+                <input type="text" value={educationPgYear} onChange={e => setEducationPgYear(e.target.value)} style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} placeholder="e.g. 2025" />
               </div>
             </div>
           </div>

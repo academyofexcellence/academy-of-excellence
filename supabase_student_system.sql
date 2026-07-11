@@ -151,7 +151,9 @@ BEGIN
         INSERT INTO public.student_profiles (
             id, email, name, course_id, batch_number, status, roll_number, is_alumni_signup,
             hometown, house_name, street, locality, district, state, pincode, mobile_number, whatsapp_number,
-            total_experience_years, experience_details
+            total_experience_years, experience_details,
+            education_degree, education_degree_college, education_degree_year,
+            education_pg, education_pg_college, education_pg_year
         )
         VALUES (
             new.id,
@@ -172,7 +174,13 @@ BEGIN
             new.raw_user_meta_data->>'mobile_number',
             new.raw_user_meta_data->>'whatsapp_number',
             new.raw_user_meta_data->>'total_experience_years',
-            new.raw_user_meta_data->>'experience_details'
+            new.raw_user_meta_data->>'experience_details',
+            new.raw_user_meta_data->>'education_degree',
+            new.raw_user_meta_data->>'education_degree_college',
+            new.raw_user_meta_data->>'education_degree_year',
+            new.raw_user_meta_data->>'education_pg',
+            new.raw_user_meta_data->>'education_pg_college',
+            new.raw_user_meta_data->>'education_pg_year'
         );
         
         -- If registering as alumni, insert their career and spouse details immediately
@@ -464,7 +472,13 @@ ALTER TABLE public.student_profiles
     ADD COLUMN IF NOT EXISTS whatsapp_number TEXT,
     ADD COLUMN IF NOT EXISTS is_alumni_signup BOOLEAN DEFAULT false,
     ADD COLUMN IF NOT EXISTS total_experience_years TEXT,
-    ADD COLUMN IF NOT EXISTS experience_details TEXT;
+    ADD COLUMN IF NOT EXISTS experience_details TEXT,
+    ADD COLUMN IF NOT EXISTS education_degree TEXT,
+    ADD COLUMN IF NOT EXISTS education_degree_college TEXT,
+    ADD COLUMN IF NOT EXISTS education_degree_year TEXT,
+    ADD COLUMN IF NOT EXISTS education_pg TEXT,
+    ADD COLUMN IF NOT EXISTS education_pg_college TEXT,
+    ADD COLUMN IF NOT EXISTS education_pg_year TEXT;
 
 -- Create alumni_profiles table for post-graduation tracking
 CREATE TABLE IF NOT EXISTS public.alumni_profiles (

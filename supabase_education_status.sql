@@ -1,64 +1,13 @@
--- RUN THIS IN YOUR SUPABASE SQL EDITOR
-
--- 1. Alter student_profiles to add work experience columns
+-- Migration: Add detailed educational background to student_profiles
 ALTER TABLE public.student_profiles 
-    ADD COLUMN IF NOT EXISTS total_experience_years TEXT,
-    ADD COLUMN IF NOT EXISTS experience_details TEXT;
+    ADD COLUMN IF NOT EXISTS education_degree TEXT,
+    ADD COLUMN IF NOT EXISTS education_degree_college TEXT,
+    ADD COLUMN IF NOT EXISTS education_degree_year TEXT,
+    ADD COLUMN IF NOT EXISTS education_pg TEXT,
+    ADD COLUMN IF NOT EXISTS education_pg_college TEXT,
+    ADD COLUMN IF NOT EXISTS education_pg_year TEXT;
 
--- 2. Alter alumni_profiles table to add spouse & family tracking columns
-ALTER TABLE public.alumni_profiles 
-    ADD COLUMN IF NOT EXISTS marital_status TEXT DEFAULT 'single' CHECK (marital_status IN ('single', 'married')),
-    ADD COLUMN IF NOT EXISTS spouse_name TEXT,
-    ADD COLUMN IF NOT EXISTS spouse_profession TEXT,
-    ADD COLUMN IF NOT EXISTS spouse_company TEXT,
-    ADD COLUMN IF NOT EXISTS spouse_work_location TEXT;
-
--- Update employment status check constraint
-ALTER TABLE public.alumni_profiles DROP CONSTRAINT IF EXISTS alumni_profiles_employment_status_check;
-ALTER TABLE public.alumni_profiles ADD CONSTRAINT alumni_profiles_employment_status_check
-    CHECK (employment_status IN ('unemployed_looking', 'unemployed_not_looking', 'employed', 'employed_looking', 'higher_studies'));
-
--- 3. Enable students to update their own student_profiles row (contact, address, experience etc.)
-DROP POLICY IF EXISTS "Enable update for users on own profile" ON public.student_profiles;
-CREATE POLICY "Enable update for users on own profile"
-ON public.student_profiles FOR UPDATE
-TO authenticated
-USING (auth.uid() = id)
-WITH CHECK (auth.uid() = id);
-
--- 4. Verify and enable RLS updates for alumni_profiles (just to be safe)
-DROP POLICY IF EXISTS "Enable insert for owners and staff" ON public.alumni_profiles;
-CREATE POLICY "Enable insert for owners and staff" 
-ON public.alumni_profiles FOR INSERT 
-TO authenticated 
-WITH CHECK (
-    auth.uid() = student_id OR 
-    EXISTS (
-        SELECT 1 FROM public.staff_profiles 
-        WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
-    )
-);
-
-DROP POLICY IF EXISTS "Enable update for owners and staff" ON public.alumni_profiles;
-CREATE POLICY "Enable update for owners and staff" 
-ON public.alumni_profiles FOR UPDATE 
-TO authenticated 
-USING (
-    auth.uid() = student_id OR 
-    EXISTS (
-        SELECT 1 FROM public.staff_profiles 
-        WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
-    )
-)
-WITH CHECK (
-    auth.uid() = student_id OR 
-    EXISTS (
-        SELECT 1 FROM public.staff_profiles 
-        WHERE id = auth.uid() AND role IN ('staff', 'gm', 'md', 'director') AND status = 'active'
-    )
-);
-
--- 5. Recreate trigger function public.handle_new_user() to copy signup address/career/spouse/experience metadata
+-- Update trigger function handle_new_user to capture these fields from raw_user_meta_data on signUp
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 DECLARE
@@ -146,15 +95,15 @@ BEGIN
                 new.raw_user_meta_data->>'spouse_work_location'
             );
         END IF;
-        
+
         INSERT INTO public.activity_logs (actor_name, action_type, details)
         VALUES (
             COALESCE(new.raw_user_meta_data->>'name', new.email),
             'student_signup',
             CASE WHEN is_alumni THEN
-                'Registered a new alumni account with career profile details (Pending Approval).'
+                'Registered a new alumni account with career and educational details (Pending Approval).'
             ELSE
-                'Registered a new student account with contact & experience details (Pending Approval).'
+                'Registered a new student account with contact, experience, and educational details (Pending Approval).'
             END
         );
     ELSE
@@ -180,16 +129,3 @@ BEGIN
     RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- 6. Add end_date column to scoring_intervals
-ALTER TABLE public.scoring_intervals ADD COLUMN IF NOT EXISTS end_date DATE;
-
--- 7. (Optional Database Correction Query)
--- If you had scores logged on Term 2 before June 22nd, you can run this query
--- in your SQL Editor to shift those scores back into Term 1:
---
--- UPDATE public.scores
--- SET interval_id = 'YOUR_TERM_1_INTERVAL_UUID'
--- WHERE interval_id = 'YOUR_TERM_2_INTERVAL_UUID'
---   AND logged_date < '2026-06-22';
-

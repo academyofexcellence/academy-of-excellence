@@ -150,6 +150,25 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
   const [galleryTitle, setGalleryTitle] = useState('');
   const [galleryCategory, setGalleryCategory] = useState('activity');
   const [galleryFile, setGalleryFile] = useState<File | null>(null);
+  const [galleryMediaType, setGalleryMediaType] = useState<'image' | 'video'>('image');
+  const [galleryVideoUrl, setGalleryVideoUrl] = useState('');
+
+  const getYouTubeId = (url: string) => {
+    try {
+      let videoId = '';
+      if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split(/[?#]/)[0];
+      } else if (url.includes('youtube.com/watch')) {
+        const urlParams = new URLSearchParams(url.split('?')[1]);
+        videoId = urlParams.get('v') || '';
+      } else if (url.includes('youtube.com/embed/')) {
+        videoId = url.split('youtube.com/embed/')[1].split(/[?#]/)[0];
+      }
+      return videoId;
+    } catch (e) {
+      return '';
+    }
+  };
 
   // Partner states
   const [partnerName, setPartnerName] = useState('');
@@ -208,12 +227,27 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
   // Gallery handlers
   const handleUploadGallery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!galleryFile || !galleryTitle) {
-      alert('Please enter an image title and select a file.');
+    if (!galleryTitle) {
+      alert('Please enter a title.');
       return;
     }
-    const url = await uploadFile(galleryFile, 'gallery');
-    if (!url) return;
+
+    let url = '';
+    if (galleryMediaType === 'image') {
+      if (!galleryFile) {
+        alert('Please select an image file to upload.');
+        return;
+      }
+      const uploadedUrl = await uploadFile(galleryFile, 'gallery');
+      if (!uploadedUrl) return;
+      url = uploadedUrl;
+    } else {
+      if (!galleryVideoUrl) {
+        alert('Please enter a YouTube video URL.');
+        return;
+      }
+      url = galleryVideoUrl;
+    }
 
     const { error } = await supabase.from('gallery').insert([
       { title: galleryTitle, category: galleryCategory, image_url: url }
@@ -222,9 +256,10 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
     if (error) {
       alert(`Error saving gallery item: ${error.message}`);
     } else {
-      await logActivity('gallery_added', `Uploaded new gallery image: "${galleryTitle}"`);
+      await logActivity('gallery_added', `Added gallery ${galleryMediaType}: "${galleryTitle}"`);
       setGalleryTitle('');
       setGalleryFile(null);
+      setGalleryVideoUrl('');
       const el = document.getElementById('gallery-file-input') as HTMLInputElement;
       if (el) el.value = '';
       fetchWebsiteContent();
@@ -818,7 +853,7 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
               <form onSubmit={handleUploadGallery} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', background: 'rgba(0,0,0,0.015)', padding: '0.8rem', borderRadius: '10px', alignItems: 'center' }}>
                 <input 
                   type="text" 
-                  placeholder="Image Title" 
+                  placeholder="Media Title" 
                   value={galleryTitle}
                   onChange={(e) => setGalleryTitle(e.target.value)}
                   required
@@ -833,38 +868,75 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
                   <option value="mock_interview">Mock Interview</option>
                   <option value="cultural">Cultural / Event</option>
                 </select>
-                <input 
-                  type="file" 
-                  id="gallery-file-input"
-                  accept="image/*" 
-                  onChange={(e) => setGalleryFile(e.target.files?.[0] || null)}
-                  required
-                  style={{ fontSize: '0.8rem', outline: 'none' }}
-                />
+                <select
+                  value={galleryMediaType}
+                  onChange={(e) => setGalleryMediaType(e.target.value as any)}
+                  style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none', background: 'white' }}
+                >
+                  <option value="image">Image File</option>
+                  <option value="video">YouTube Video URL</option>
+                </select>
+
+                {galleryMediaType === 'image' ? (
+                  <input 
+                    type="file" 
+                    id="gallery-file-input"
+                    accept="image/*" 
+                    onChange={(e) => setGalleryFile(e.target.files?.[0] || null)}
+                    required
+                    style={{ fontSize: '0.8rem', outline: 'none' }}
+                  />
+                ) : (
+                  <input 
+                    type="url"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={galleryVideoUrl}
+                    onChange={(e) => setGalleryVideoUrl(e.target.value)}
+                    required
+                    style={{ padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none', width: '220px' }}
+                  />
+                )}
+
                 <button type="submit" disabled={galleryUploading} className="btn btn-primary" style={{ padding: '0.4rem 1rem', fontSize: '0.8rem' }}>
-                  <Upload size={14} /> {galleryUploading ? 'Uploading...' : 'Upload Image'}
+                  <Upload size={14} /> {galleryUploading ? 'Saving...' : galleryMediaType === 'image' ? 'Upload Image' : 'Save Video'}
                 </button>
               </form>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.8rem' }}>
-                {galleryItems.map(item => (
-                  <div key={item.id} style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(0,0,0,0.08)', aspectRatio: '4/3' }}>
-                    <img 
-                      src={item.image_url} 
-                      alt="Gallery Item" 
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                    />
-                    <button
-                      onClick={() => handleDeleteGallery(item.id, item.image_url)}
-                      style={{
-                        position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'rgba(220,38,38,0.85)',
-                        border: 'none', borderRadius: '4px', color: 'white', padding: '0.2rem', cursor: 'pointer'
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
+                {galleryItems.map(item => {
+                  const isVideo = item.image_url && (item.image_url.includes('youtube.com') || item.image_url.includes('youtu.be'));
+                  const videoId = isVideo ? getYouTubeId(item.image_url) : '';
+                  const thumbUrl = isVideo ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : item.image_url;
+
+                  return (
+                    <div key={item.id} style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(0,0,0,0.08)', aspectRatio: '4/3' }}>
+                      <img 
+                        src={thumbUrl} 
+                        alt="Gallery Item" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                      {isVideo && (
+                        <div style={{
+                          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'rgba(0,0,0,0.3)', pointerEvents: 'none'
+                        }}>
+                          <span style={{ background: 'rgba(201,156,51,0.9)', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '12px', fontSize: '0.65rem', fontWeight: 'bold' }}>
+                            🎥 Video
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleDeleteGallery(item.id, item.image_url)}
+                        style={{
+                          position: 'absolute', top: '0.3rem', right: '0.3rem', background: 'rgba(220,38,38,0.85)',
+                          border: 'none', borderRadius: '4px', color: 'white', padding: '0.2rem', cursor: 'pointer', zIndex: 10
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

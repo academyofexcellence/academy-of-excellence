@@ -95,6 +95,12 @@ interface StudentProfile {
   whatsapp_number?: string;
   total_experience_years?: string;
   experience_details?: string;
+  education_degree?: string;
+  education_degree_college?: string;
+  education_degree_year?: string;
+  education_pg?: string;
+  education_pg_college?: string;
+  education_pg_year?: string;
 }
 
 interface ScoringInterval {
@@ -3254,6 +3260,8 @@ const AdminDashboard = () => {
       'Name', 'Email', 'Course', 'Batch', 'Roll Number', 'Mobile Number', 'WhatsApp Number', 
       'Total Experience Years', 'Prior Experience Details',
       'Hometown', 'House Name', 'Street', 'Locality', 'District', 'State', 'Pincode',
+      'Education Degree', 'Education Degree College', 'Education Degree Year',
+      'Education PG', 'Education PG College', 'Education PG Year',
       'Employment Status', 'Preferred Location', 'Preferred Roles', 'Current Job Title', 
       'Current Company', 'Current Work Location', 'Skills Learned', 'LinkedIn URL',
       'Marital Status', 'Spouse Name', 'Spouse Profession', 'Spouse Company', 'Spouse Work Location'
@@ -3276,6 +3284,12 @@ const AdminDashboard = () => {
       alumnus.district || '',
       alumnus.state || '',
       alumnus.pincode || '',
+      alumnus.education_degree || '',
+      alumnus.education_degree_college || '',
+      alumnus.education_degree_year || '',
+      alumnus.education_pg || '',
+      alumnus.education_pg_college || '',
+      alumnus.education_pg_year || '',
       alumnus.career?.employment_status || 'unemployed_looking',
       alumnus.career?.preferred_location || 'anywhere',
       alumnus.career?.preferred_roles || '',

@@ -13,26 +13,33 @@ const Gallery = () => {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const getYouTubeId = (url: string) => {
+    try {
+      let videoId = '';
+      if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split(/[?#]/)[0];
+      } else if (url.includes('youtube.com/watch')) {
+        const urlParams = new URLSearchParams(url.split('?')[1]);
+        videoId = urlParams.get('v') || '';
+      } else if (url.includes('youtube.com/embed/')) {
+        videoId = url.split('youtube.com/embed/')[1].split(/[?#]/)[0];
+      }
+      return videoId;
+    } catch (e) {
+      return '';
+    }
+  };
+
   useEffect(() => {
     const fetchGallery = async () => {
-      // Temporary mock data so the page looks beautiful before Supabase is connected
-      const mockData: GalleryItem[] = [
-        { id: '1', title: 'Team Building Activity', category: 'activity', image_url: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=800&q=80' },
-        { id: '2', title: 'Creative Session', category: 'activity', image_url: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=800&q=80' },
-        { id: '3', title: 'Mock Interview Prep', category: 'mock_interview', image_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=800&q=80' },
-        { id: '4', title: 'Group Discussion', category: 'activity', image_url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80' },
-      ];
-      
       try {
-        const { data } = await supabase.from('gallery').select('*');
-        if (data && data.length > 0) {
+        const { data, error } = await supabase.from('gallery').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        if (data) {
           setItems(data);
-        } else {
-          setItems(mockData); 
         }
       } catch (err) {
-        // If Supabase is not connected yet, show mock data
-        setItems(mockData);
+        console.error('Error fetching gallery:', err);
       } finally {
         setLoading(false);
       }
@@ -54,28 +61,53 @@ const Gallery = () => {
 
         {loading ? (
           <div className="text-center py-5">Loading gallery...</div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-5" style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>
+            No media items uploaded yet. Admin can upload images and link YouTube videos from the dashboard.
+          </div>
         ) : (
           <div className="grid grid-2" style={{ gap: '2rem' }}>
-            {items.map(item => (
-              <div key={item.id} className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div 
-                  style={{ 
-                    height: '300px', 
-                    backgroundImage: `url(${item.image_url})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    transition: 'transform 0.5s ease'
-                  }}
-                  className="gallery-img"
-                />
-                <div style={{ padding: '1.5rem' }}>
-                  <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--primary)', fontWeight: 700 }}>
-                    {item.category.replace('_', ' ')}
-                  </span>
-                  <h3 style={{ marginTop: '0.5rem' }}>{item.title}</h3>
+            {items.map(item => {
+              const isVideo = item.image_url && (item.image_url.includes('youtube.com') || item.image_url.includes('youtu.be'));
+              const videoId = isVideo ? getYouTubeId(item.image_url) : '';
+              const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : '';
+
+              return (
+                <div key={item.id} className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {isVideo ? (
+                    <div style={{ height: '300px', width: '100%', overflow: 'hidden', background: '#000' }}>
+                      <iframe 
+                        width="100%" 
+                        height="100%" 
+                        src={embedUrl} 
+                        title={item.title} 
+                        frameBorder="0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                        allowFullScreen
+                        style={{ border: 'none' }}
+                      />
+                    </div>
+                  ) : (
+                    <div 
+                      style={{ 
+                        height: '300px', 
+                        backgroundImage: `url(${item.image_url})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        transition: 'transform 0.5s ease'
+                      }}
+                      className="gallery-img"
+                    />
+                  )}
+                  <div style={{ padding: '1.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--primary)', fontWeight: 700 }}>
+                      {item.category.replace('_', ' ')} {isVideo && '• 🎥 Video'}
+                    </span>
+                    <h3 style={{ marginTop: '0.5rem' }}>{item.title}</h3>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

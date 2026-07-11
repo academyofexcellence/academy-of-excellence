@@ -203,7 +203,7 @@ const Home = () => {
           <div className="grid grid-2" style={{ alignItems: 'center', gap: '3rem' }}>
             <div className="hero-content">
               <span className="badge">
-                <Award size={16} className="text-primary" /> Ranked #1 Bilingual Training Academy
+                <Award size={16} className="text-primary" /> #1 Bilingual Training Academy
               </span>
               
               <h1 className="heading-xl">
@@ -712,10 +712,7 @@ const Home = () => {
               <p style={{ opacity: 0.7, fontSize: '0.95rem', lineHeight: '1.7', marginBottom: '1rem' }}>
                 Affiliated with recognized administrative bodies. Providing standard certifications verified for professional employment clearance.
               </p>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.75rem', background: 'rgba(201,156,51,0.15)', color: 'var(--primary-light)', padding: '0.3rem 0.8rem', borderRadius: '50px', fontWeight: 600, border: '1px solid rgba(201,156,51,0.2)' }}>Bilingual ISO</span>
-                <span style={{ fontSize: '0.75rem', background: 'rgba(201,156,51,0.15)', color: 'var(--primary-light)', padding: '0.3rem 0.8rem', borderRadius: '50px', fontWeight: 600, border: '1px solid rgba(201,156,51,0.2)' }}>Govt Recognized</span>
-              </div>
+
             </div>
           </div>
           
