@@ -8,7 +8,10 @@ import {
   HelpCircle,
   GraduationCap,
   Briefcase,
-  MessageSquare
+  MessageSquare,
+  Home,
+  ArrowLeft,
+  Grid
 } from 'lucide-react';
 import { StudentProgress } from '../components/student/StudentProgress';
 import { StudentLeaderboard } from '../components/student/StudentLeaderboard';
@@ -45,7 +48,20 @@ const StudentDashboard = () => {
   };
 
   // Tab navigation state
-  const [activeTab, setActiveTab] = useState<'progress' | 'leaderboard' | 'appeals' | 'profile' | 'jobboard' | 'alumnilounge'>('progress');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Tab navigation state
+  const [activeTab, setActiveTab] = useState<'menu' | 'progress' | 'leaderboard' | 'appeals' | 'profile' | 'jobboard' | 'alumnilounge'>(
+    window.innerWidth < 768 ? 'menu' : 'progress'
+  );
   const [prefillAppeal, setPrefillAppeal] = useState<{
     date: string;
     type: 'attendance' | 'checklist' | 'scoring';
@@ -1275,7 +1291,7 @@ const StudentDashboard = () => {
         </div>
 
         {/* Alumni Global Welcome Banner */}
-        {currentStudent.status === 'alumni' && activeTab !== 'alumnilounge' && (
+        {currentStudent.status === 'alumni' && activeTab !== 'alumnilounge' && !isMobile && (
           <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 15px 35px rgba(201, 156, 51, 0.1)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
             <div className="hero-blob" style={{ width: '300px', height: '300px', top: '-50px', right: '-50px', background: 'radial-gradient(circle, rgba(201,156,51,0.15) 0%, rgba(253,251,247,0) 70%)' }}></div>
             
@@ -1307,6 +1323,124 @@ const StudentDashboard = () => {
                 <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary-dark)', textAlign: 'center' }}>Academy Alumnus</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Mobile App-like Home Menu Launcher */}
+        {isMobile && activeTab === 'menu' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '0.5rem' }}>
+            <div className="glass-card bg-grid-pattern" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.2)', position: 'relative', overflow: 'hidden', background: 'white' }}>
+              <div className="hero-blob" style={{ width: '150px', height: '150px', top: '-30px', right: '-30px', background: 'radial-gradient(circle, rgba(201,156,51,0.1) 0%, rgba(253,251,247,0) 70%)' }}></div>
+              <span className="badge" style={{ background: 'rgba(201,156,51,0.15)', color: 'var(--primary-dark)', fontWeight: 700, fontSize: '0.7rem' }}>
+                {currentStudent.courses?.name} • Batch {currentStudent.batch_number}
+              </span>
+              <h2 style={{ fontSize: '1.5rem', margin: '0.5rem 0 0.2rem 0', fontWeight: 800, color: 'var(--primary-dark)' }}>
+                Welcome, {currentStudent.name.split(' ')[0]}!
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: 0 }}>
+                {currentStudent.status === 'alumni' ? '🎓 Academy Alumnus' : `📚 Student ID: ${currentStudent.roll_number || 'Pending'}`}
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+              {currentStudent.status !== 'alumni' && (
+                <>
+                  <button 
+                    onClick={() => setActiveTab('progress')}
+                    className="glass-card"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+                  >
+                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(59,130,246,0.1)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <TrendingUp size={24} />
+                    </div>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>My Progress</strong>
+                  </button>
+
+                  <button 
+                    onClick={() => setActiveTab('leaderboard')}
+                    className="glass-card"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+                  >
+                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(245,158,11,0.1)', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Award size={24} />
+                    </div>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Leaderboard</strong>
+                  </button>
+
+                  <button 
+                    onClick={() => setActiveTab('appeals')}
+                    className="glass-card"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+                  >
+                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(107,114,128,0.1)', color: '#4b5563', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <HelpCircle size={24} />
+                    </div>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Appeals Support</strong>
+                  </button>
+                </>
+              )}
+
+              <button 
+                onClick={() => setActiveTab('alumnilounge')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(16,185,129,0.1)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MessageSquare size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Alumni Lounge</strong>
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('profile')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(139,92,246,0.1)', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GraduationCap size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>My Profile</strong>
+              </button>
+
+              <button 
+                onClick={() => setActiveTab('jobboard')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(236,72,153,0.1)', color: '#db2777', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Briefcase size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Job Board</strong>
+              </button>
+            </div>
+
+            <button 
+              onClick={handleLogout}
+              className="btn btn-outline"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#dc2626', borderColor: '#fca5a5', padding: '0.8rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 700, width: '100%', cursor: 'pointer', marginTop: '1rem' }}
+            >
+              <LogOut size={16} /> Sign Out of App
+            </button>
+          </div>
+        )}
+
+        {/* Mobile View Header & Back Button */}
+        {isMobile && activeTab !== 'menu' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.2rem', padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'relative', marginTop: '-15px' }}>
+            <button 
+              onClick={() => setActiveTab('menu')}
+              style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)', color: 'var(--primary-dark)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}
+            >
+              <ArrowLeft size={14} /> Back to Menu
+            </button>
+            <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-main)', marginLeft: 'auto' }}>
+              {activeTab === 'progress' && '📈 Progress Archive'}
+              {activeTab === 'leaderboard' && '🏆 Leaderboard'}
+              {activeTab === 'alumnilounge' && '💬 Alumni Lounge'}
+              {activeTab === 'profile' && '👤 Profile Details'}
+              {activeTab === 'jobboard' && '💼 Job Board'}
+              {activeTab === 'appeals' && '❓ Appeals'}
+            </span>
           </div>
         )}
 
@@ -1432,6 +1566,13 @@ const StudentDashboard = () => {
 
         {/* Mobile Fixed Bottom Navigation Bar */}
         <div className="mobile-bottom-nav">
+          <button 
+            onClick={() => setActiveTab('menu')} 
+            className={`mobile-nav-item ${activeTab === 'menu' ? 'active' : ''}`}
+          >
+            <Grid size={22} />
+            <span>Menu</span>
+          </button>
           {currentStudent.status === 'alumni' ? (
             <>
               <button 
@@ -1455,13 +1596,6 @@ const StudentDashboard = () => {
                 <Briefcase size={22} />
                 <span>Jobs</span>
               </button>
-              <button 
-                onClick={() => setActiveTab('progress')} 
-                className={`mobile-nav-item ${activeTab === 'progress' ? 'active' : ''}`}
-              >
-                <TrendingUp size={22} />
-                <span>Archive</span>
-              </button>
             </>
           ) : (
             <>
@@ -1477,28 +1611,14 @@ const StudentDashboard = () => {
                 className={`mobile-nav-item ${activeTab === 'leaderboard' ? 'active' : ''}`}
               >
                 <Award size={22} />
-                <span>Leaderboard</span>
-              </button>
-              <button 
-                onClick={() => setActiveTab('appeals')} 
-                className={`mobile-nav-item ${activeTab === 'appeals' ? 'active' : ''}`}
-              >
-                <HelpCircle size={22} />
-                <span>Appeals</span>
+                <span>Leader</span>
               </button>
               <button 
                 onClick={() => setActiveTab('jobboard')} 
                 className={`mobile-nav-item ${activeTab === 'jobboard' ? 'active' : ''}`}
               >
                 <Briefcase size={22} />
-                <span>Job Board</span>
-              </button>
-              <button 
-                onClick={() => setActiveTab('profile')} 
-                className={`mobile-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
-              >
-                <GraduationCap size={22} />
-                <span>Profile</span>
+                <span>Jobs</span>
               </button>
             </>
           )}

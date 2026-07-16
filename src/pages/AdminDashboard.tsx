@@ -27,7 +27,9 @@ import {
   Download,
   Bell,
   BellOff,
-  MessageSquare
+  MessageSquare,
+  ArrowLeft,
+  Grid
 } from 'lucide-react';
 import { requestAndSubscribePush, unsubscribePush } from '../lib/pushNotifications';
 import { AnalyticsHub } from '../components/dashboard/AnalyticsHub';
@@ -154,6 +156,15 @@ const AdminDashboard = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<StaffProfile | null>(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
@@ -344,7 +355,9 @@ const AdminDashboard = () => {
   };
 
   // Tab navigation states
-  const [adminTab, setAdminTab] = useState<'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge' | 'management'>('dashboard');
+  const [adminTab, setAdminTab] = useState<'menu' | 'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge' | 'management'>(
+    window.innerWidth < 768 ? 'menu' : 'dashboard'
+  );
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
   const [managementSubTab, setManagementSubTab] = useState<'tracker' | 'minutes'>('tracker');
 
@@ -3845,11 +3858,12 @@ const AdminDashboard = () => {
   const careersNotificationCount = pendingJobsCount + totalApplicationsCount;
 
   return (
-    <div className="bg-grid-pattern admin-dashboard-layout">
+    <div className="bg-grid-pattern admin-dashboard-layout" style={{ paddingBottom: isMobile ? '90px' : '2rem' }}>
       <div className="container" style={{ maxWidth: '1150px' }}>
         
         {/* Welcome Section */}
-        <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.15)', boxShadow: 'var(--glass-shadow)', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        {(!isMobile || adminTab === 'menu') && (
+          <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.15)', boxShadow: 'var(--glass-shadow)', marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <span className="badge" style={{ background: 'rgba(201, 156, 51, 0.15)', color: 'var(--primary-dark)', fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem' }}>
               Operations Center • {currentUser.role.toUpperCase()}
@@ -3905,6 +3919,7 @@ const AdminDashboard = () => {
             </button>
           </div>
         </div>
+        )}
 
         {/* Global Toast Message */}
         {message && (
@@ -3914,7 +3929,8 @@ const AdminDashboard = () => {
         )}
 
         {/* Navigation Tabs (Staff & Leadership Dashboard) */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(201,156,51,0.2)', marginBottom: '2rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+        {!isMobile && (
+          <div style={{ display: 'flex', borderBottom: '1px solid rgba(201,156,51,0.2)', marginBottom: '2rem', gap: '0.5rem', flexWrap: 'wrap' }}>
           {!isLeadership && (
             <button 
               onClick={() => setAdminTab('tasks')}
@@ -4041,6 +4057,165 @@ const AdminDashboard = () => {
             </>
           )}
         </div>
+        )}
+
+        {/* Mobile App-like Home Menu Launcher */}
+        {isMobile && adminTab === 'menu' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '0.5rem', marginBottom: '2rem' }}>
+            <div className="glass-card bg-grid-pattern" style={{ padding: '1.5rem', border: '1px solid rgba(201, 156, 51, 0.2)', background: 'white' }}>
+              <div className="hero-blob" style={{ width: '150px', height: '150px', top: '-30px', right: '-30px', background: 'radial-gradient(circle, rgba(201,156,51,0.1) 0%, rgba(253,251,247,0) 70%)' }}></div>
+              <span className="badge" style={{ background: 'rgba(201, 156, 51, 0.15)', color: 'var(--primary-dark)', fontWeight: 700, fontSize: '0.7rem' }}>
+                Operations Center • {currentUser.role.toUpperCase()}
+              </span>
+              <h2 style={{ fontSize: '1.5rem', margin: '0.5rem 0 0.2rem 0', fontWeight: 800, color: 'var(--primary-dark)' }}>
+                Welcome, {currentUser.name.split(' ')[0]}!
+              </h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: 0 }}>
+                Role: <strong>{currentUser.designation || 'Staff Member'}</strong>
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+              {!isLeadership && (
+                <button 
+                  onClick={() => setAdminTab('tasks')}
+                  className="glass-card"
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+                >
+                  <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(59,130,246,0.1)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ListChecks size={24} />
+                  </div>
+                  <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>My Tasks</strong>
+                </button>
+              )}
+
+              {isLeadership && (
+                <button 
+                  onClick={() => setAdminTab('dashboard')}
+                  className="glass-card"
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+                >
+                  <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(239,68,68,0.1)', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Activity size={24} />
+                  </div>
+                  <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Analytics Hub</strong>
+                </button>
+              )}
+
+              <button 
+                onClick={() => setAdminTab('classroom')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px', position: 'relative' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(245,158,11,0.1)', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <GraduationCap size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Classroom Hub</strong>
+                {pendingAppealsCount > 0 && (
+                  <span style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: '#dc2626', color: 'white', fontSize: '0.7rem', fontWeight: 800, width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {pendingAppealsCount}
+                  </span>
+                )}
+              </button>
+
+              <button 
+                onClick={() => setAdminTab('management')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(107,114,128,0.1)', color: '#4b5563', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ClipboardList size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Management Board</strong>
+              </button>
+
+              <button 
+                onClick={() => setAdminTab('careers')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px', position: 'relative' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(139,92,246,0.1)', color: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Briefcase size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Careers & Alumni</strong>
+                {careersNotificationCount > 0 && (
+                  <span style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: '#dc2626', color: 'white', fontSize: '0.7rem', fontWeight: 800, width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {careersNotificationCount}
+                  </span>
+                )}
+              </button>
+
+              <button 
+                onClick={() => setAdminTab('alumnilounge')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(16,185,129,0.1)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MessageSquare size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Alumni Lounge</strong>
+              </button>
+
+              {isLeadership && (
+                <>
+                  <button 
+                    onClick={() => setAdminTab('directory')}
+                    className="glass-card"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+                  >
+                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(99,102,241,0.1)', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Users size={24} />
+                    </div>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Directory</strong>
+                  </button>
+
+                  <button 
+                    onClick={() => setAdminTab('operations')}
+                    className="glass-card"
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+                  >
+                    <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(201,156,51,0.1)', color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Settings size={24} />
+                    </div>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Operations Hub</strong>
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginTop: '1rem' }}>
+              <button 
+                onClick={handleLogout}
+                className="btn btn-outline"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#dc2626', borderColor: '#fca5a5', padding: '0.8rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}
+              >
+                <LogOut size={16} /> Sign Out of App
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile View Header & Back Button */}
+        {isMobile && adminTab !== 'menu' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.2rem', padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'relative', marginTop: '-15px' }}>
+            <button 
+              onClick={() => setAdminTab('menu')}
+              style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.06)', color: 'var(--primary-dark)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 'bold' }}
+            >
+              <ArrowLeft size={14} /> Back to Menu
+            </button>
+            <span style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-main)', marginLeft: 'auto' }}>
+              {adminTab === 'tasks' && '📋 Tasks Duty Board'}
+              {adminTab === 'dashboard' && '📊 Analytics Hub'}
+              {adminTab === 'classroom' && '🏫 Classroom Hub'}
+              {adminTab === 'management' && '📋 Management Board'}
+              {adminTab === 'careers' && '💼 Careers & Alumni'}
+              {adminTab === 'alumnilounge' && '💬 Alumni Lounge'}
+              {adminTab === 'directory' && '👥 Directory Hub'}
+              {adminTab === 'operations' && '⚙️ Operations Hub'}
+            </span>
+          </div>
+        )}
 
         {/* TAB CONTENT AREAS */}
         {adminTab === 'tasks' && !isLeadership && (
@@ -5464,6 +5639,74 @@ const AdminDashboard = () => {
                 })()
               )}
             </div>
+          </div>
+        )}
+
+        {/* Mobile Fixed Bottom Navigation Bar for Admin */}
+        {isMobile && (
+          <div className="mobile-bottom-nav" style={{
+            display: 'flex',
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '64px',
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(12px)',
+            borderTop: '1px solid rgba(0, 0, 0, 0.08)',
+            zIndex: 100,
+            alignItems: 'center',
+            justifyContent: 'space-around',
+            paddingBottom: 'env(safe-area-inset-bottom)'
+          }}>
+            <button 
+              onClick={() => setAdminTab('menu')} 
+              className={`mobile-nav-item ${adminTab === 'menu' ? 'active' : ''}`}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: '0.2rem', color: adminTab === 'menu' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                fontSize: '0.7rem', fontWeight: 700, background: 'transparent', border: 'none', cursor: 'pointer', flex: 1
+              }}
+            >
+              <Grid size={20} />
+              <span>Menu</span>
+            </button>
+            <button 
+              onClick={() => setAdminTab('classroom')} 
+              className={`mobile-nav-item ${adminTab === 'classroom' ? 'active' : ''}`}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: '0.2rem', color: adminTab === 'classroom' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                fontSize: '0.7rem', fontWeight: 700, background: 'transparent', border: 'none', cursor: 'pointer', flex: 1
+              }}
+            >
+              <GraduationCap size={20} />
+              <span>Classroom</span>
+            </button>
+            <button 
+              onClick={() => setAdminTab('management')} 
+              className={`mobile-nav-item ${adminTab === 'management' ? 'active' : ''}`}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: '0.2rem', color: adminTab === 'management' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                fontSize: '0.7rem', fontWeight: 700, background: 'transparent', border: 'none', cursor: 'pointer', flex: 1
+              }}
+            >
+              <ClipboardList size={20} />
+              <span>Board</span>
+            </button>
+            <button 
+              onClick={() => setAdminTab('alumnilounge')} 
+              className={`mobile-nav-item ${adminTab === 'alumnilounge' ? 'active' : ''}`}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: '0.2rem', color: adminTab === 'alumnilounge' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                fontSize: '0.7rem', fontWeight: 700, background: 'transparent', border: 'none', cursor: 'pointer', flex: 1
+              }}
+            >
+              <MessageSquare size={20} />
+              <span>Lounge</span>
+            </button>
           </div>
         )}
       </div>
