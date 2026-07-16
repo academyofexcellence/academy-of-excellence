@@ -10,7 +10,11 @@ import {
   UserCheck, 
   Upload, 
   CheckCircle2, 
-  Briefcase 
+  Briefcase,
+  Database,
+  Download,
+  FileDown,
+  RefreshCw 
 } from 'lucide-react';
 import { Course, ScoringInterval, Task, StaffProfile } from '../../lib/types';
 
@@ -141,10 +145,212 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
   filterCourse,
   filterBatch
 }) => {
-  const [subTab, setSubTab] = useState<'intervals' | 'tasks' | 'website'>('intervals');
+  const [subTab, setSubTab] = useState<'intervals' | 'tasks' | 'website' | 'system'>('intervals');
 
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
   const [galleryUploading, setGalleryUploading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreMessage, setRestoreMessage] = useState('');
+
+  const formatSqlValue = (val: any) => {
+    if (val === null || val === undefined) {
+      return 'NULL';
+    }
+    if (typeof val === 'boolean') {
+      return val ? 'true' : 'false';
+    }
+    if (typeof val === 'number') {
+      return val.toString();
+    }
+    if (typeof val === 'object') {
+      return `'${JSON.stringify(val).replace(/'/g, "''")}'`;
+    }
+    return `'${val.toString().replace(/'/g, "''")}'`;
+  };
+
+  const handleExportSQL = async () => {
+    setBackupLoading(true);
+    try {
+      const tables = [
+        'courses',
+        'student_profiles',
+        'alumni_profiles',
+        'tasks',
+        'partners',
+        'visitors',
+        'inquiries',
+        'job_posts',
+        'job_applications',
+        'scoring_intervals'
+      ];
+
+      let sqlOutput = `-- ========================================================\n`;
+      sqlOutput += `-- ACADEMY OF EXCELLENCE - COMPLETE DATABASE BACKUP\n`;
+      sqlOutput += `-- Generated on: ${new Date().toUTCString()}\n`;
+      sqlOutput += `-- ========================================================\n\n`;
+      sqlOutput += `BEGIN;\n\n`;
+
+      for (const table of tables) {
+        const { data, error } = await supabase.from(table).select('*');
+        if (error) {
+          sqlOutput += `-- Failed to read ${table}: ${error.message}\n\n`;
+          continue;
+        }
+        if (!data || data.length === 0) {
+          sqlOutput += `-- Table ${table} is empty\n\n`;
+          continue;
+        }
+
+        sqlOutput += `-- Data for table: public.${table} (${data.length} rows)\n`;
+        sqlOutput += `DELETE FROM public.${table};\n`;
+
+        const columns = Object.keys(data[0]);
+        for (const row of data) {
+          const values = columns.map(col => formatSqlValue(row[col]));
+          sqlOutput += `INSERT INTO public.${table} (${columns.join(', ')}) VALUES (${values.join(', ')});\n`;
+        }
+        sqlOutput += `\n`;
+      }
+
+      sqlOutput += `COMMIT;\n`;
+
+      const blob = new Blob([sqlOutput], { type: 'text/sql;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `academy_database_backup_${new Date().toISOString().split('T')[0]}.sql`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleExportJSON = async () => {
+    setBackupLoading(true);
+    try {
+      const tables = [
+        'courses',
+        'student_profiles',
+        'alumni_profiles',
+        'tasks',
+        'partners',
+        'visitors',
+        'inquiries',
+        'job_posts',
+        'job_applications',
+        'scoring_intervals'
+      ];
+
+      const backupData: Record<string, any[]> = {};
+
+      for (const table of tables) {
+        const { data, error } = await supabase.from(table).select('*');
+        if (error) {
+          console.warn(`Failed to export ${table}: ${error.message}`);
+          continue;
+        }
+        backupData[table] = data || [];
+      }
+
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `academy_data_backup_${new Date().toISOString().split('T')[0]}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleImportJSON = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!window.confirm('⚠️ WARNING: Restoring a backup will overwrite the current database tables. Are you sure you want to proceed?')) {
+      e.target.value = '';
+      return;
+    }
+
+    setRestoreLoading(true);
+    setRestoreMessage('Starting restore...');
+
+    try {
+      const fileText = await file.text();
+      const backupData = JSON.parse(fileText) as Record<string, any[]>;
+
+      const deleteOrder = [
+        'job_applications',
+        'job_posts',
+        'inquiries',
+        'alumni_profiles',
+        'student_profiles',
+        'tasks',
+        'scoring_intervals',
+        'visitors',
+        'partners',
+        'courses'
+      ];
+
+      const insertOrder = [
+        'courses',
+        'partners',
+        'visitors',
+        'scoring_intervals',
+        'tasks',
+        'student_profiles',
+        'alumni_profiles',
+        'inquiries',
+        'job_posts',
+        'job_applications'
+      ];
+
+      for (const table of deleteOrder) {
+        setRestoreMessage(`Cleaning table "${table}"...`);
+        const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (error) {
+          const idField = table === 'alumni_profiles' ? 'student_id' : 'id';
+          const { error: altError } = await supabase.from(table).delete().neq(idField, '00000000-0000-0000-0000-000000000000');
+          if (altError) {
+             throw new Error(`Failed to clean table ${table}: ${altError.message}`);
+          }
+        }
+      }
+
+      for (const table of insertOrder) {
+        const rows = backupData[table];
+        if (!rows || rows.length === 0) {
+          continue;
+        }
+
+        setRestoreMessage(`Restoring table "${table}" (${rows.length} rows)...`);
+        const { error } = await supabase.from(table).insert(rows);
+        if (error) {
+          throw new Error(`Failed to insert into ${table}: ${error.message}`);
+        }
+      }
+
+      setRestoreMessage('✅ Database restored successfully! Reloading...');
+      alert('✅ Database backup restored successfully!');
+      fetchWebsiteContent();
+    } catch (err: any) {
+      console.error(err);
+      setRestoreMessage(`❌ Restore failed: ${err.message}`);
+      alert(`❌ Restore failed: ${err.message}`);
+    } finally {
+      setRestoreLoading(false);
+      e.target.value = '';
+    }
+  };
   
   // Gallery states
   const [galleryTitle, setGalleryTitle] = useState('');
@@ -442,6 +648,26 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
           }}
         >
           <Image size={15} /> Website Content
+        </button>
+        <button
+          onClick={() => setSubTab('system')}
+          style={{
+            padding: '0.5rem 1.2rem',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            background: subTab === 'system' ? 'white' : 'transparent',
+            color: subTab === 'system' ? 'var(--primary-dark)' : 'var(--text-muted)',
+            boxShadow: subTab === 'system' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem'
+          }}
+        >
+          <Database size={15} /> Backup & Portability
         </button>
       </div>
 
@@ -1051,6 +1277,92 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {subTab === 'system' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <h3 style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0', fontWeight: 800, color: 'var(--primary-dark)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Database size={20} /> System Backup & Data Portability
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 1.2rem 0', lineHeight: '1.6' }}>
+              Download a complete snapshot of your database tables directly from the website. You can export the records as a standard PostgreSQL script to restore directly in pgAdmin/Supabase SQL Editor, or save them in a structured JSON file to transfer or restore data onto another instance easily.
+            </p>
+
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+              <button 
+                onClick={handleExportSQL}
+                disabled={backupLoading}
+                className="btn btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', fontSize: '0.85rem' }}
+              >
+                <Download size={16} /> {backupLoading ? 'Exporting SQL...' : 'Export Database (SQL Dump)'}
+              </button>
+
+              <button 
+                onClick={handleExportJSON}
+                disabled={backupLoading}
+                className="btn"
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.5rem', 
+                  padding: '0.6rem 1.2rem', 
+                  fontSize: '0.85rem',
+                  background: 'rgba(201,156,51,0.08)',
+                  border: '1px solid rgba(201,156,51,0.2)',
+                  color: 'var(--primary-dark)',
+                  fontWeight: 700,
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                <FileDown size={16} /> {backupLoading ? 'Exporting JSON...' : 'Export Database (JSON Backup)'}
+              </button>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '1.5rem' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>
+                🔄 Restore Database from Backup
+              </h4>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 1rem 0', lineHeight: '1.5' }}>
+                To restore or migrate data from a previous backup, select the `.json` backup file you exported. 
+                <span style={{ color: '#dc2626', fontWeight: 600 }}> Warning: This will overwrite current table data.</span>
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                  <input 
+                    type="file" 
+                    accept=".json"
+                    onChange={handleImportJSON}
+                    disabled={restoreLoading}
+                    style={{ fontSize: '0.85rem' }}
+                  />
+                  {restoreLoading && (
+                    <span style={{ fontSize: '0.8rem', color: 'var(--primary-dark)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <RefreshCw className="animate-spin" size={14} /> Processing...
+                    </span>
+                  )}
+                </div>
+                {restoreMessage && (
+                  <div style={{ 
+                    fontSize: '0.8rem', 
+                    padding: '0.5rem 0.8rem', 
+                    borderRadius: '6px', 
+                    background: restoreMessage.startsWith('❌') ? '#fef2f2' : '#f0fdf4',
+                    border: `1px solid ${restoreMessage.startsWith('❌') ? '#fecaca' : '#bbf7d0'}`,
+                    color: restoreMessage.startsWith('❌') ? '#991b1b' : '#166534',
+                    alignSelf: 'flex-start',
+                    marginTop: '0.5rem'
+                  }}>
+                    {restoreMessage}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
