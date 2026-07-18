@@ -139,7 +139,10 @@ const StudentDashboard = () => {
       // Mon-Fri only
       const day = current.getDay();
       if (day !== 0 && day !== 6) {
-        dates.push(current.toISOString().split('T')[0]);
+        const yyyy = current.getFullYear();
+        const mm = String(current.getMonth() + 1).padStart(2, '0');
+        const dd = String(current.getDate()).padStart(2, '0');
+        dates.push(`${yyyy}-${mm}-${dd}`);
       }
       current.setDate(current.getDate() + 1);
     }
@@ -806,7 +809,10 @@ const StudentDashboard = () => {
         for (let i = 0; i < 5; i++) {
           const date = new Date(monday);
           date.setDate(monday.getDate() + i);
-          weekDates.push(date.toISOString().split('T')[0]);
+          const yyyy = date.getFullYear();
+          const mm = String(date.getMonth() + 1).padStart(2, '0');
+          const dd = String(date.getDate()).padStart(2, '0');
+          weekDates.push(`${yyyy}-${mm}-${dd}`);
         }
 
         const vocabMap: { [key: string]: boolean } = {};
