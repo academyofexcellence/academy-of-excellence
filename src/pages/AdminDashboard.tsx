@@ -1229,7 +1229,7 @@ const AdminDashboard = () => {
           student?.course_id || activeInterval.course_id,
           student?.batch_number || activeInterval.batch_number
         );
-        const { error } = await supabase.from('scores').insert([
+        const { error } = await supabase.from('scores').upsert([
           {
             student_id: studentId,
             interval_id: targetInterval ? targetInterval.id : activeInterval.id,
@@ -1240,7 +1240,7 @@ const AdminDashboard = () => {
             logged_by: currentUser.id,
             logged_date: targetDate
           }
-        ]);
+        ], { onConflict: 'student_id,logged_date,score_type,activity_name' });
         if (error) throw error;
 
         const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
@@ -1745,7 +1745,7 @@ const AdminDashboard = () => {
         throw new Error('No student grades entered.');
       }
 
-      const { error } = await supabase.from('scores').insert(insertRecords);
+      const { error } = await supabase.from('scores').upsert(insertRecords, { onConflict: 'student_id,logged_date,score_type,activity_name' });
       if (error) throw error;
 
       await logActivity('exam_graded', `Logged grades for exam "${examName}" across batch for date ${selectedGradingDate}`);
@@ -1792,7 +1792,7 @@ const AdminDashboard = () => {
         throw new Error('No student grades entered.');
       }
 
-      const { error } = await supabase.from('scores').insert(insertRecords);
+      const { error } = await supabase.from('scores').upsert(insertRecords, { onConflict: 'student_id,logged_date,score_type,activity_name' });
       if (error) throw error;
 
       await logActivity('custom_graded', `Logged grades for activity "${customActivityName}" across batch for date ${selectedGradingDate}`);
@@ -2167,7 +2167,7 @@ const AdminDashboard = () => {
           activity_name: dbActivityName,
           logged_by: currentUser.id,
           logged_date: addLogDate
-        }, { onConflict: 'student_id,logged_date,score_type' })
+        }, { onConflict: 'student_id,logged_date,score_type,activity_name' })
         .select();
 
       if (error) throw error;
@@ -2238,7 +2238,7 @@ const AdminDashboard = () => {
             max_points: task.points,
             logged_by: currentUser.id,
             logged_date: addLogDate
-          }, { onConflict: 'student_id,logged_date,score_type' })
+          }, { onConflict: 'student_id,logged_date,score_type,activity_name' })
           .select();
         
         if (error) throw error;
