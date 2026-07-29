@@ -4195,6 +4195,39 @@ const AdminDashboard = () => {
                 <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Alumni Lounge</strong>
               </button>
 
+              <button 
+                onClick={() => setAdminTab('certificates')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(217,119,6,0.1)', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Award size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Certificates</strong>
+              </button>
+
+              <button 
+                onClick={() => setAdminTab('attendance')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(37,99,235,0.1)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Calendar size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Attendance</strong>
+              </button>
+
+              <button 
+                onClick={() => setAdminTab('accounting')}
+                className="glass-card"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
+              >
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(34,197,94,0.1)', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <TrendingUp size={24} />
+                </div>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Finance</strong>
+              </button>
+
               {isLeadership && (
                 <>
                   <button 
@@ -4250,6 +4283,9 @@ const AdminDashboard = () => {
               {adminTab === 'management' && '📋 Management Board'}
               {adminTab === 'careers' && '💼 Careers & Alumni'}
               {adminTab === 'alumnilounge' && '💬 Alumni Lounge'}
+              {adminTab === 'certificates' && '📜 Certificates Hub'}
+              {adminTab === 'attendance' && '📅 Attendance Hub'}
+              {adminTab === 'accounting' && '💰 Finance & Accounting'}
               {adminTab === 'directory' && '👥 Directory Hub'}
               {adminTab === 'operations' && '⚙️ Operations Hub'}
             </span>
