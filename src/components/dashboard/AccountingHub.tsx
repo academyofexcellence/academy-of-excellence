@@ -838,7 +838,11 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               >
                 <option value="Admission Fee (1st Payment)">Admission Fee (1st Payment)</option>
                 <option value="Month 1 Installment (2nd Payment)">Month 1 Installment (2nd Payment)</option>
-                <option value="Month 3 Installment (3rd Payment)">Month 3 Installment (3rd Payment)</option>
+                <option value="Month 2 Installment (3rd Payment)">Month 2 Installment (3rd Payment)</option>
+                <option value="Month 3 Installment (4th Payment)">Month 3 Installment (4th Payment)</option>
+                <option value="Month 4 Installment">Month 4 Installment</option>
+                <option value="Month 5 Installment">Month 5 Installment</option>
+                <option value="Month 6 Installment">Month 6 Installment</option>
                 <option value="Custom Installment Payment">Custom Installment Payment</option>
               </select>
             </div>
