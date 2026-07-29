@@ -41,6 +41,7 @@ import { AlumniLounge } from '../components/alumni/AlumniLounge';
 import { PlacementTracker } from '../components/dashboard/PlacementTracker';
 import { MeetingMinutes } from '../components/dashboard/MeetingMinutes';
 import CertificateHub from '../components/dashboard/CertificateHub';
+import AttendanceHub from '../components/dashboard/AttendanceHub';
 
 interface StaffProfile {
   id: string;
@@ -356,7 +357,7 @@ const AdminDashboard = () => {
   };
 
   // Tab navigation states
-  const [adminTab, setAdminTab] = useState<'menu' | 'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge' | 'management' | 'certificates'>(
+  const [adminTab, setAdminTab] = useState<'menu' | 'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge' | 'management' | 'certificates' | 'attendance'>(
     window.innerWidth < 768 ? 'menu' : 'dashboard'
   );
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
@@ -4042,6 +4043,18 @@ const AdminDashboard = () => {
             <Award size={16} /> Certificates
           </button>
 
+          <button 
+            onClick={() => setAdminTab('attendance')}
+            style={{
+              padding: '0.8rem 1.2rem', background: 'none', border: 'none',
+              borderBottom: adminTab === 'attendance' ? '3px solid var(--primary)' : '3px solid transparent',
+              color: adminTab === 'attendance' ? 'var(--primary-dark)' : 'var(--text-muted)',
+              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+            }}
+          >
+            <Calendar size={16} /> Attendance
+          </button>
+
           {isLeadership && (
             <>
               <button 
@@ -4490,6 +4503,10 @@ const AdminDashboard = () => {
 
         {adminTab === 'certificates' && (
           <CertificateHub coursesList={courses} studentList={studentList} />
+        )}
+
+        {adminTab === 'attendance' && (
+          <AttendanceHub coursesList={courses} studentList={studentList} />
         )}
 
         {isLeadership && adminTab === 'operations' && (

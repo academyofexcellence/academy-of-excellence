@@ -134,3 +134,20 @@ export interface CertificateRecord {
   created_at: string;
 }
 
+export interface DailyAttendanceLog {
+  id: string;
+  student_id: string;
+  student_name: string;
+  course_id?: string;
+  batch_number: number;
+  date: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  check_in_status?: 'on_time' | 'late' | 'pending';
+  check_out_status?: 'on_time' | 'early' | 'pending';
+  points_awarded: number; // 10, 5, or 0
+  status: 'present_full' | 'present_half' | 'absent' | 'manual_override';
+  method?: 'qr_scan' | 'manual_override';
+  notes?: string;
+  created_at?: string;
+}
