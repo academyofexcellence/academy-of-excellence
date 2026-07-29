@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Course, StudentProfile, CertificateRecord } from '../../lib/types';
-import { Award, Download, Printer, RefreshCw, Search, ShieldCheck, Trash2, CheckCircle2, AlertCircle, Eye, ExternalLink, QrCode, Keyboard, CheckSquare, Square } from 'lucide-react';
+import { Award, Download, Printer, RefreshCw, Search, ShieldCheck, Trash2, CheckCircle2, AlertCircle, Eye, ExternalLink, QrCode, Keyboard, CheckSquare, Square, Calendar, Edit3, X } from 'lucide-react';
 import QRCode from 'qrcode';
 
 interface CertificateHubProps {
@@ -15,6 +15,7 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
   const [fourDigitBatchCode, setFourDigitBatchCode] = useState<string>('0208'); // e.g. 0208 for DPT0208 or CAT0208
   const [certType, setCertType] = useState<'DPT' | 'CAT'>('DPT');
   const [gradeDescription, setGradeDescription] = useState<string>('Passed with Distinction');
+  const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().split('T')[0]); // Manual issue date
 
   // Selected students checklist for selective generation (useful for CAT typing certs)
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
@@ -28,6 +29,11 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
   // Diploma Preview Modal State
   const [activePreviewCert, setActivePreviewCert] = useState<CertificateRecord | null>(null);
   const [previewQrUrl, setPreviewQrUrl] = useState<string>('');
+
+  // Edit Certificate Modal State
+  const [editingCert, setEditingCert] = useState<CertificateRecord | null>(null);
+  const [editIssueDate, setEditIssueDate] = useState<string>('');
+  const [editGradeDescription, setEditGradeDescription] = useState<string>('');
 
   // Filter students by selected Course & Batch
   const filteredStudents = studentList.filter(
@@ -134,7 +140,7 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
           course_name: courseName,
           batch_number: student.batch_number,
           roll_number: rollStr,
-          issue_date: new Date().toISOString().split('T')[0],
+          issue_date: issueDate || new Date().toISOString().split('T')[0],
           certificate_type: certType,
           grade_description: gradeDescription,
           status: 'valid'
@@ -147,7 +153,7 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
 
       if (error) throw error;
 
-      setMessage(`✅ Successfully generated ${recordsToUpsert.length} ${certType} certificate(s) for ${batchPrefix}!`);
+      setMessage(`✅ Successfully generated ${recordsToUpsert.length} ${certType} certificate(s) dated ${issueDate}!`);
       await fetchCertificates();
     } catch (err: any) {
       console.error('Error generating certificates:', err);
@@ -155,6 +161,35 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
     } finally {
       setGenerating(false);
       setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  // Open Edit Modal
+  const handleOpenEdit = (cert: CertificateRecord) => {
+    setEditingCert(cert);
+    setEditIssueDate(cert.issue_date);
+    setEditGradeDescription(cert.grade_description || '');
+  };
+
+  // Save Edit Changes
+  const handleSaveEdit = async () => {
+    if (!editingCert) return;
+    try {
+      const { error } = await supabase
+        .from('certificates')
+        .update({
+          issue_date: editIssueDate,
+          grade_description: editGradeDescription
+        })
+        .eq('id', editingCert.id);
+
+      if (error) throw error;
+      setMessage(`✅ Updated certificate ${editingCert.certificate_code}!`);
+      setEditingCert(null);
+      await fetchCertificates();
+    } catch (err: any) {
+      console.error('Error updating certificate:', err);
+      alert(`Failed to update certificate: ${err.message}`);
     }
   };
 
@@ -419,6 +454,19 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
             </span>
           </div>
 
+          {/* MANUAL ISSUE DATE FIELD */}
+          <div>
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <Calendar size={13} className="text-primary" /> Certificate Issue Date *
+            </label>
+            <input
+              type="date"
+              value={issueDate}
+              onChange={(e) => setIssueDate(e.target.value)}
+              style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none', fontWeight: 600 }}
+            />
+          </div>
+
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>Grade / Evaluation Honor</label>
             <input
@@ -490,7 +538,7 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
         {/* Live Code Preview */}
         <div style={{ background: '#f1f5f9', padding: '0.85rem 1.25rem', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', border: '1px solid #e2e8f0' }}>
           <div style={{ fontSize: '0.85rem', color: '#334155' }}>
-            Target: <strong>{selectedStudentIds.length} student(s)</strong> selected for <strong>{certType}</strong>
+            Target: <strong>{selectedStudentIds.length} student(s)</strong> selected for <strong>{certType}</strong> • Issue Date: <strong>{issueDate}</strong>
           </div>
           <div style={{ fontSize: '0.85rem', color: '#0f172a' }}>
             Code Format Preview: <code style={{ background: '#e2e8f0', color: certType === 'CAT' ? '#2563eb' : '#b45309', padding: '0.25rem 0.6rem', borderRadius: '6px', fontWeight: 800 }}>{certType}{fourDigitBatchCode || 'XXXX'}/{new Date().getFullYear().toString().slice(-2)}/001</code>
@@ -581,8 +629,8 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
                         {cert.course_name} (Batch {cert.batch_number})
                       </td>
 
-                      <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>
-                        {new Date(cert.issue_date).toLocaleDateString()}
+                      <td style={{ padding: '0.85rem 1rem', color: '#0f172a', fontWeight: 600 }}>
+                        {new Date(cert.issue_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                       </td>
 
                       <td style={{ padding: '0.85rem 1rem' }}>
@@ -600,6 +648,15 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
                       <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
                           
+                          {/* Edit Details (Date/Grade) */}
+                          <button
+                            onClick={() => handleOpenEdit(cert)}
+                            title="Edit Certificate Details"
+                            style={{ padding: '0.4rem 0.5rem', borderRadius: '6px', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                          >
+                            <Edit3 size={14} />
+                          </button>
+
                           {/* Download QR PNG */}
                           <button
                             onClick={() => handleDownloadQrPng(cert)}
@@ -659,6 +716,64 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
         )}
 
       </div>
+
+      {/* --- EDIT CERTIFICATE MODAL --- */}
+      {editingCert && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', width: '100%', maxWidth: '450px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+              <h4 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.1rem' }}>
+                Edit Certificate Details
+              </h4>
+              <button onClick={() => setEditingCert(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Student</label>
+              <input type="text" disabled value={`${editingCert.student_name} (${editingCert.certificate_code})`} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', background: '#f1f5f9', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }} />
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Issue Date</label>
+              <input
+                type="date"
+                value={editIssueDate}
+                onChange={(e) => setEditIssueDate(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 600 }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Grade / Honor Description</label>
+              <input
+                type="text"
+                value={editGradeDescription}
+                onChange={(e) => setEditGradeDescription(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setEditingCert(null)}
+                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#2563eb', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Save Changes
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* --- DIPLOMA PRINT PREVIEW MODAL --- */}
       {activePreviewCert && (
