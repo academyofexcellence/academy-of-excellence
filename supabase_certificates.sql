@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.certificates (
     batch_number INTEGER NOT NULL,
     roll_number TEXT,
     issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    certificate_type TEXT NOT NULL DEFAULT 'DPT', -- 'DPT' for Diploma, 'CAT' for Typing Certificate
     grade_description TEXT DEFAULT 'Completed Course',
     status TEXT NOT NULL DEFAULT 'valid' CHECK (status IN ('valid', 'revoked')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL

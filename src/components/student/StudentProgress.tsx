@@ -80,7 +80,7 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
   handlePrintReport,
   getDatesRange
 }) => {
-  const [certRecord, setCertRecord] = useState<any>(null);
+  const [certRecords, setCertRecords] = useState<any[]>([]);
 
   useEffect(() => {
     if (currentStudent?.id) {
@@ -90,9 +90,8 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
         .eq('student_id', currentStudent.id)
         .eq('status', 'valid')
         .order('created_at', { ascending: false })
-        .maybeSingle()
         .then(({ data }) => {
-          if (data) setCertRecord(data);
+          if (data) setCertRecords(data);
         });
     }
   }, [currentStudent?.id]);
@@ -108,41 +107,46 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
     remarks.industrial_visit_remark?.trim()
   );
 
+  const renderCertCard = (cert: any) => {
+    const isTyping = cert.certificate_code.startsWith('CAT') || cert.certificate_type === 'CAT';
+    return (
+      <div key={cert.id} className="glass-card" style={{ padding: '1.25rem 1.5rem', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', borderRadius: '16px', border: `2px solid ${isTyping ? '#2563eb' : '#d97706'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ background: isTyping ? '#2563eb' : '#16a34a', borderRadius: '50%', padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ShieldCheck size={28} color="white" />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.7rem', color: isTyping ? '#93c5fd' : '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              {isTyping ? 'Typing Proficiency Credential' : 'Accredited Diploma Credential'}
+            </div>
+            <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0.2rem 0', color: 'white' }}>
+              {cert.course_name}
+            </h4>
+            <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+              Serial: <code style={{ color: isTyping ? '#60a5fa' : '#fbbf24', background: 'rgba(255,255,255,0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>{cert.certificate_code}</code>
+            </div>
+          </div>
+        </div>
+
+        <a
+          href={`/verify?code=${encodeURIComponent(cert.certificate_code)}`}
+          target="_blank"
+          rel="noreferrer"
+          className="btn btn-primary"
+          style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', background: isTyping ? 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' : 'linear-gradient(135deg, #d97706 0%, #b45309 100%)', color: 'white', textDecoration: 'none', fontWeight: 700, fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: 'none' }}
+        >
+          <ExternalLink size={16} /> View Verification Portal
+        </a>
+      </div>
+    );
+  };
+
   if (currentStudent.status === 'alumni') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         
-        {/* Verified Certificate Card */}
-        {certRecord && (
-          <div className="glass-card" style={{ padding: '1.25rem 1.5rem', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', borderRadius: '16px', border: '2px solid #d97706', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.3)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ background: '#16a34a', borderRadius: '50%', padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ShieldCheck size={28} color="white" />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.7rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                  Accredited Credentials
-                </div>
-                <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0.2rem 0', color: 'white' }}>
-                  Official Verified Certificate Issued
-                </h4>
-                <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
-                  Serial: <code style={{ color: '#fbbf24', background: 'rgba(255,255,255,0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>{certRecord.certificate_code}</code>
-                </div>
-              </div>
-            </div>
-
-            <a
-              href={`/verify?code=${encodeURIComponent(certRecord.certificate_code)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary"
-              style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)', color: 'white', textDecoration: 'none', fontWeight: 700, fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: 'none' }}
-            >
-              <ExternalLink size={16} /> View Verification Portal
-            </a>
-          </div>
-        )}
+        {/* Verified Certificate Cards */}
+        {certRecords.map(renderCertCard)}
 
         {/* Period Selector */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem', marginBottom: '-0.5rem' }}>
@@ -434,37 +438,8 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
-      {/* Verified Certificate Card */}
-      {certRecord && (
-        <div className="glass-card" style={{ padding: '1.25rem 1.5rem', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', borderRadius: '16px', border: '2px solid #d97706', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ background: '#16a34a', borderRadius: '50%', padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ShieldCheck size={28} color="white" />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.7rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                Accredited Credentials
-              </div>
-              <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0.2rem 0', color: 'white' }}>
-                Official Verified Certificate Issued
-              </h4>
-              <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
-                Serial: <code style={{ color: '#fbbf24', background: 'rgba(255,255,255,0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>{certRecord.certificate_code}</code>
-              </div>
-            </div>
-          </div>
-
-          <a
-            href={`/verify?code=${encodeURIComponent(certRecord.certificate_code)}`}
-            target="_blank"
-            rel="noreferrer"
-            className="btn btn-primary"
-            style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)', color: 'white', textDecoration: 'none', fontWeight: 700, fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: 'none' }}
-          >
-            <ExternalLink size={16} /> View Verification Portal
-          </a>
-        </div>
-      )}
+        {/* Verified Certificate Cards */}
+        {certRecords.map(renderCertCard)}
 
       {/* Metrics Period Selector */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem', marginBottom: '-0.5rem' }}>

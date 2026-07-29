@@ -128,6 +128,7 @@ export interface CertificateRecord {
   batch_number: number;
   roll_number?: string;
   issue_date: string;
+  certificate_type?: 'DPT' | 'CAT';
   grade_description: string;
   status: 'valid' | 'revoked';
   created_at: string;
