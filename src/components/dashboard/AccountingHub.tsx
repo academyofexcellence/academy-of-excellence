@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Course, StudentProfile, StudentFeeProfile, FeePaymentTransaction, AcademyExpense } from '../../lib/types';
-import { DollarSign, CreditCard, Wallet, TrendingUp, TrendingDown, RefreshCw, PlusCircle, Search, Printer, Send, Edit3, CheckCircle2, AlertCircle, FileText, X, ArrowUpRight, ArrowDownRight, Calendar, ShieldCheck, Tag } from 'lucide-react';
+import { DollarSign, CreditCard, Wallet, TrendingUp, TrendingDown, RefreshCw, PlusCircle, Search, Printer, Send, Edit3, CheckCircle2, AlertCircle, FileText, X, ArrowUpRight, ArrowDownRight, Calendar, ShieldCheck, Tag, Settings } from 'lucide-react';
 
 interface AccountingHubProps {
   coursesList: Course[];
@@ -20,6 +20,9 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Batch Fee state
+  const [batchStandardFee, setBatchStandardFee] = useState<number>(25000);
 
   // Collect Fee Modal
   const [collectingStudent, setCollectingStudent] = useState<StudentProfile | null>(null);
@@ -54,6 +57,16 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   useEffect(() => {
     fetchAllFinancialData();
   }, [selectedCourseId, selectedBatchNumber]);
+
+  // Update batch standard fee input when student profile loads
+  useEffect(() => {
+    if (activeStudents.length > 0) {
+      const firstProfile = feeProfiles.find(p => p.student_id === activeStudents[0].id);
+      if (firstProfile?.standard_fee) {
+        setBatchStandardFee(firstProfile.standard_fee);
+      }
+    }
+  }, [feeProfiles, selectedCourseId, selectedBatchNumber]);
 
   const fetchAllFinancialData = async () => {
     setLoading(true);
@@ -90,7 +103,54 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const gpayBankBalance = totalGpayIncome - totalGpayExpense;
   const netLiquidity = officeCashBalance + gpayBankBalance;
 
-  // --- HANDLERS FOR NET FEE MODAL ---
+  // --- APPLY STANDARD FEE TO ALL STUDENTS IN BATCH ---
+  const handleApplyBatchStandardFee = async () => {
+    if (activeStudents.length === 0) {
+      alert('No active students found in this course and batch.');
+      return;
+    }
+    if (!confirm(`Apply standard fee of ₹${batchStandardFee.toLocaleString()} to ALL ${activeStudents.length} student(s) in Batch ${selectedBatchNumber}?`)) return;
+
+    try {
+      setLoading(true);
+      const recordsToUpsert = activeStudents.map(student => {
+        const existing = feeProfiles.find(p => p.student_id === student.id);
+        const discount = existing?.discount_amount || 0;
+        const netAgreed = Math.max(0, batchStandardFee - discount);
+        const paid = existing?.total_paid || 0;
+        const balance = Math.max(0, netAgreed - paid);
+
+        let newStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
+        if (paid >= netAgreed && netAgreed > 0) newStatus = 'fully_paid';
+        else if (paid > 0) newStatus = 'partially_paid';
+
+        return {
+          student_id: student.id,
+          standard_fee: batchStandardFee,
+          discount_amount: discount,
+          discount_reason: existing?.discount_reason || null,
+          total_agreed_fee: netAgreed,
+          total_paid: paid,
+          balance_due: balance,
+          status: newStatus
+        };
+      });
+
+      const { error } = await supabase.from('student_fee_profiles').upsert(recordsToUpsert, { onConflict: 'student_id' });
+      if (error) throw error;
+
+      setMessage(`✅ Updated standard fee to ₹${batchStandardFee.toLocaleString()} for all ${activeStudents.length} student(s) in Batch ${selectedBatchNumber}!`);
+      await fetchAllFinancialData();
+    } catch (err: any) {
+      console.error('Error setting batch fee:', err);
+      alert(`Failed to set batch fee: ${err.message}`);
+    } finally {
+      setLoading(false);
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  // --- HANDLERS FOR INDIVIDUAL NET FEE MODAL ---
   const handleDiscountChange = (val: number) => {
     setDiscountAmount(val);
     setNetAgreedFeeInput(Math.max(0, standardFee - val));
@@ -515,7 +575,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               </p>
             </div>
 
-            {/* Selectors */}
+            {/* Course, Batch, & Batch Standard Fee Selectors */}
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <select
                 value={selectedCourseId}
@@ -533,8 +593,27 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                 value={selectedBatchNumber}
                 onChange={(e) => setSelectedBatchNumber(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="Batch #"
-                style={{ width: '80px', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
+                style={{ width: '70px', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
               />
+
+              {/* BATCH STANDARD FEE GLOBAL CONTROLLER */}
+              <div style={{ display: 'flex', alignItems: 'center', background: '#f8fafc', padding: '0.25rem 0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#334155' }}>Batch Fee:</span>
+                <input
+                  type="number"
+                  value={batchStandardFee}
+                  onChange={(e) => setBatchStandardFee(Number(e.target.value))}
+                  style={{ width: '90px', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}
+                />
+                <button
+                  onClick={handleApplyBatchStandardFee}
+                  title="Apply this total standard fee to ALL students in this batch"
+                  style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#0f172a', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
+                >
+                  Apply Fee to Batch
+                </button>
+              </div>
+
             </div>
           </div>
 
@@ -560,7 +639,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                 <tbody>
                   {activeStudents.map(student => {
                     const prof = feeProfiles.find(p => p.student_id === student.id);
-                    const stdFee = prof?.standard_fee || 25000;
+                    const stdFee = prof?.standard_fee || batchStandardFee;
                     const discount = prof?.discount_amount || 0;
                     const agreedFee = prof?.total_agreed_fee || stdFee;
                     const paid = prof?.total_paid || 0;
