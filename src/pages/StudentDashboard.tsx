@@ -19,6 +19,7 @@ import { StudentAppeals } from '../components/student/StudentAppeals';
 import { StudentProfile as StudentProfileView } from '../components/student/StudentProfile';
 import { StudentJobBoard } from '../components/student/StudentJobBoard';
 import { AlumniLounge } from '../components/alumni/AlumniLounge';
+import { StudentAttendanceScanner } from '../components/student/StudentAttendanceScanner';
 import { StudentProfile, Interval, LeaderboardEntry, ScoreLog } from '../lib/types';
 
 const StudentDashboard = () => {
@@ -1453,6 +1454,17 @@ const StudentDashboard = () => {
         {/* Tab Contents */}
         {activeTab === 'progress' && (
           <div>
+            {/* Daily QR Attendance Scanner Component */}
+            {currentStudent.status !== 'alumni' && (
+              <StudentAttendanceScanner 
+                currentStudent={currentStudent} 
+                onAttendanceMarked={() => {
+                  fetchLeaderboard(selectedInterval, currentStudent.course_id, currentStudent.batch_number);
+                  fetchLogsAndWeeklyCheckins(currentStudent.id, selectedInterval);
+                }} 
+              />
+            )}
+
             {/* Welcome & Gamified Badge Banner (specific to progress tab) */}
             {currentStudent.status !== 'alumni' && (
               <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(201, 156, 51, 0.2)', boxShadow: '0 15px 35px rgba(201, 156, 51, 0.1)', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
