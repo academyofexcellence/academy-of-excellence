@@ -11,7 +11,7 @@ interface CertificateHubProps {
 
 export default function CertificateHub({ coursesList, studentList }: CertificateHubProps) {
   const [selectedCourseId, setSelectedCourseId] = useState<string>(coursesList[0]?.id || '');
-  const [selectedBatchNumber, setSelectedBatchNumber] = useState<number>(26);
+  const [selectedBatchNumber, setSelectedBatchNumber] = useState<number | string>(26);
   const [fourDigitBatchCode, setFourDigitBatchCode] = useState<string>('0208'); // e.g. 0208 for DPT0208 or CAT0208
   const [certType, setCertType] = useState<'DPT' | 'CAT'>('DPT');
   const [gradeDescription, setGradeDescription] = useState<string>('Passed with Distinction');
@@ -427,9 +427,11 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem' }}>Batch Number</label>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={selectedBatchNumber}
-              onChange={(e) => setSelectedBatchNumber(parseInt(e.target.value) || 1)}
+              onChange={(e) => setSelectedBatchNumber(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="e.g. 26"
               style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none' }}
             />
           </div>
