@@ -151,3 +151,44 @@ export interface DailyAttendanceLog {
   notes?: string;
   created_at?: string;
 }
+
+export interface StudentFeeProfile {
+  id?: string;
+  student_id: string;
+  standard_fee: number;
+  discount_amount: number;
+  discount_reason?: string;
+  total_agreed_fee: number;
+  total_paid: number;
+  balance_due: number;
+  status: 'unpaid' | 'partially_paid' | 'fully_paid' | 'overdue';
+  updated_at?: string;
+}
+
+export interface FeePaymentTransaction {
+  id: string;
+  receipt_no: string;
+  student_id: string;
+  student_name: string;
+  course_id?: string;
+  batch_number: number;
+  amount_paid: number;
+  payment_mode: 'gpay_bank' | 'office_cash';
+  installment_label: string;
+  notes?: string;
+  logged_by: string;
+  payment_date: string;
+  created_at?: string;
+}
+
+export interface AcademyExpense {
+  id: string;
+  title: string;
+  category: 'rent' | 'utilities' | 'salaries' | 'supplies' | 'marketing' | 'maintenance' | 'other';
+  amount: number;
+  payment_mode: 'gpay_bank' | 'office_cash';
+  notes?: string;
+  logged_by: string;
+  expense_date: string;
+  created_at?: string;
+}
