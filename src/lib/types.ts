@@ -116,3 +116,20 @@ export interface AppealRequest {
   reviewed_by?: string;
   reviewed_at?: string;
 }
+
+export interface CertificateRecord {
+  id: string;
+  certificate_code: string;
+  batch_code_prefix: string;
+  student_id: string;
+  student_name: string;
+  course_id: string;
+  course_name: string;
+  batch_number: number;
+  roll_number?: string;
+  issue_date: string;
+  grade_description: string;
+  status: 'valid' | 'revoked';
+  created_at: string;
+}
+

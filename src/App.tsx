@@ -5,6 +5,7 @@ import Gallery from './pages/Gallery';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import StudentDashboard from './pages/StudentDashboard';
+import VerifyCertificate from './pages/VerifyCertificate';
 import { Menu, X } from 'lucide-react';
 
 const Navigation = () => {
@@ -24,9 +25,8 @@ const Navigation = () => {
     }
   };
 
-  // Hide landing page navbar on private dashboard paths
-  const hideNavbarPaths = ['/student/dashboard', '/admin/dashboard'];
-  if (hideNavbarPaths.includes(location.pathname)) {
+  // Hide landing page navbar on private dashboard and custom verification paths
+  if (location.pathname.startsWith('/student/dashboard') || location.pathname.startsWith('/admin/dashboard') || location.pathname.startsWith('/verify')) {
     return null;
   }
 
@@ -63,6 +63,7 @@ const Navigation = () => {
           <a href="#programs" onClick={(e) => handleNavScroll(e, 'programs')}>Programs</a>
           <Link to="/gallery" onClick={() => setMenuOpen(false)}>Gallery</Link>
           <a href="#alumni" onClick={(e) => handleNavScroll(e, 'alumni')}>Alumni</a>
+          <Link to="/verify" onClick={() => setMenuOpen(false)}>Verify Certificate</Link>
           <Link to="/admin" onClick={() => setMenuOpen(false)} className="btn btn-outline" style={{ padding: '0.5rem 1.5rem' }}>Login</Link>
         </div>
       </div>
@@ -77,6 +78,8 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/gallery" element={<Gallery />} />
+        <Route path="/verify" element={<VerifyCertificate />} />
+        <Route path="/verify/*" element={<VerifyCertificate />} />
         <Route path="/admin" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/student/dashboard" element={<StudentDashboard />} />
@@ -86,3 +89,4 @@ function App() {
 }
 
 export default App;
+

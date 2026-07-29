@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { StudentProfile, ScoreLog, Interval } from '../../lib/types';
+import { supabase } from '../../lib/supabase';
 import { 
-  Calendar, BookOpen, MessageSquare, Video, Globe, Award, Printer, AlertTriangle, FileText, Clock, Grid, Sparkles, Compass, Volume2
+  Calendar, BookOpen, MessageSquare, Video, Globe, Award, Printer, AlertTriangle, FileText, Clock, Grid, Sparkles, Compass, Volume2, ShieldCheck, ExternalLink, QrCode
 } from 'lucide-react';
 
 interface StudentProgressProps {
@@ -79,6 +80,23 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
   handlePrintReport,
   getDatesRange
 }) => {
+  const [certRecord, setCertRecord] = useState<any>(null);
+
+  useEffect(() => {
+    if (currentStudent?.id) {
+      supabase
+        .from('certificates')
+        .select('*')
+        .eq('student_id', currentStudent.id)
+        .eq('status', 'valid')
+        .order('created_at', { ascending: false })
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setCertRecord(data);
+        });
+    }
+  }, [currentStudent?.id]);
+
   const hasAnyRemarks = remarks && (
     remarks.strengths?.trim() ||
     remarks.weaknesses?.trim() ||
@@ -93,6 +111,39 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
   if (currentStudent.status === 'alumni') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        
+        {/* Verified Certificate Card */}
+        {certRecord && (
+          <div className="glass-card" style={{ padding: '1.25rem 1.5rem', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', borderRadius: '16px', border: '2px solid #d97706', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.3)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ background: '#16a34a', borderRadius: '50%', padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ShieldCheck size={28} color="white" />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.7rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Accredited Credentials
+                </div>
+                <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0.2rem 0', color: 'white' }}>
+                  Official Verified Certificate Issued
+                </h4>
+                <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                  Serial: <code style={{ color: '#fbbf24', background: 'rgba(255,255,255,0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>{certRecord.certificate_code}</code>
+                </div>
+              </div>
+            </div>
+
+            <a
+              href={`/verify?code=${encodeURIComponent(certRecord.certificate_code)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-primary"
+              style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)', color: 'white', textDecoration: 'none', fontWeight: 700, fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: 'none' }}
+            >
+              <ExternalLink size={16} /> View Verification Portal
+            </a>
+          </div>
+        )}
+
         {/* Period Selector */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem', marginBottom: '-0.5rem' }}>
           <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Period filter:</label>
@@ -383,6 +434,38 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
+      {/* Verified Certificate Card */}
+      {certRecord && (
+        <div className="glass-card" style={{ padding: '1.25rem 1.5rem', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', borderRadius: '16px', border: '2px solid #d97706', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ background: '#16a34a', borderRadius: '50%', padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ShieldCheck size={28} color="white" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                Accredited Credentials
+              </div>
+              <h4 style={{ fontSize: '1.15rem', fontWeight: 800, margin: '0.2rem 0', color: 'white' }}>
+                Official Verified Certificate Issued
+              </h4>
+              <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                Serial: <code style={{ color: '#fbbf24', background: 'rgba(255,255,255,0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 800 }}>{certRecord.certificate_code}</code>
+              </div>
+            </div>
+          </div>
+
+          <a
+            href={`/verify?code=${encodeURIComponent(certRecord.certificate_code)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-primary"
+            style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)', color: 'white', textDecoration: 'none', fontWeight: 700, fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: 'none' }}
+          >
+            <ExternalLink size={16} /> View Verification Portal
+          </a>
+        </div>
+      )}
+
       {/* Metrics Period Selector */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem', marginBottom: '-0.5rem' }}>
         <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Period filter:</label>

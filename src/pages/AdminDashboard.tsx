@@ -40,6 +40,7 @@ import { OperationsHub } from '../components/dashboard/OperationsHub';
 import { AlumniLounge } from '../components/alumni/AlumniLounge';
 import { PlacementTracker } from '../components/dashboard/PlacementTracker';
 import { MeetingMinutes } from '../components/dashboard/MeetingMinutes';
+import CertificateHub from '../components/dashboard/CertificateHub';
 
 interface StaffProfile {
   id: string;
@@ -355,7 +356,7 @@ const AdminDashboard = () => {
   };
 
   // Tab navigation states
-  const [adminTab, setAdminTab] = useState<'menu' | 'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge' | 'management'>(
+  const [adminTab, setAdminTab] = useState<'menu' | 'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge' | 'management' | 'certificates'>(
     window.innerWidth < 768 ? 'menu' : 'dashboard'
   );
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
@@ -4029,6 +4030,18 @@ const AdminDashboard = () => {
             <MessageSquare size={16} /> Alumni Lounge
           </button>
 
+          <button 
+            onClick={() => setAdminTab('certificates')}
+            style={{
+              padding: '0.8rem 1.2rem', background: 'none', border: 'none',
+              borderBottom: adminTab === 'certificates' ? '3px solid var(--primary)' : '3px solid transparent',
+              color: adminTab === 'certificates' ? 'var(--primary-dark)' : 'var(--text-muted)',
+              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
+            }}
+          >
+            <Award size={16} /> Certificates
+          </button>
+
           {isLeadership && (
             <>
               <button 
@@ -4473,6 +4486,10 @@ const AdminDashboard = () => {
 
         {adminTab === 'alumnilounge' && (
           <AlumniLounge currentUserId={currentUser?.id || ''} isStaffOrAdmin={true} />
+        )}
+
+        {adminTab === 'certificates' && (
+          <CertificateHub coursesList={courses} studentList={studentList} />
         )}
 
         {isLeadership && adminTab === 'operations' && (
