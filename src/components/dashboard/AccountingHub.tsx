@@ -28,10 +28,11 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const [installmentLabel, setInstallmentLabel] = useState<string>('Admission Fee (1st Payment)');
   const [paymentNotes, setPaymentNotes] = useState<string>('');
 
-  // Discount Modal
+  // Net Fee / Discount Modal
   const [discountingStudent, setDiscountingStudent] = useState<StudentProfile | null>(null);
   const [standardFee, setStandardFee] = useState<number>(25000);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [netAgreedFeeInput, setNetAgreedFeeInput] = useState<number>(25000);
   const [discountReason, setDiscountReason] = useState<string>('');
 
   // Add Expense Modal
@@ -89,11 +90,22 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const gpayBankBalance = totalGpayIncome - totalGpayExpense;
   const netLiquidity = officeCashBalance + gpayBankBalance;
 
-  // --- SAVE DISCOUNT / AGREED FEE ---
+  // --- HANDLERS FOR NET FEE MODAL ---
+  const handleDiscountChange = (val: number) => {
+    setDiscountAmount(val);
+    setNetAgreedFeeInput(Math.max(0, standardFee - val));
+  };
+
+  const handleNetFeeChange = (val: number) => {
+    setNetAgreedFeeInput(val);
+    setDiscountAmount(Math.max(0, standardFee - val));
+  };
+
   const handleSaveDiscount = async () => {
     if (!discountingStudent) return;
     try {
-      const netAgreed = Math.max(0, standardFee - discountAmount);
+      const netAgreed = Math.max(0, netAgreedFeeInput);
+      const computedDiscount = Math.max(0, standardFee - netAgreed);
       const existingProfile = feeProfiles.find(p => p.student_id === discountingStudent.id);
       const paidSoFar = existingProfile?.total_paid || 0;
       const newBalance = Math.max(0, netAgreed - paidSoFar);
@@ -105,7 +117,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
       const payload = {
         student_id: discountingStudent.id,
         standard_fee: standardFee,
-        discount_amount: discountAmount,
+        discount_amount: computedDiscount,
         discount_reason: discountReason || null,
         total_agreed_fee: netAgreed,
         total_paid: paidSoFar,
@@ -116,7 +128,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
       const { error } = await supabase.from('student_fee_profiles').upsert(payload, { onConflict: 'student_id' });
       if (error) throw error;
 
-      setMessage(`✅ Updated fee structure for ${discountingStudent.name}! Net Fee: ₹${netAgreed.toLocaleString()}`);
+      setMessage(`✅ Updated fee structure for ${discountingStudent.name}! Net Agreed Fee set to ₹${netAgreed.toLocaleString()}`);
       setDiscountingStudent(null);
       await fetchAllFinancialData();
     } catch (err: any) {
@@ -136,10 +148,8 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
     }
 
     try {
-      // 1. Generate Receipt Number (e.g. REC-2026-0042)
       const receiptNo = `REC-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(4, '0')}`;
 
-      // 2. Insert Transaction Record
       const txPayload = {
         receipt_no: receiptNo,
         student_id: collectingStudent.id,
@@ -156,7 +166,6 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
       const { data: newTx, error: txError } = await supabase.from('fee_payment_transactions').insert(txPayload).select().single();
       if (txError) throw txError;
 
-      // 3. Update Student Fee Profile
       const existingProfile = feeProfiles.find(p => p.student_id === collectingStudent.id);
       const agreedFee = existingProfile?.total_agreed_fee || 25000;
       const currentPaid = existingProfile?.total_paid || 0;
@@ -181,7 +190,6 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
 
       setMessage(`✅ Recorded ₹${paymentAmount.toLocaleString()} payment via ${paymentMode === 'gpay_bank' ? 'GPay/Bank' : 'Liquid Office Cash'}!`);
       
-      // Auto open printable receipt
       if (newTx) {
         setActiveReceipt({ tx: newTx as FeePaymentTransaction, student: collectingStudent });
       }
@@ -235,7 +243,6 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
 
     const reminderMsg = `Dear ${student.name}, greetings from Academy of Excellence!\nThis is a friendly payment reminder for your course ${selectedCourse?.name || ''} (Batch ${student.batch_number}).\nTotal Agreed Fee: ₹${(prof?.total_agreed_fee || 25000).toLocaleString()}\nTotal Paid: ₹${(prof?.total_paid || 0).toLocaleString()}\nRemaining Balance: ₹${balance.toLocaleString()}\nKindly clear your upcoming installment. Thank you!`;
     
-    // Copy to clipboard or open WhatsApp link if phone is present
     const phone = student.whatsapp_number || student.mobile_number;
     if (phone) {
       const cleanPhone = phone.replace(/[^0-9]/g, '');
@@ -265,13 +272,24 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
           </div>
         </div>
 
-        <button
-          onClick={fetchAllFinancialData}
-          className="btn btn-outline"
-          style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', color: 'white', borderColor: 'rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-        >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Quick Record Expense Button in Header */}
+          <button
+            onClick={() => { setActiveTab('expenses'); setShowAddExpense(true); }}
+            className="btn btn-primary"
+            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', background: '#dc2626', color: 'white', borderRadius: '8px', border: 'none', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <PlusCircle size={16} /> Record Expense
+          </button>
+
+          <button
+            onClick={fetchAllFinancialData}
+            className="btn btn-outline"
+            style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', color: 'white', borderColor: 'rgba(255,255,255,0.2)', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh
+          </button>
+        </div>
       </div>
 
       {message && (
@@ -603,18 +621,19 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                               <DollarSign size={14} /> Collect Fee
                             </button>
 
-                            {/* Discount Editor */}
+                            {/* Set Net Fee / Discount Editor */}
                             <button
                               onClick={() => {
                                 setDiscountingStudent(student);
                                 setStandardFee(stdFee);
                                 setDiscountAmount(discount);
+                                setNetAgreedFeeInput(agreedFee);
                                 setDiscountReason(prof?.discount_reason || '');
                               }}
-                              title="Set Custom Discount / Concession"
-                              style={{ padding: '0.4rem 0.5rem', borderRadius: '6px', background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', cursor: 'pointer' }}
+                              title="Set Custom Net Agreed Fee or Discount"
+                              style={{ padding: '0.4rem 0.65rem', borderRadius: '6px', background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', fontWeight: 800, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                             >
-                              <Tag size={14} />
+                              <Tag size={14} /> Set Net Fee
                             </button>
 
                             {/* Send Reminder */}
@@ -865,7 +884,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
               <h4 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.1rem' }}>
-                Record Academy Expense
+                Record Academy Expense Outflow
               </h4>
               <button onClick={() => setShowAddExpense(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={20} />
@@ -876,7 +895,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Expense Title *</label>
               <input
                 type="text"
-                placeholder="e.g. Office Electricity Bill / Stationery"
+                placeholder="e.g. Office Electricity Bill / Tea / Paper"
                 value={expenseTitle}
                 onChange={(e) => setExpenseTitle(e.target.value)}
                 style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
@@ -935,14 +954,14 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
         </div>
       )}
 
-      {/* --- DISCOUNT EDITOR MODAL --- */}
+      {/* --- NET FEE & DISCOUNT MODAL --- */}
       {discountingStudent && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
           <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', width: '100%', maxWidth: '450px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
               <h4 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.1rem' }}>
-                Assign Student Concession / Discount
+                Set Net Agreed Fee & Concession
               </h4>
               <button onClick={() => setDiscountingStudent(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
                 <X size={20} />
@@ -961,23 +980,24 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Discount Concession (₹)</label>
-                <input type="number" value={discountAmount} onChange={(e) => setDiscountAmount(Number(e.target.value))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 800, color: '#b45309' }} />
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Net Agreed Fee (₹) *</label>
+                <input type="number" value={netAgreedFeeInput} onChange={(e) => handleNetFeeChange(Number(e.target.value))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #16a34a', fontSize: '1rem', fontWeight: 900, color: '#15803d', background: '#f0fdf4' }} />
               </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Calculated Discount (₹)</label>
+              <input type="number" value={discountAmount} onChange={(e) => handleDiscountChange(Number(e.target.value))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 800, color: '#b45309' }} />
             </div>
 
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Concession Reason / Notes</label>
-              <input type="text" placeholder="e.g. Merit Scholarship / Special Concession" value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
-            </div>
-
-            <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1.25rem', fontSize: '0.85rem' }}>
-              Net Agreed Tuition Fee: <strong style={{ color: '#0f172a', fontSize: '1rem' }}>₹{Math.max(0, standardFee - discountAmount).toLocaleString()}</strong>
+              <input type="text" placeholder="e.g. Special Concession / Scholarship" value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }} />
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
               <button onClick={() => setDiscountingStudent(null)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleSaveDiscount} style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#b45309', color: 'white', fontWeight: 800, cursor: 'pointer' }}>Save Fee Structure</button>
+              <button onClick={handleSaveDiscount} style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 800, cursor: 'pointer' }}>Save Net Fee</button>
             </div>
 
           </div>
