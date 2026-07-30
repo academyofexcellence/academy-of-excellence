@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../../lib/supabase';
 import { StudentProfile, DailyAttendanceLog } from '../../lib/types';
 import { QrCode, CheckCircle2, AlertCircle, Camera, Key, X, Clock, Award, Sparkles, RefreshCw } from 'lucide-react';
@@ -61,7 +62,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
     setCameraActive(true);
 
     try {
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 200));
 
       const readerElem = document.getElementById('qr-reader');
       if (!readerElem) return;
@@ -234,6 +235,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
         });
       }
 
+      stopCameraScanner();
       setShowScannerModal(false);
       if (onAttendanceMarked) onAttendanceMarked();
 
@@ -243,6 +245,194 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
     } finally {
       setLoading(false);
     }
+  };
+
+  // Render Full-Screen Modal Portal directly at document.body
+  const renderFullScreenModal = () => {
+    if (!showScannerModal) return null;
+
+    const modalContent = (
+      <div 
+        style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          width: '100vw', 
+          height: '100dvh', 
+          background: '#0f172a', 
+          zIndex: 999999, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          justifyContent: 'space-between',
+          padding: '1rem 1.25rem 1.5rem 1.25rem', 
+          boxSizing: 'border-box',
+          overflowY: 'auto'
+        }}
+      >
+        {/* CSS Fix for html5-qrcode video element */}
+        <style>{`
+          #qr-reader {
+            border: none !important;
+            width: 100% !important;
+            background: #000 !important;
+          }
+          #qr-reader video {
+            width: 100% !important;
+            max-height: 48vh !important;
+            object-fit: cover !important;
+            border-radius: 16px !important;
+          }
+          #qr-reader img {
+            display: none !important;
+          }
+          #qr-reader__scan_region {
+            border-radius: 16px !important;
+            overflow: hidden !important;
+          }
+        `}</style>
+
+        {/* Modal Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+          <div>
+            <h4 style={{ margin: 0, fontWeight: 800, fontSize: '1.15rem', color: '#c99c33', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <QrCode size={20} /> Daily Attendance Scanner
+            </h4>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+              {!todayLog ? 'Morning Check-In' : 'Afternoon Check-Out'} • Academy of Excellence
+            </span>
+          </div>
+          <button 
+            onClick={() => { stopCameraScanner(); setShowScannerModal(false); }} 
+            style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Modal Mode Selector Tabs */}
+        <div style={{ display: 'flex', background: '#1e293b', borderRadius: '12px', padding: '0.3rem', marginBottom: '1.25rem', border: '1px solid rgba(201, 156, 51, 0.3)' }}>
+          <button
+            onClick={() => setModalTab('camera')}
+            style={{
+              flex: 1,
+              padding: '0.6rem',
+              borderRadius: '9px',
+              border: 'none',
+              background: modalTab === 'camera' ? '#c99c33' : 'transparent',
+              color: modalTab === 'camera' ? 'white' : '#94a3b8',
+              fontWeight: 800,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            <Camera size={16} /> Scan Camera QR
+          </button>
+
+          <button
+            onClick={() => setModalTab('passkey')}
+            style={{
+              flex: 1,
+              padding: '0.6rem',
+              borderRadius: '9px',
+              border: 'none',
+              background: modalTab === 'passkey' ? '#c99c33' : 'transparent',
+              color: modalTab === 'passkey' ? 'white' : '#94a3b8',
+              fontWeight: 800,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            <Key size={16} /> Enter Passkey
+          </button>
+        </div>
+
+        {/* Modal Main View Body */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          
+          {/* CAMERA SCANNER TAB */}
+          {modalTab === 'camera' && (
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '1rem', marginTop: 0 }}>
+                Point your phone camera at the classroom QR code on screen:
+              </p>
+
+              {cameraError ? (
+                <div style={{ padding: '1.25rem', borderRadius: '14px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', color: '#fca5a5', fontSize: '0.85rem', textAlign: 'center', marginBottom: '1rem' }}>
+                  {cameraError}
+                </div>
+              ) : (
+                <div style={{ overflow: 'hidden', borderRadius: '20px', border: '2px solid #c99c33', background: '#000', margin: '0 auto 1rem auto', maxWidth: '360px', boxShadow: '0 15px 30px rgba(0,0,0,0.5)' }}>
+                  <div id="qr-reader" style={{ width: '100%' }}></div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* PASSKEY ENTRY TAB */}
+          {modalTab === 'passkey' && (
+            <div style={{ maxWidth: '360px', margin: '0 auto', width: '100%' }}>
+              <p style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '1rem', marginTop: 0, textAlign: 'center' }}>
+                Enter the 6-digit daily passkey displayed under the classroom QR code:
+              </p>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <input
+                  type="text"
+                  placeholder="e.g. 948271"
+                  value={passkeyInput}
+                  onChange={(e) => setPasskeyInput(e.target.value)}
+                  style={{ width: '100%', padding: '0.9rem 1rem', borderRadius: '14px', border: '2px solid #c99c33', background: '#1e293b', color: 'white', fontSize: '1.4rem', fontWeight: 900, textAlign: 'center', letterSpacing: '0.15em', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <button
+                onClick={() => handleMarkAttendance(passkeyInput)}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '0.9rem',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #c99c33 0%, #a67c22 100%)',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '1rem',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 8px 20px rgba(201, 156, 51, 0.3)'
+                }}
+              >
+                {loading ? 'Submitting...' : 'Confirm & Mark Attendance'}
+              </button>
+            </div>
+          )}
+
+        </div>
+
+        {/* Modal Bottom Footer */}
+        <div style={{ textAlign: 'center', marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.75rem' }}>
+          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+            Academy of Excellence • Automated QR Attendance
+          </span>
+        </div>
+
+      </div>
+    );
+
+    return createPortal(modalContent, document.body);
   };
 
   return (
@@ -283,7 +473,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           </div>
         </div>
 
-        {/* Scan Action Button in Official Academy Gold */}
+        {/* Scan Action Button */}
         <div>
           {(!todayLog || !todayLog.check_out_time) ? (
             <button
@@ -321,128 +511,8 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
         </div>
       )}
 
-      {/* --- RESPONSIVE ACADEMY THEMED MOBILE MODAL --- */}
-      {showScannerModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', boxSizing: 'border-box' }}>
-          <div style={{ background: '#0f172a', border: '1px solid rgba(201, 156, 51, 0.3)', padding: '1.25rem 1.5rem', borderRadius: '20px', width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto', color: 'white', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', boxSizing: 'border-box' }}>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.65rem' }}>
-              <h4 style={{ margin: 0, fontWeight: 800, fontSize: '1.05rem', color: '#c99c33', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <QrCode size={18} /> Record Attendance
-              </h4>
-              <button onClick={() => { stopCameraScanner(); setShowScannerModal(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Modal Tabs: Camera vs Passkey */}
-            <div style={{ display: 'flex', background: '#1e293b', borderRadius: '10px', padding: '0.25rem', marginBottom: '1.25rem', border: '1px solid rgba(201, 156, 51, 0.2)' }}>
-              <button
-                onClick={() => setModalTab('camera')}
-                style={{
-                  flex: 1,
-                  padding: '0.5rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: modalTab === 'camera' ? '#c99c33' : 'transparent',
-                  color: modalTab === 'camera' ? 'white' : '#94a3b8',
-                  fontWeight: 800,
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.3rem'
-                }}
-              >
-                <Camera size={14} /> Scan Camera QR
-              </button>
-
-              <button
-                onClick={() => setModalTab('passkey')}
-                style={{
-                  flex: 1,
-                  padding: '0.5rem',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: modalTab === 'passkey' ? '#c99c33' : 'transparent',
-                  color: modalTab === 'passkey' ? 'white' : '#94a3b8',
-                  fontWeight: 800,
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.3rem'
-                }}
-              >
-                <Key size={14} /> Enter Passkey
-              </button>
-            </div>
-
-            {/* --- TAB 1: LIVE CAMERA QR SCANNER --- */}
-            {modalTab === 'camera' && (
-              <div>
-                <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 0, textAlign: 'center' }}>
-                  Point your camera at the classroom QR code:
-                </p>
-
-                {cameraError ? (
-                  <div style={{ padding: '1rem', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#f87171', fontSize: '0.8rem', textAlign: 'center', marginBottom: '1rem' }}>
-                    {cameraError}
-                  </div>
-                ) : (
-                  <div style={{ overflow: 'hidden', borderRadius: '14px', border: '2px solid #c99c33', background: '#000', marginBottom: '1rem' }}>
-                    <div id="qr-reader" style={{ width: '100%' }}></div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* --- TAB 2: PASSKEY INPUT FORM --- */}
-            {modalTab === 'passkey' && (
-              <div>
-                <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: 0 }}>
-                  Enter the 6-digit daily passkey displayed under the classroom QR code:
-                </p>
-
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <input
-                    type="text"
-                    placeholder="e.g. 948271"
-                    value={passkeyInput}
-                    onChange={(e) => setPasskeyInput(e.target.value)}
-                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '2px solid #c99c33', background: '#1e293b', color: 'white', fontSize: '1.2rem', fontWeight: 800, textAlign: 'center', letterSpacing: '0.12em', boxSizing: 'border-box' }}
-                  />
-                </div>
-
-                <button
-                  onClick={() => handleMarkAttendance(passkeyInput)}
-                  disabled={loading}
-                  style={{
-                    width: '100%',
-                    padding: '0.8rem',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #c99c33 0%, #a67c22 100%)',
-                    color: 'white',
-                    border: 'none',
-                    fontWeight: 800,
-                    fontSize: '0.9rem',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
-                >
-                  {loading ? 'Submitting...' : 'Confirm & Mark Attendance'}
-                </button>
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
+      {/* Render Full Screen Modal Portal */}
+      {renderFullScreenModal()}
 
     </div>
   );
