@@ -179,17 +179,32 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
     }
   };
 
-  // Sync points to Leaderboard Scores table
+  // Sync points to Leaderboard Scores table under active term interval
   const syncScoreToLeaderboard = async (studentId: string, points: number) => {
     try {
-      await supabase.from('scores').insert({
+      const student = activeStudents.find(s => s.id === studentId);
+      let intervalId: string | undefined = undefined;
+
+      if (student) {
+        const { data: activeInterval } = await supabase
+          .from('scoring_intervals')
+          .select('id')
+          .eq('course_id', student.course_id)
+          .eq('batch_number', student.batch_number)
+          .eq('is_active', true)
+          .maybeSingle();
+        intervalId = activeInterval?.id;
+      }
+
+      await supabase.from('scores').upsert({
         student_id: studentId,
-        score_type: 'daily_attendance',
+        interval_id: intervalId,
+        score_type: 'attendance',
         points: points,
         max_points: 10,
         activity_name: `Daily QR Attendance (${selectedDate})`,
         logged_date: selectedDate
-      });
+      }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
     } catch (err) {
       console.error('Error syncing score:', err);
     }

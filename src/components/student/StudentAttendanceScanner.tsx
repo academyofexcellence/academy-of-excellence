@@ -175,14 +175,25 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
         const { data: inserted, error } = await supabase.from('daily_attendance_logs').insert(newLogPayload).select().single();
         if (error) throw error;
 
-        await supabase.from('scores').insert({
+        // Fetch active scoring interval for student's course & batch
+        const { data: activeInterval } = await supabase
+          .from('scoring_intervals')
+          .select('id')
+          .eq('course_id', currentStudent.course_id)
+          .eq('batch_number', currentStudent.batch_number)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        // Sync points to scores leaderboard under active term interval
+        await supabase.from('scores').upsert({
           student_id: currentStudent.id,
-          score_type: 'daily_attendance',
+          interval_id: activeInterval?.id,
+          score_type: 'attendance',
           points: initialPoints,
           max_points: 10,
-          activity_name: `QR Attendance Check-In (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+          activity_name: `Daily QR Attendance Check-In (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
           logged_date: todayStr
-        });
+        }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
 
         setTodayLog(inserted as DailyAttendanceLog);
         setMessage({
@@ -216,17 +227,25 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
 
         if (error) throw error;
 
-        const pointDiff = finalPoints - (todayLog.points_awarded || 0);
-        if (pointDiff > 0) {
-          await supabase.from('scores').insert({
-            student_id: currentStudent.id,
-            score_type: 'daily_attendance',
-            points: pointDiff,
-            max_points: 10,
-            activity_name: `QR Attendance Check-Out (${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
-            logged_date: todayStr
-          });
-        }
+        // Fetch active scoring interval for student's course & batch
+        const { data: activeInterval } = await supabase
+          .from('scoring_intervals')
+          .select('id')
+          .eq('course_id', currentStudent.course_id)
+          .eq('batch_number', currentStudent.batch_number)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        // Update score log for afternoon completion
+        await supabase.from('scores').upsert({
+          student_id: currentStudent.id,
+          interval_id: activeInterval?.id,
+          score_type: 'attendance',
+          points: finalPoints,
+          max_points: 10,
+          activity_name: `Daily QR Attendance Check-Out (${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+          logged_date: todayStr
+        }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
 
         setTodayLog(updated as DailyAttendanceLog);
         setMessage({
