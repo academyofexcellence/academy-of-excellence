@@ -40,19 +40,25 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
     }
   };
 
-  // Helper to calculate daily attendance points (10 vs 5 vs 0)
+  // Helper to extract hour/minute in IST (Asia/Kolkata UTC+5:30)
+  const getISTTimeDetails = (dateInput?: string | Date) => {
+    const d = dateInput ? new Date(dateInput) : new Date();
+    const istTimeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false });
+    const [h, m] = istTimeStr.split(':').map(Number);
+    const decimalHours = h + m / 60;
+    return { hour: h, minute: m, decimalHours };
+  };
+
+  // Helper to calculate daily attendance points (10 vs 5 vs 0) strictly in IST
   const calculatePoints = (inTimeStr?: string, outTimeStr?: string): { points: number; status: 'present_full' | 'present_half' | 'absent' } => {
     if (!inTimeStr) return { points: 0, status: 'absent' };
 
-    const inTime = new Date(inTimeStr);
-    const inHour = inTime.getHours();
-    const inMin = inTime.getMinutes();
-    const isOnTimeCheckIn = (inHour < 10) || (inHour === 10 && inMin === 0);
+    const inDetails = getISTTimeDetails(inTimeStr);
+    const isOnTimeCheckIn = inDetails.decimalHours <= 10.08; // 10:05 AM in IST
 
     if (outTimeStr) {
-      const outTime = new Date(outTimeStr);
-      const outHour = outTime.getHours();
-      const isFullDayCheckOut = outHour >= 16; // 4:00 PM or later
+      const outDetails = getISTTimeDetails(outTimeStr);
+      const isFullDayCheckOut = outDetails.decimalHours >= 15.95; // 4:00 PM in IST
 
       if (isOnTimeCheckIn && isFullDayCheckOut) {
         return { points: 10, status: 'present_full' };
@@ -77,15 +83,12 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
 
     try {
       const now = new Date();
-      const currentHour = now.getHours();
+      const nowDetails = getISTTimeDetails(now);
       const nowIso = now.toISOString();
-
-      // Check if code contains AM or PM or passkey
-      const isMorningSlot = currentHour < 13; // Before 1:00 PM is Morning Check-In
 
       if (!todayLog) {
         // --- FIRST SCAN OF THE DAY (CHECK-IN) ---
-        const checkInStatus = (currentHour < 10 || (currentHour === 10 && now.getMinutes() === 0)) ? 'on_time' : 'late';
+        const checkInStatus = nowDetails.decimalHours <= 10.08 ? 'on_time' : 'late';
         const initialPoints = checkInStatus === 'on_time' ? 10 : 5;
         const initialStatus = checkInStatus === 'on_time' ? 'present_full' : 'present_half';
 
@@ -128,7 +131,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           return;
         }
 
-        const checkOutStatus = currentHour >= 16 ? 'on_time' : 'early';
+        const checkOutStatus = nowDetails.hour >= 16 ? 'on_time' : 'early';
         const { points: finalPoints, status: finalStatus } = calculatePoints(todayLog.check_in_time, nowIso);
 
         const updatePayload = {

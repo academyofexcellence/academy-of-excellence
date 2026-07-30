@@ -98,25 +98,34 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
     }
   };
 
-  // Evaluate Attendance & Points Logic
-  const evaluatePointsAndStatus = (checkInIso?: string, checkOutIso?: string) => {
-    if (!checkInIso && !checkOutIso) {
-      return { points: 0, status: 'absent', check_in_status: 'pending', check_out_status: 'pending' };
+  // Helper to extract decimal hours in IST (Asia/Kolkata UTC+5:30)
+  const getHoursInIST = (timeInput?: string | Date): number => {
+    if (!timeInput) return -1;
+    if (typeof timeInput === 'string' && /^\d{2}:\d{2}$/.test(timeInput)) {
+      const [h, m] = timeInput.split(':').map(Number);
+      return h + m / 60;
     }
+    const d = new Date(timeInput);
+    if (isNaN(d.getTime())) return -1;
+    const istTimeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false });
+    const [h, m] = istTimeStr.split(':').map(Number);
+    return h + m / 60;
+  };
+
+  // Evaluate Attendance & Points Logic (Strictly in IST)
+  const evaluatePointsAndStatus = (checkInInput?: string | Date, checkOutInput?: string | Date) => {
+    const inHours = getHoursInIST(checkInInput);
+    const outHours = getHoursInIST(checkOutInput);
 
     let checkInStatus: 'on_time' | 'late' | 'pending' = 'pending';
     let checkOutStatus: 'on_time' | 'early' | 'pending' = 'pending';
 
-    if (checkInIso) {
-      const inDate = new Date(checkInIso);
-      const inHours = inDate.getHours() + inDate.getMinutes() / 60;
-      checkInStatus = inHours <= 10.05 ? 'on_time' : 'late';
+    if (inHours >= 0) {
+      checkInStatus = inHours <= 10.08 ? 'on_time' : 'late'; // 10:05 AM grace in IST
     }
 
-    if (checkOutIso) {
-      const outDate = new Date(checkOutIso);
-      const outHours = outDate.getHours() + outDate.getMinutes() / 60;
-      checkOutStatus = outHours >= 15.95 ? 'on_time' : 'early'; // 4:00 PM (16:00)
+    if (outHours >= 0) {
+      checkOutStatus = outHours >= 15.95 ? 'on_time' : 'early'; // 4:00 PM (16:00) in IST
     }
 
     if (checkInStatus === 'on_time' && checkOutStatus === 'on_time') {
@@ -219,10 +228,7 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
 
   // --- RUN TEST SIMULATION (SANDBOX - ZERO IMPACT ON PRODUCTION) ---
   const handleRunTestSimulation = () => {
-    const inIso = testCheckInTime ? `2026-07-30T${testCheckInTime}:00Z` : undefined;
-    const outIso = testCheckOutTime ? `2026-07-30T${testCheckOutTime}:00Z` : undefined;
-
-    const res = evaluatePointsAndStatus(inIso, outIso);
+    const res = evaluatePointsAndStatus(testCheckInTime, testCheckOutTime);
 
     let explanation = '';
     if (res.points === 10) {
