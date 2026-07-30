@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import BackupSyncHub from './BackupSyncHub';
 import { 
   ClipboardList, 
   Image, 
@@ -14,7 +15,8 @@ import {
   Database,
   Download,
   FileDown,
-  RefreshCw 
+  RefreshCw,
+  HardDrive
 } from 'lucide-react';
 import { Course, ScoringInterval, Task, StaffProfile } from '../../lib/types';
 
@@ -145,7 +147,7 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
   filterCourse,
   filterBatch
 }) => {
-  const [subTab, setSubTab] = useState<'intervals' | 'tasks' | 'website' | 'system'>('intervals');
+  const [subTab, setSubTab] = useState<'intervals' | 'tasks' | 'website' | 'system' | 'backup_sync'>('intervals');
 
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
   const [galleryUploading, setGalleryUploading] = useState(false);
@@ -650,6 +652,26 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
           <Image size={15} /> Website Content
         </button>
         <button
+          onClick={() => setSubTab('backup_sync')}
+          style={{
+            padding: '0.5rem 1.2rem',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            background: subTab === 'backup_sync' ? 'white' : 'transparent',
+            color: subTab === 'backup_sync' ? 'var(--primary-dark)' : 'var(--text-muted)',
+            boxShadow: subTab === 'backup_sync' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem'
+          }}
+        >
+          <HardDrive size={15} /> 💾 Local Backup & Dual-Sync
+        </button>
+        <button
           onClick={() => setSubTab('system')}
           style={{
             padding: '0.5rem 1.2rem',
@@ -667,11 +689,12 @@ export const OperationsHub: React.FC<OperationsHubProps> = ({
             gap: '0.4rem'
           }}
         >
-          <Database size={15} /> Backup & Portability
+          <Database size={15} /> Legacy Backup & Export
         </button>
       </div>
 
       {/* Tab Panels */}
+      {subTab === 'backup_sync' && <BackupSyncHub />}
       {subTab === 'intervals' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
           {/* Manage Courses Panel */}
