@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Course, StudentProfile, DailyAttendanceLog } from '../../lib/types';
-import { Calendar, QrCode, Printer, RefreshCw, CheckCircle2, Clock, AlertTriangle, UserCheck, ShieldCheck, Search, Filter, Edit3, Save, X, PlusCircle } from 'lucide-react';
+import { Calendar, QrCode, Printer, RefreshCw, CheckCircle2, Clock, AlertTriangle, UserCheck, ShieldCheck, Search, Filter, Edit3, Save, X, PlusCircle, FlaskConical, Play, Sparkles } from 'lucide-react';
 import QRCode from 'qrcode';
 
 interface AttendanceHubProps {
@@ -13,7 +13,7 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
   const [selectedCourseId, setSelectedCourseId] = useState<string>(coursesList[0]?.id || '');
   const [selectedBatchNumber, setSelectedBatchNumber] = useState<number | string>(26);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [subTab, setSubTab] = useState<'qr_screen' | 'daily_register' | 'history_logs'>('daily_register');
+  const [subTab, setSubTab] = useState<'qr_screen' | 'daily_register' | 'history_logs' | 'test_simulator'>('daily_register');
 
   // Logs & Loading
   const [attendanceLogs, setAttendanceLogs] = useState<DailyAttendanceLog[]>([]);
@@ -31,6 +31,17 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
   const [editCheckOut, setEditCheckOut] = useState<string>('');
   const [editPoints, setEditPoints] = useState<number>(10);
   const [editNotes, setEditNotes] = useState<string>('');
+
+  // TEST SIMULATOR SANDBOX STATE
+  const [testCheckInTime, setTestCheckInTime] = useState<string>('09:45');
+  const [testCheckOutTime, setTestCheckOutTime] = useState<string>('16:15');
+  const [testResult, setTestResult] = useState<{
+    checkInStatus: string;
+    checkOutStatus: string;
+    points: number;
+    status: string;
+    explanation: string;
+  } | null>(null);
 
   const selectedCourse = coursesList.find(c => c.id === selectedCourseId);
   const activeStudents = studentList.filter(
@@ -53,40 +64,41 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
         .from('daily_attendance_logs')
         .select('*')
         .eq('date', selectedDate)
-        .order('created_at', { ascending: false });
+        .order('student_name', { ascending: true });
 
       if (error) throw error;
       setAttendanceLogs(data as DailyAttendanceLog[] || []);
     } catch (err: any) {
-      console.error('Error fetching attendance logs:', err);
+      console.error('Error fetching logs:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Generate dynamic QR Code token for display on classroom screen
+  // Generate QR token with 6-digit daily passkey
   const generateQrToken = async () => {
     try {
-      const tokenPayload = {
+      const todayPasskey = Math.abs(
+        selectedDate.split('-').reduce((acc, part) => acc + parseInt(part), 0) * 98765
+      ).toString().slice(0, 6).padStart(6, '9');
+
+      const qrPayload = JSON.stringify({
+        type: 'AOE_ATTENDANCE_TOKEN',
+        slot: qrType,
         date: selectedDate,
         course_id: selectedCourseId,
-        batch_number: Number(selectedBatchNumber),
-        type: qrType,
-        token: `AOE-ATTEND-${selectedDate}-${qrType}`
-      };
-      const jsonStr = JSON.stringify(tokenPayload);
-      const url = await QRCode.toDataURL(jsonStr, {
-        width: 320,
-        margin: 1,
-        color: { dark: qrType === 'check_in' ? '#0f172a' : '#1d4ed8', light: '#ffffff' }
+        batch: selectedBatchNumber,
+        passkey: todayPasskey
       });
+
+      const url = await QRCode.toDataURL(qrPayload, { width: 320, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
       setQrDataUrl(url);
     } catch (err) {
-      console.error('Error generating QR token:', err);
+      console.error('QR generation error:', err);
     }
   };
 
-  // Auto-calculate points and status based on Check-in (10am) & Check-out (4pm) rules
+  // Evaluate Attendance & Points Logic
   const evaluatePointsAndStatus = (checkInIso?: string, checkOutIso?: string) => {
     if (!checkInIso && !checkOutIso) {
       return { points: 0, status: 'absent', check_in_status: 'pending', check_out_status: 'pending' };
@@ -98,7 +110,7 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
     if (checkInIso) {
       const inDate = new Date(checkInIso);
       const inHours = inDate.getHours() + inDate.getMinutes() / 60;
-      checkInStatus = inHours <= 10.05 ? 'on_time' : 'late'; // Allow up to 10:03 AM grace
+      checkInStatus = inHours <= 10.05 ? 'on_time' : 'late';
     }
 
     if (checkOutIso) {
@@ -107,7 +119,6 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
       checkOutStatus = outHours >= 15.95 ? 'on_time' : 'early'; // 4:00 PM (16:00)
     }
 
-    // Points rule: 10 points if check-in <= 10:00 AM AND check-out >= 04:00 PM
     if (checkInStatus === 'on_time' && checkOutStatus === 'on_time') {
       return { points: 10, status: 'present_full', check_in_status: checkInStatus, check_out_status: checkOutStatus };
     } else if (checkInStatus !== 'pending' || checkOutStatus !== 'pending') {
@@ -139,7 +150,7 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
         points_awarded: pointsOverride,
         status: statusOverride,
         method: 'manual_override',
-        notes: `Staff Manual Entry (${pointsOverride} Pts)`
+        notes: 'Quick marked by staff'
       };
 
       const { error } = await supabase
@@ -148,66 +159,39 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
 
       if (error) throw error;
 
-      // Sync points to scores table for live leaderboard
       await syncScoreToLeaderboard(student.id, pointsOverride);
-
-      setMessage(`✅ Saved ${student.name}: ${pointsOverride} Points (${statusOverride.replace('_', ' ')})`);
+      setMessage(`✅ Attendance set to ${pointsOverride} XP for ${student.name}`);
       await fetchLogs();
     } catch (err: any) {
-      console.error('Error saving manual attendance:', err);
-      setMessage(`❌ Failed: ${err.message}`);
+      console.error('Error marking attendance:', err);
+      alert(`Error marking attendance: ${err.message}`);
     } finally {
       setTimeout(() => setMessage(''), 3000);
     }
   };
 
-  // Sync points to leaderboard scores table
+  // Sync points to Leaderboard Scores table
   const syncScoreToLeaderboard = async (studentId: string, points: number) => {
     try {
-      // Find active interval
-      const { data: intervalData } = await supabase
-        .from('scoring_intervals')
-        .select('id')
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (!intervalData?.id) return;
-
-      await supabase
-        .from('scores')
-        .upsert({
-          student_id: studentId,
-          interval_id: intervalData.id,
-          score_type: 'attendance',
-          points: points,
-          max_points: 10,
-          activity_name: `Attendance (${selectedDate})`,
-          logged_date: selectedDate,
-          logged_by: 'Staff System'
-        }, { onConflict: 'student_id,logged_date,score_type,activity_name' });
+      await supabase.from('scores').insert({
+        student_id: studentId,
+        score_type: 'daily_attendance',
+        points: points,
+        max_points: 10,
+        activity_name: `Daily QR Attendance (${selectedDate})`,
+        logged_date: selectedDate
+      });
     } catch (err) {
       console.error('Error syncing score:', err);
     }
-  };
-
-  // Open Edit Modal
-  const handleOpenEdit = (log: DailyAttendanceLog) => {
-    setEditingLog(log);
-    setEditCheckIn(log.check_in_time ? new Date(log.check_in_time).toTimeString().slice(0, 5) : '09:30');
-    setEditCheckOut(log.check_out_time ? new Date(log.check_out_time).toTimeString().slice(0, 5) : '16:15');
-    setEditPoints(log.points_awarded || 10);
-    setEditNotes(log.notes || '');
   };
 
   // Save Edit Details
   const handleSaveEdit = async () => {
     if (!editingLog) return;
     try {
-      // Construct ISO timestamps with selectedDate
       const inIso = editCheckIn ? new Date(`${selectedDate}T${editCheckIn}:00`).toISOString() : undefined;
       const outIso = editCheckOut ? new Date(`${selectedDate}T${editCheckOut}:00`).toISOString() : undefined;
-
-      const evalRes = evaluatePointsAndStatus(inIso, outIso);
 
       const { error } = await supabase
         .from('daily_attendance_logs')
@@ -231,6 +215,31 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
       console.error('Error updating log:', err);
       alert(`Error updating log: ${err.message}`);
     }
+  };
+
+  // --- RUN TEST SIMULATION (SANDBOX - ZERO IMPACT ON PRODUCTION) ---
+  const handleRunTestSimulation = () => {
+    const inIso = testCheckInTime ? `2026-07-30T${testCheckInTime}:00Z` : undefined;
+    const outIso = testCheckOutTime ? `2026-07-30T${testCheckOutTime}:00Z` : undefined;
+
+    const res = evaluatePointsAndStatus(inIso, outIso);
+
+    let explanation = '';
+    if (res.points === 10) {
+      explanation = '✅ On-Time Check-In (≤ 10:00 AM) AND Full Check-Out (≥ 4:00 PM) = 10 XP Awarded.';
+    } else if (res.points === 5) {
+      explanation = '⚠️ Late Check-In (> 10:00 AM) or Early Check-Out (< 4:00 PM) = 5 XP Awarded.';
+    } else {
+      explanation = '❌ No Check-In / Check-Out recorded = 0 XP.';
+    }
+
+    setTestResult({
+      checkInStatus: res.check_in_status,
+      checkOutStatus: res.check_out_status,
+      points: res.points,
+      status: res.status,
+      explanation
+    });
   };
 
   // Filter logs for registry table
@@ -301,7 +310,7 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
             gap: '0.4rem'
           }}
         >
-          <UserCheck size={18} /> Daily Register & Manual Entry
+          <UserCheck size={16} /> Daily Attendance Register
         </button>
 
         <button
@@ -320,7 +329,7 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
             gap: '0.4rem'
           }}
         >
-          <QrCode size={18} /> Classroom QR Screen
+          <QrCode size={16} /> Classroom QR Screen
         </button>
 
         <button
@@ -329,7 +338,7 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
             padding: '0.6rem 1.25rem',
             borderRadius: '10px',
             border: 'none',
-            background: subTab === 'history_logs' ? '#b45309' : '#f1f5f9',
+            background: subTab === 'history_logs' ? '#059669' : '#f1f5f9',
             color: subTab === 'history_logs' ? 'white' : '#475569',
             fontWeight: 800,
             fontSize: '0.9rem',
@@ -339,48 +348,64 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
             gap: '0.4rem'
           }}
         >
-          <Printer size={18} /> Complete Logs & Print Report
+          <Printer size={16} /> Log History & Printable Report
+        </button>
+
+        {/* Dedicated Test Simulator Tab */}
+        <button
+          onClick={() => setSubTab('test_simulator')}
+          style={{
+            padding: '0.6rem 1.25rem',
+            borderRadius: '10px',
+            border: 'none',
+            background: subTab === 'test_simulator' ? '#7c3aed' : '#f3e8ff',
+            color: subTab === 'test_simulator' ? 'white' : '#7c3aed',
+            fontWeight: 800,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem'
+          }}
+        >
+          <FlaskConical size={16} /> 🧪 Test QR Simulator
         </button>
       </div>
 
-      {/* --- TAB 1: DAILY REGISTER & MANUAL ENTRY --- */}
+      {/* --- SUB-TAB 1: DAILY REGISTER --- */}
       {subTab === 'daily_register' && (
         <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '16px' }}>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                Attendance Register for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                Classroom Attendance Register ({selectedDate})
               </h3>
               <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
-                Batch {selectedBatchNumber} • Rule: Check-in before 10 AM & Check-out after 4 PM = 10 Pts. Partial = 5 Pts.
+                {selectedCourse?.name || 'Academic Course'} • Batch {selectedBatchNumber} ({activeStudents.length} Active Students)
               </p>
             </div>
 
-            {/* Course & Batch Selectors */}
+            {/* Selectors */}
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div>
-                <select
-                  value={selectedCourseId}
-                  onChange={(e) => setSelectedCourseId(e.target.value)}
-                  style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                >
-                  {coursesList.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={selectedCourseId}
+                onChange={(e) => setSelectedCourseId(e.target.value)}
+                style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+              >
+                {coursesList.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
 
-              <div>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={selectedBatchNumber}
-                  onChange={(e) => setSelectedBatchNumber(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="Batch #"
-                  style={{ width: '80px', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
-                />
-              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={selectedBatchNumber}
+                onChange={(e) => setSelectedBatchNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="Batch #"
+                style={{ width: '80px', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
+              />
             </div>
           </div>
 
@@ -396,102 +421,71 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                     <th style={{ padding: '0.75rem 1rem' }}>Student Name</th>
                     <th style={{ padding: '0.75rem 1rem' }}>Check-In Time</th>
                     <th style={{ padding: '0.75rem 1rem' }}>Check-Out Time</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Calculated Points</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Quick Actions</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Today Status</th>
+                    <th style={{ padding: '0.75rem 1rem' }}>Points Awarded</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Quick Staff Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {activeStudents.map(student => {
                     const log = attendanceLogs.find(l => l.student_id === student.id);
-                    const checkInStr = log?.check_in_time ? new Date(log.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-                    const checkOutStr = log?.check_out_time ? new Date(log.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                    const checkInStr = log?.check_in_time ? new Date(log.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+                    const checkOutStr = log?.check_out_time ? new Date(log.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+                    const points = log ? log.points_awarded : 0;
 
                     return (
                       <tr key={student.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        
                         <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#0f172a' }}>
                           {student.name}
                           {student.roll_number && <span style={{ color: '#64748b', fontSize: '0.75rem', marginLeft: '0.4rem', fontWeight: 500 }}>(Roll #{student.roll_number})</span>}
                         </td>
 
-                        <td style={{ padding: '0.85rem 1rem', color: '#334155' }}>
-                          {log?.check_in_time ? (
-                            <span style={{ color: log.check_in_status === 'on_time' ? '#16a34a' : '#d97706', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <Clock size={13} /> {checkInStr}
-                            </span>
-                          ) : <span style={{ color: '#94a3b8' }}>Not Checked In</span>}
+                        <td style={{ padding: '0.85rem 1rem', color: log?.check_in_time ? '#15803d' : '#94a3b8', fontWeight: log?.check_in_time ? 700 : 400 }}>
+                          {checkInStr}
+                          {log?.check_in_status === 'on_time' && <span style={{ marginLeft: '0.3rem', color: '#16a34a', fontSize: '0.7rem' }}>✓ On Time</span>}
+                          {log?.check_in_status === 'late' && <span style={{ marginLeft: '0.3rem', color: '#d97706', fontSize: '0.7rem' }}>⚠ Late</span>}
                         </td>
 
-                        <td style={{ padding: '0.85rem 1rem', color: '#334155' }}>
-                          {log?.check_out_time ? (
-                            <span style={{ color: log.check_out_status === 'on_time' ? '#16a34a' : '#d97706', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <Clock size={13} /> {checkOutStr}
-                            </span>
-                          ) : <span style={{ color: '#94a3b8' }}>Not Checked Out</span>}
+                        <td style={{ padding: '0.85rem 1rem', color: log?.check_out_time ? '#15803d' : '#94a3b8', fontWeight: log?.check_out_time ? 700 : 400 }}>
+                          {checkOutStr}
+                          {log?.check_out_status === 'on_time' && <span style={{ marginLeft: '0.3rem', color: '#16a34a', fontSize: '0.7rem' }}>✓ Full Day</span>}
+                          {log?.check_out_status === 'early' && <span style={{ marginLeft: '0.3rem', color: '#dc2626', fontSize: '0.7rem' }}>⚠ Early</span>}
                         </td>
 
                         <td style={{ padding: '0.85rem 1rem' }}>
-                          {log ? (
-                            <span style={{ background: log.points_awarded === 10 ? 'rgba(34, 197, 94, 0.15)' : (log.points_awarded === 5 ? 'rgba(217, 119, 6, 0.15)' : 'rgba(239, 68, 68, 0.15)'), color: log.points_awarded === 10 ? '#15803d' : (log.points_awarded === 5 ? '#b45309' : '#b91c1c'), padding: '0.25rem 0.65rem', borderRadius: '8px', fontWeight: 900, fontSize: '0.85rem' }}>
-                              {log.points_awarded} Points
-                            </span>
+                          {log?.status === 'present_full' ? (
+                            <span style={{ background: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 800 }}>Present (Full Day)</span>
+                          ) : log?.status === 'present_half' ? (
+                            <span style={{ background: 'rgba(217, 119, 6, 0.1)', color: '#b45309', padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 800 }}>Half Day / Late</span>
                           ) : (
-                            <span style={{ color: '#94a3b8' }}>0 Points</span>
+                            <span style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 800 }}>Absent / Unmarked</span>
                           )}
                         </td>
 
-                        <td style={{ padding: '0.85rem 1rem' }}>
-                          {log ? (
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: log.status === 'present_full' ? '#16a34a' : (log.status === 'present_half' ? '#d97706' : '#dc2626') }}>
-                              {log.status.replace('_', ' ')}
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Unmarked</span>
-                          )}
+                        <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: points === 10 ? '#16a34a' : (points === 5 ? '#b45309' : '#94a3b8') }}>
+                          +{points} XP
                         </td>
 
                         <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                            
-                            {/* Mark 10 Points (Full Day) */}
+                          <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
                             <button
                               onClick={() => handleQuickMarkAttendance(student, 10, 'present_full')}
-                              title="Mark Full Day Present (10 Pts)"
-                              style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}
+                              style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#16a34a', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
                             >
                               +10 Pts
                             </button>
-
-                            {/* Mark 5 Points (Half Day) */}
                             <button
                               onClick={() => handleQuickMarkAttendance(student, 5, 'present_half')}
-                              title="Mark Partial / Late Present (5 Pts)"
-                              style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}
+                              style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#d97706', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
                             >
                               +5 Pts
                             </button>
-
-                            {/* Mark Absent */}
                             <button
                               onClick={() => handleQuickMarkAttendance(student, 0, 'absent')}
-                              title="Mark Absent (0 Pts)"
-                              style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem' }}
+                              style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#dc2626', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
                             >
                               Absent
                             </button>
-
-                            {/* Edit Timestamps / Notes */}
-                            {log && (
-                              <button
-                                onClick={() => handleOpenEdit(log)}
-                                title="Edit Check-in / Check-out Details"
-                                style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569', cursor: 'pointer' }}
-                              >
-                                <Edit3 size={14} />
-                              </button>
-                            )}
-
                           </div>
                         </td>
 
@@ -506,243 +500,244 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
         </div>
       )}
 
-      {/* --- TAB 2: CLASSROOM QR SCREEN --- */}
+      {/* --- SUB-TAB 2: CLASSROOM QR SCREEN --- */}
       {subTab === 'qr_screen' && (
-        <div className="glass-card" style={{ padding: '2.5rem 1.5rem', borderRadius: '16px', textAlign: 'center', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white' }}>
+        <div className="glass-card" style={{ padding: '2rem', borderRadius: '16px', textAlign: 'center', background: '#0f172a', color: 'white' }}>
           
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
             <button
               onClick={() => setQrType('check_in')}
-              style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', border: 'none', background: qrType === 'check_in' ? '#22c55e' : 'rgba(255,255,255,0.1)', color: 'white', fontWeight: 800, cursor: 'pointer' }}
+              style={{
+                padding: '0.6rem 1.5rem',
+                borderRadius: '10px',
+                border: 'none',
+                background: qrType === 'check_in' ? '#22c55e' : 'rgba(255,255,255,0.1)',
+                color: 'white',
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
             >
-              🌅 Morning Check-In QR (Cutoff 10:00 AM)
+              ☀️ Morning Check-In QR (≤ 10:00 AM)
             </button>
+
             <button
               onClick={() => setQrType('check_out')}
-              style={{ padding: '0.6rem 1.25rem', borderRadius: '10px', border: 'none', background: qrType === 'check_out' ? '#2563eb' : 'rgba(255,255,255,0.1)', color: 'white', fontWeight: 800, cursor: 'pointer' }}
+              style={{
+                padding: '0.6rem 1.5rem',
+                borderRadius: '10px',
+                border: 'none',
+                background: qrType === 'check_out' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                color: 'white',
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
             >
-              🌇 Afternoon Check-Out QR (Cutoff 04:00 PM)
+              🌙 Afternoon Check-Out QR (≥ 04:00 PM)
             </button>
           </div>
 
-          <h3 style={{ fontSize: '1.5rem', fontWeight: 900, color: '#fbbf24', margin: '0 0 0.5rem 0' }}>
-            {selectedCourse?.name || 'Academic Program'} - Batch {selectedBatchNumber}
-          </h3>
-          <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            Scan with your phone to log your <strong>{qrType === 'check_in' ? 'Check-In' : 'Check-Out'}</strong> timestamp for {selectedDate}.
-          </p>
-
-          {/* QR Code Container */}
-          <div style={{ background: 'white', padding: '1.5rem', borderRadius: '20px', display: 'inline-block', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)', border: '4px solid #fbbf24', marginBottom: '1.5rem' }}>
-            {qrDataUrl && <img src={qrDataUrl} alt="Attendance QR" style={{ width: '280px', height: '280px', display: 'block' }} />}
+          <div style={{ background: 'white', padding: '1.5rem', borderRadius: '20px', display: 'inline-block', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="Classroom QR Code" style={{ width: '280px', height: '280px' }} />
+            ) : (
+              <div style={{ width: '280px', height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>Generating QR...</div>
+            )}
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
-            <div>✅ <strong>In &lt;= 10:00 AM + Out &gt;= 4:00 PM</strong>: 10 Points</div>
-            <div>⚠️ <strong>Late or Early Exit</strong>: 5 Points</div>
+          <div style={{ marginTop: '1.5rem' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: qrType === 'check_in' ? '#4ade80' : '#60a5fa', margin: '0 0 0.5rem 0' }}>
+              {qrType === 'check_in' ? 'Scan to Check-In (On-Time before 10:00 AM)' : 'Scan to Check-Out (Full Day after 04:00 PM)'}
+            </h3>
+            <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 0 }}>
+              {selectedCourse?.name} • Batch {selectedBatchNumber} • Date: {selectedDate}
+            </p>
+
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '0.75rem 1.5rem', borderRadius: '12px', display: 'inline-block', marginTop: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.2rem' }}>6-DIGIT DAILY CLASSROOM PASSKEY</span>
+              <strong style={{ fontSize: '1.8rem', letterSpacing: '0.25em', color: '#facc15' }}>
+                {Math.abs(selectedDate.split('-').reduce((acc, part) => acc + parseInt(part), 0) * 98765).toString().slice(0, 6).padStart(6, '9')}
+              </strong>
+            </div>
           </div>
 
         </div>
       )}
 
-      {/* --- TAB 3: COMPLETE LOGS & PRINTABLE REPORT --- */}
+      {/* --- SUB-TAB 3: LOG HISTORY & PRINTABLE REPORT --- */}
       {subTab === 'history_logs' && (
         <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '16px' }}>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
             <div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                Complete Attendance & Audit Log History
+                Attendance Log History & Audit
               </h3>
               <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
-                Total Records: <strong>{filteredLogs.length} entries</strong>
+                Showing logs for {selectedDate}
               </p>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-              <div style={{ position: 'relative', width: '220px' }}>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by student or date..."
-                  style={{ width: '100%', padding: '0.45rem 0.75rem 0.45rem 2rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-                />
-                <Search size={15} style={{ position: 'absolute', left: '0.65rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              </div>
-
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button
                 onClick={() => window.print()}
                 className="btn btn-primary"
-                style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', background: '#b45309', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', background: '#059669', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
               >
                 <Printer size={16} /> Print Attendance Register
               </button>
             </div>
           </div>
 
-          {/* Printable Document Container */}
-          <div className="printable-attendance-register">
-            
-            {/* Header for Printed Version */}
-            <div className="only-print" style={{ display: 'none', textAlign: 'center', marginBottom: '1.5rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
-              <h2 style={{ margin: '0 0 0.25rem 0', fontSize: '1.8rem', fontWeight: 900 }}>ACADEMY OF EXCELLENCE</h2>
-              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#b45309' }}>Official Attendance Register & Audit History</h3>
-              <p style={{ margin: 0, fontSize: '0.9rem', color: '#475569' }}>
-                Program: {selectedCourse?.name || 'All Programs'} • Batch {selectedBatchNumber} • Date: {selectedDate}
-              </p>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
-                    <th style={{ padding: '0.75rem 1rem' }}>Date</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Student Name</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Check-In Time</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Check-Out Time</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Points</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Method / Notes</th>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
+                  <th style={{ padding: '0.75rem 1rem' }}>Date</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Student Name</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Check-In</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Check-Out</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Status</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Points</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>No logs found for this date.</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filteredLogs.map(log => {
-                    const checkInStr = log.check_in_time ? new Date(log.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-                    const checkOutStr = log.check_out_time ? new Date(log.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-
-                    return (
-                      <tr key={log.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        
-                        <td style={{ padding: '0.85rem 1rem', color: '#0f172a', fontWeight: 700 }}>
-                          {log.date}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#0f172a' }}>
-                          {log.student_name}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem' }}>
-                          {log.check_in_time ? (
-                            <span style={{ color: log.check_in_status === 'on_time' ? '#16a34a' : '#d97706', fontWeight: 700 }}>
-                              {checkInStr} {log.check_in_status === 'late' && '(Late)'}
-                            </span>
-                          ) : '--:--'}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem' }}>
-                          {log.check_out_time ? (
-                            <span style={{ color: log.check_out_status === 'on_time' ? '#16a34a' : '#d97706', fontWeight: 700 }}>
-                              {checkOutStr} {log.check_out_status === 'early' && '(Early)'}
-                            </span>
-                          ) : '--:--'}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: log.points_awarded === 10 ? '#15803d' : (log.points_awarded === 5 ? '#b45309' : '#dc2626') }}>
-                          {log.points_awarded} Pts
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem', textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 700 }}>
-                          {log.status.replace('_', ' ')}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem', color: '#64748b', fontSize: '0.8rem' }}>
-                          {log.method === 'manual_override' ? '✏️ Staff Manual' : '📱 QR Scan'} {log.notes && `• ${log.notes}`}
-                        </td>
-
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
+                ) : (
+                  filteredLogs.map(l => (
+                    <tr key={l.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>{l.date}</td>
+                      <td style={{ padding: '0.85rem 1rem', fontWeight: 700 }}>{l.student_name}</td>
+                      <td style={{ padding: '0.85rem 1rem' }}>{l.check_in_time ? new Date(l.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                      <td style={{ padding: '0.85rem 1rem' }}>{l.check_out_time ? new Date(l.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                      <td style={{ padding: '0.85rem 1rem', textTransform: 'capitalize' }}>{l.status}</td>
+                      <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: l.points_awarded === 10 ? '#16a34a' : '#b45309' }}>+{l.points_awarded} XP</td>
+                      <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>{l.method || 'qr_scan'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
 
         </div>
       )}
 
-      {/* --- EDIT MODAL --- */}
-      {editingLog && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', width: '100%', maxWidth: '450px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
+      {/* --- SUB-TAB 4: DEDICATED TEST QR SIMULATOR SANDBOX --- */}
+      {subTab === 'test_simulator' && (
+        <div className="glass-card" style={{ padding: '2rem', borderRadius: '16px', background: '#ffffff', border: '2px dashed #a855f7' }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: '#f3e8ff', color: '#7c3aed', padding: '0.75rem', borderRadius: '12px' }}>
+              <FlaskConical size={28} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#6b21a8' }}>
+                Safe Attendance Rule Simulator & Sandbox
+              </h3>
+              <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+                Test the 10:00 AM on-time rule, 04:00 PM full-day rule, and +10 XP / +5 XP points calculation without affecting any real student ranks or database records.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ background: '#f8fafc', padding: '1rem 1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', color: '#1e293b', fontSize: '0.85rem' }}>
+            🔒 <strong>Safe Mode Active:</strong> All test scans in this simulator run in memory and do <strong>NOT</strong> touch real student profiles or live leaderboard rankings.
+          </div>
+
+          {/* Time Test Inputs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
             
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
-              <h4 style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: '1.1rem' }}>
-                Edit Attendance Record
-              </h4>
-              <button onClick={() => setEditingLog(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Student</label>
-              <input type="text" disabled value={`${editingLog.student_name} (${editingLog.date})`} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', background: '#f1f5f9', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }} />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Check-In Time</label>
-                <input
-                  type="time"
-                  value={editCheckIn}
-                  onChange={(e) => setEditCheckIn(e.target.value)}
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Check-Out Time</label>
-                <input
-                  type="time"
-                  value={editCheckOut}
-                  onChange={(e) => setEditCheckOut(e.target.value)}
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Points Awarded</label>
-              <select
-                value={editPoints}
-                onChange={(e) => setEditPoints(Number(e.target.value))}
-                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
-              >
-                <option value={10}>10 Points (Full Day On-Time)</option>
-                <option value={5}>5 Points (Partial / Late)</option>
-                <option value={0}>0 Points (Absent / Unmarked)</option>
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Staff Note</label>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}>
+                Simulated Check-In Time
+              </label>
               <input
-                type="text"
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-                placeholder="Reason for manual edit..."
-                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                type="time"
+                value={testCheckInTime}
+                onChange={(e) => setTestCheckInTime(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '1rem', fontWeight: 800 }}
               />
+              <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
+                Rule: On-Time if ≤ 10:00 AM
+              </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setEditingLog(null)}
-                style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#2563eb', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
-              >
-                Save Changes
-              </button>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}>
+                Simulated Check-Out Time
+              </label>
+              <input
+                type="time"
+                value={testCheckOutTime}
+                onChange={(e) => setTestCheckOutTime(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '1rem', fontWeight: 800 }}
+              />
+              <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
+                Rule: Full Day if ≥ 04:00 PM (16:00)
+              </span>
             </div>
 
           </div>
+
+          <button
+            onClick={handleRunTestSimulation}
+            style={{
+              padding: '0.75rem 1.5rem',
+              borderRadius: '10px',
+              background: '#7c3aed',
+              color: 'white',
+              border: 'none',
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontSize: '0.9rem'
+            }}
+          >
+            <Play size={16} /> Run Test Simulation
+          </button>
+
+          {/* Test Simulation Results */}
+          {testResult && (
+            <div style={{ marginTop: '1.75rem', padding: '1.5rem', borderRadius: '12px', background: '#faf5ff', border: '1px solid #e9d5ff' }}>
+              <h4 style={{ margin: '0 0 0.75rem 0', fontWeight: 800, color: '#6b21a8', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Sparkles size={18} /> Test Rule Calculation Result:
+              </h4>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #f3e8ff' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block' }}>CHECK-IN EVALUATION</span>
+                  <strong style={{ color: testResult.checkInStatus === 'on_time' ? '#16a34a' : '#d97706', fontSize: '0.95rem' }}>
+                    {testResult.checkInStatus === 'on_time' ? '✓ On Time' : '⚠ Late Check-In'}
+                  </strong>
+                </div>
+
+                <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #f3e8ff' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block' }}>CHECK-OUT EVALUATION</span>
+                  <strong style={{ color: testResult.checkOutStatus === 'on_time' ? '#16a34a' : '#dc2626', fontSize: '0.95rem' }}>
+                    {testResult.checkOutStatus === 'on_time' ? '✓ Full Day' : '⚠ Early Check-Out'}
+                  </strong>
+                </div>
+
+                <div style={{ background: 'white', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #f3e8ff' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'block' }}>POINTS AWARDED</span>
+                  <strong style={{ color: testResult.points === 10 ? '#16a34a' : '#b45309', fontSize: '1.2rem' }}>
+                    +{testResult.points} XP
+                  </strong>
+                </div>
+              </div>
+
+              <div style={{ fontSize: '0.85rem', color: '#581c87', fontWeight: 700 }}>
+                {testResult.explanation}
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
