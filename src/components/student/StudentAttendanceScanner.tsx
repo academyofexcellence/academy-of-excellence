@@ -61,7 +61,6 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
     setCameraActive(true);
 
     try {
-      // Small delay for DOM element to mount
       await new Promise(r => setTimeout(r, 150));
 
       const readerElem = document.getElementById('qr-reader');
@@ -81,14 +80,10 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           qrbox: { width: 220, height: 220 }
         },
         (decodedText) => {
-          // QR Code scanned successfully!
-          console.log('Scanned QR:', decodedText);
           stopCameraScanner();
           handleMarkAttendance(decodedText);
         },
-        (errorMessage) => {
-          // Scanning frame failure (normal during scanning)
-        }
+        (errorMessage) => {}
       );
     } catch (err: any) {
       console.error('Camera Scanner Error:', err);
@@ -179,7 +174,6 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
         const { data: inserted, error } = await supabase.from('daily_attendance_logs').insert(newLogPayload).select().single();
         if (error) throw error;
 
-        // Sync points to scores leaderboard
         await supabase.from('scores').insert({
           student_id: currentStudent.id,
           score_type: 'daily_attendance',
@@ -252,12 +246,12 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
   };
 
   return (
-    <div className="glass-card" style={{ padding: '1.25rem 1.5rem', borderRadius: '16px', marginBottom: '1.5rem', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', border: '1px solid rgba(74, 222, 128, 0.3)', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.3)' }}>
+    <div className="glass-card" style={{ padding: '1.25rem 1.5rem', borderRadius: '16px', marginBottom: '1.5rem', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: 'white', border: '1px solid rgba(201, 156, 51, 0.3)', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.3)' }}>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ background: 'rgba(74, 222, 128, 0.15)', padding: '0.75rem', borderRadius: '12px', color: '#4ade80', border: '1px solid rgba(74, 222, 128, 0.3)' }}>
+          <div style={{ background: 'rgba(201, 156, 51, 0.15)', padding: '0.75rem', borderRadius: '12px', color: '#c99c33', border: '1px solid rgba(201, 156, 51, 0.3)' }}>
             <QrCode size={30} />
           </div>
           <div>
@@ -266,7 +260,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
                 Daily QR Attendance
               </h3>
               {todayLog?.status === 'present_full' && (
-                <span style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', fontSize: '0.7rem', fontWeight: 800, padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(74,222,128,0.4)' }}>
+                <span style={{ background: 'rgba(201, 156, 51, 0.2)', color: '#e6be65', fontSize: '0.7rem', fontWeight: 800, padding: '0.2rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(201, 156, 51, 0.4)' }}>
                   +10 XP Full Day
                 </span>
               )}
@@ -289,7 +283,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           </div>
         </div>
 
-        {/* Scan Action Button */}
+        {/* Scan Action Button in Official Academy Gold */}
         <div>
           {(!todayLog || !todayLog.check_out_time) ? (
             <button
@@ -297,7 +291,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
               style={{
                 padding: '0.65rem 1.25rem',
                 borderRadius: '10px',
-                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                background: 'linear-gradient(135deg, #c99c33 0%, #a67c22 100%)',
                 color: 'white',
                 border: 'none',
                 fontWeight: 800,
@@ -306,14 +300,14 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)'
+                boxShadow: '0 4px 12px rgba(201, 156, 51, 0.3)'
               }}
             >
               <QrCode size={18} />
               {!todayLog ? '📱 Scan Check-In QR' : '📱 Scan Check-Out QR'}
             </button>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#4ade80', fontWeight: 800, fontSize: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#e6be65', fontWeight: 800, fontSize: '0.85rem' }}>
               <CheckCircle2 size={20} /> Attendance Complete (+{todayLog.points_awarded} XP)
             </div>
           )}
@@ -322,18 +316,18 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
       </div>
 
       {message && (
-        <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', borderRadius: '10px', background: message.type === 'success' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', border: `1px solid ${message.type === 'success' ? '#22c55e' : '#ef4444'}`, color: message.type === 'success' ? '#4ade80' : '#f87171', fontSize: '0.85rem', fontWeight: 700 }}>
+        <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', borderRadius: '10px', background: message.type === 'success' ? 'rgba(201, 156, 51, 0.15)' : 'rgba(239,68,68,0.15)', border: `1px solid ${message.type === 'success' ? '#c99c33' : '#ef4444'}`, color: message.type === 'success' ? '#e6be65' : '#f87171', fontSize: '0.85rem', fontWeight: 700 }}>
           {message.text}
         </div>
       )}
 
-      {/* --- RESPONSIVE MOBILE MODAL FOR SCANNER & PASSKEY --- */}
+      {/* --- RESPONSIVE ACADEMY THEMED MOBILE MODAL --- */}
       {showScannerModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', boxSizing: 'border-box' }}>
-          <div style={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)', padding: '1.25rem 1.5rem', borderRadius: '20px', width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto', color: 'white', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', boxSizing: 'border-box' }}>
+          <div style={{ background: '#0f172a', border: '1px solid rgba(201, 156, 51, 0.3)', padding: '1.25rem 1.5rem', borderRadius: '20px', width: '100%', maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto', color: 'white', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', boxSizing: 'border-box' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.65rem' }}>
-              <h4 style={{ margin: 0, fontWeight: 800, fontSize: '1.05rem', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <h4 style={{ margin: 0, fontWeight: 800, fontSize: '1.05rem', color: '#c99c33', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <QrCode size={18} /> Record Attendance
               </h4>
               <button onClick={() => { stopCameraScanner(); setShowScannerModal(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}>
@@ -342,7 +336,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
             </div>
 
             {/* Modal Tabs: Camera vs Passkey */}
-            <div style={{ display: 'flex', background: '#1e293b', borderRadius: '10px', padding: '0.25rem', marginBottom: '1.25rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', background: '#1e293b', borderRadius: '10px', padding: '0.25rem', marginBottom: '1.25rem', border: '1px solid rgba(201, 156, 51, 0.2)' }}>
               <button
                 onClick={() => setModalTab('camera')}
                 style={{
@@ -350,7 +344,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
                   padding: '0.5rem',
                   borderRadius: '8px',
                   border: 'none',
-                  background: modalTab === 'camera' ? '#22c55e' : 'transparent',
+                  background: modalTab === 'camera' ? '#c99c33' : 'transparent',
                   color: modalTab === 'camera' ? 'white' : '#94a3b8',
                   fontWeight: 800,
                   fontSize: '0.8rem',
@@ -371,7 +365,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
                   padding: '0.5rem',
                   borderRadius: '8px',
                   border: 'none',
-                  background: modalTab === 'passkey' ? '#22c55e' : 'transparent',
+                  background: modalTab === 'passkey' ? '#c99c33' : 'transparent',
                   color: modalTab === 'passkey' ? 'white' : '#94a3b8',
                   fontWeight: 800,
                   fontSize: '0.8rem',
@@ -398,7 +392,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
                     {cameraError}
                   </div>
                 ) : (
-                  <div style={{ overflow: 'hidden', borderRadius: '14px', border: '2px solid #22c55e', background: '#000', marginBottom: '1rem' }}>
+                  <div style={{ overflow: 'hidden', borderRadius: '14px', border: '2px solid #c99c33', background: '#000', marginBottom: '1rem' }}>
                     <div id="qr-reader" style={{ width: '100%' }}></div>
                   </div>
                 )}
@@ -418,7 +412,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
                     placeholder="e.g. 948271"
                     value={passkeyInput}
                     onChange={(e) => setPasskeyInput(e.target.value)}
-                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '2px solid #334155', background: '#1e293b', color: 'white', fontSize: '1.2rem', fontWeight: 800, textAlign: 'center', letterSpacing: '0.12em', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: '2px solid #c99c33', background: '#1e293b', color: 'white', fontSize: '1.2rem', fontWeight: 800, textAlign: 'center', letterSpacing: '0.12em', boxSizing: 'border-box' }}
                   />
                 </div>
 
@@ -429,7 +423,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
                     width: '100%',
                     padding: '0.8rem',
                     borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                    background: 'linear-gradient(135deg, #c99c33 0%, #a67c22 100%)',
                     color: 'white',
                     border: 'none',
                     fontWeight: 800,
