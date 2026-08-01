@@ -585,15 +585,35 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                           const hasHadithulArabiaToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'hadithul_arabia');
 
                           const attendanceObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'attendance');
-                          const attVal = attendanceObj ? attendanceObj.activity_name.replace('Attendance: ', '') : '';
+                          const qrLog = qrAttendanceLogs.find(l => l.student_id === student.id);
+
+                          let attVal = '';
+                          if (attendanceObj) {
+                            const actName = (attendanceObj.activity_name || '').toLowerCase();
+                            if (actName.includes('on time') || actName.includes('on_time')) attVal = 'On Time';
+                            else if (actName.includes('late')) attVal = 'Late';
+                            else if (actName.includes('half day') || actName.includes('half_day')) attVal = 'Half Day';
+                            else if (actName.includes('absent')) attVal = 'Absent';
+                            else attVal = attendanceObj.activity_name.replace('Attendance: ', '').trim();
+                          }
+
+                          if (!attVal && qrLog) {
+                            if (qrLog.check_in_status === 'on_time' || qrLog.points_awarded === 10) {
+                              attVal = 'On Time';
+                            } else if (qrLog.points_awarded === 7 || qrLog.check_in_status === 'late') {
+                              attVal = 'Late';
+                            } else if (qrLog.status === 'present_half' || qrLog.points_awarded === 5) {
+                              attVal = 'Half Day';
+                            } else if (qrLog.status === 'absent' || qrLog.points_awarded === 0) {
+                              attVal = 'Absent';
+                            }
+                          }
 
                           const talkObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'custom' && s.activity_name === 'One Minute Talk');
                           const talkVal = talkObj ? talkObj.points.toString() : '';
 
                           const penaltyObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'penalty');
                           const penaltyPoints = penaltyObj ? Math.round(Math.abs(penaltyObj.points)) : 0;
-
-                          const qrLog = qrAttendanceLogs.find(l => l.student_id === student.id);
 
                           return (
                             <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>

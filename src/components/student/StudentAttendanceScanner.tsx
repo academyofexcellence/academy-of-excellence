@@ -184,21 +184,37 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           .eq('is_active', true)
           .maybeSingle();
 
+        let targetIntervalId = activeInterval?.id;
+        if (!targetIntervalId) {
+          const { data: latestInt } = await supabase
+            .from('scoring_intervals')
+            .select('id')
+            .eq('course_id', currentStudent.course_id)
+            .eq('batch_number', currentStudent.batch_number)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          targetIntervalId = latestInt?.id;
+        }
+
+        const attStatusText = checkInStatus === 'on_time' ? 'On Time' : 'Late';
+
         // Sync points to scores leaderboard under active term interval
         await supabase.from('scores').upsert({
           student_id: currentStudent.id,
-          interval_id: activeInterval?.id,
+          interval_id: targetIntervalId,
           score_type: 'attendance',
           points: initialPoints,
           max_points: 10,
-          activity_name: `Daily QR Attendance Check-In (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+          activity_name: `Attendance: ${attStatusText}`,
+          logged_by: currentStudent.id,
           logged_date: todayStr
         }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
 
         setTodayLog(inserted as DailyAttendanceLog);
         setMessage({
           type: 'success',
-          text: `🎉 Check-In Successful at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}! Status: ${checkInStatus === 'on_time' ? 'On Time (+10 XP)' : 'Late (+5 XP)'}`
+          text: `🎉 Check-In Successful at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}! Status: ${attStatusText} (+${initialPoints} XP)`
         });
 
       } else {
@@ -236,21 +252,37 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           .eq('is_active', true)
           .maybeSingle();
 
+        let targetIntervalId = activeInterval?.id;
+        if (!targetIntervalId) {
+          const { data: latestInt } = await supabase
+            .from('scoring_intervals')
+            .select('id')
+            .eq('course_id', currentStudent.course_id)
+            .eq('batch_number', currentStudent.batch_number)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          targetIntervalId = latestInt?.id;
+        }
+
+        const finalStatusText = finalPoints === 10 ? 'On Time' : (finalPoints === 7 ? 'Late' : (finalPoints === 5 ? 'Half Day' : 'Absent'));
+
         // Update score log for afternoon completion
         await supabase.from('scores').upsert({
           student_id: currentStudent.id,
-          interval_id: activeInterval?.id,
+          interval_id: targetIntervalId,
           score_type: 'attendance',
           points: finalPoints,
           max_points: 10,
-          activity_name: `Daily QR Attendance Check-Out (${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+          activity_name: `Attendance: ${finalStatusText}`,
+          logged_by: currentStudent.id,
           logged_date: todayStr
         }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
 
         setTodayLog(updated as DailyAttendanceLog);
         setMessage({
           type: 'success',
-          text: `🎯 Check-Out Recorded at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}! Final Today Points: +${finalPoints} XP`
+          text: `🎯 Check-Out Recorded at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}! Final Today Points: +${finalPoints} XP (${finalStatusText})`
         });
       }
 

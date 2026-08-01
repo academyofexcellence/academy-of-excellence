@@ -210,10 +210,10 @@ const StudentDashboard = () => {
 
     const attendanceRecords = scores.filter(s => s.score_type === 'attendance');
     const totalAttendance = attendanceRecords.length;
-    const onTimeCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('on time')).length;
-    const lateCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('late')).length;
-    const halfDayCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('half day')).length;
-    const absentCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('absent')).length;
+    const onTimeCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('on time') || s.points === 10).length;
+    const lateCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('late') || s.points === 7).length;
+    const halfDayCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('half day') || s.points === 5).length;
+    const absentCount = attendanceRecords.filter(s => s.activity_name.toLowerCase().includes('absent') || s.points === 0).length;
     
     const presentDays = onTimeCount + lateCount + (halfDayCount * 0.5);
     const attendanceRate = totalAttendance > 0 ? Math.round((presentDays / totalAttendance) * 100) : 0;
@@ -908,10 +908,10 @@ const StudentDashboard = () => {
 
   const attendanceLogs = recentLogs.filter(log => log.score_type === 'attendance');
   const totalAttendance = attendanceLogs.length;
-  const onTimeCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('on time')).length;
-  const lateCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('late')).length;
-  const halfDayCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('half day')).length;
-  const absentCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('absent')).length;
+  const onTimeCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('on time') || log.points === 10).length;
+  const lateCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('late') || log.points === 7).length;
+  const halfDayCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('half day') || log.points === 5).length;
+  const absentCount = attendanceLogs.filter(log => log.activity_name.toLowerCase().includes('absent') || log.points === 0).length;
   
   const presentDays = onTimeCount + lateCount + (halfDayCount * 0.5);
   const attendanceRate = totalAttendance > 0 ? Math.round((presentDays / totalAttendance) * 100) : 0;
