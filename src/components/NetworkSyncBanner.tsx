@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { syncEngine } from '../lib/syncEngine';
 import { Wifi, WifiOff, RefreshCw, HardDrive, ShieldCheck } from 'lucide-react';
 
 export default function NetworkSyncBanner() {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
   const [syncStatus, setSyncStatus] = useState({
     isOnline: navigator.onLine,
     pendingCount: 0,
@@ -11,12 +15,16 @@ export default function NetworkSyncBanner() {
   });
 
   useEffect(() => {
+    if (!isAdminRoute) return;
+
     syncEngine.init();
     const unsubscribe = syncEngine.subscribe((status) => {
       setSyncStatus(status);
     });
     return () => unsubscribe();
-  }, []);
+  }, [isAdminRoute]);
+
+  if (!isAdminRoute) return null;
 
   const timeAgo = (isoStr: string) => {
     try {
