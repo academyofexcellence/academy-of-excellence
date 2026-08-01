@@ -817,7 +817,7 @@ const AdminDashboard = () => {
           if (matchedInterval) {
             if (reqType === 'attendance') {
               const statusValue = expectedVal; // expected e.g. 'On Time', 'Late', 'Half Day', 'Absent'
-              const points = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
+              const points = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 5 : (statusValue === 'Half Day' ? 5 : 0));
               const dbActivityName = `Attendance: ${statusValue}`;
 
               const { data: existingScores, error: findError } = await supabase
@@ -1588,7 +1588,7 @@ const AdminDashboard = () => {
           setMessage(`📅 Attendance removed for ${studName}.`);
         }
       } else {
-        const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
+        const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 5 : (statusValue === 'Half Day' ? 5 : 0));
         const dbActivityName = `Attendance: ${statusValue}`;
         
         if (existingAttendance) {
@@ -1978,7 +1978,36 @@ const AdminDashboard = () => {
         .order('logged_date', { ascending: false });
       
       if (error) throw error;
-      setStudentReportData({ scores: data || [], loading: false });
+
+      const scoresList = [...(data || [])];
+
+      const { data: attLogs } = await supabase
+        .from('daily_attendance_logs')
+        .select('*')
+        .eq('student_id', student.id);
+
+      if (attLogs && attLogs.length > 0) {
+        attLogs.forEach(log => {
+          const existingScore = scoresList.find(s => s.score_type === 'attendance' && s.logged_date === log.date);
+          if (!existingScore) {
+            const statusText = log.check_in_status === 'on_time' ? 'On Time' : 'Late';
+            const pts = log.points_awarded || (statusText === 'On Time' ? 10 : 5);
+            scoresList.push({
+              id: `att-log-${log.id}`,
+              student_id: log.student_id,
+              score_type: 'attendance',
+              activity_name: `Attendance: ${statusText}`,
+              points: pts,
+              max_points: 10,
+              logged_date: log.date,
+              created_at: log.created_at || log.check_in_time
+            });
+          }
+        });
+      }
+
+      scoresList.sort((a, b) => new Date(b.logged_date + 'T00:00:00').getTime() - new Date(a.logged_date + 'T00:00:00').getTime());
+      setStudentReportData({ scores: scoresList, loading: false });
     } catch (err: any) {
       console.error(err);
       setStudentReportData({ scores: [], loading: false });
@@ -2022,7 +2051,7 @@ const AdminDashboard = () => {
   const handleUpdateAttendanceScore = async (scoreId: string, statusValue: string) => {
     if (!selectedReportStudent) return;
     try {
-      const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
+      const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 5 : (statusValue === 'Half Day' ? 5 : 0));
       const dbActivityName = `Attendance: ${statusValue}`;
       const { error } = await supabase
         .from('scores')
@@ -2148,7 +2177,7 @@ const AdminDashboard = () => {
     if (!selectedReportStudent || !currentUser) return;
     try {
       const statusValue = addAttStatus;
-      const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 7 : (statusValue === 'Half Day' ? 5 : 0));
+      const pointsValue = statusValue === 'On Time' ? 10 : (statusValue === 'Late' ? 5 : (statusValue === 'Half Day' ? 5 : 0));
       const dbActivityName = `Attendance: ${statusValue}`;
       
       const studentCourseId = selectedReportStudent.course_id;
@@ -5201,7 +5230,7 @@ const AdminDashboard = () => {
                                 style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', fontWeight: 600, outline: 'none' }}
                               >
                                 <option value="On Time">On Time (10 XP)</option>
-                                <option value="Late">Late (7 XP)</option>
+                                <option value="Late">Late (5 XP)</option>
                                 <option value="Half Day">Half Day (5 XP)</option>
                                 <option value="Absent">Absent (0 XP)</option>
                               </select>
@@ -5243,7 +5272,7 @@ const AdminDashboard = () => {
                                       return (
                                         <tr key={rec.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                                           <td style={{ padding: '0.6rem 1rem', fontWeight: 550 }}>
-                                            {new Date(rec.logged_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                            {new Date(rec.logged_date.includes('T') ? rec.logged_date : rec.logged_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                           </td>
                                           <td style={{ padding: '0.6rem 1rem' }}>
                                             <select

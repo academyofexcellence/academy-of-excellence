@@ -266,7 +266,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           targetIntervalId = latestInt?.id;
         }
 
-        const finalStatusText = finalPoints === 10 ? 'On Time' : (finalPoints === 7 ? 'Late' : (finalPoints === 5 ? 'Half Day' : 'Absent'));
+        const finalStatusText = finalPoints === 10 ? 'On Time' : (finalPoints === 5 ? 'Late' : 'Absent');
 
         // Update score log for afternoon completion
         await supabase.from('scores').upsert({
