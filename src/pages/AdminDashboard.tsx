@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { getISTDateString } from '../lib/dateUtils';
 import { 
   LogOut, 
   Image, 
@@ -415,7 +416,7 @@ const AdminDashboard = () => {
   const [savingRemarks, setSavingRemarks] = useState(false);
   
   // Report Edit Form States
-  const [addLogDate, setAddLogDate] = useState(new Date().toISOString().split('T')[0]);
+  const [addLogDate, setAddLogDate] = useState(getISTDateString());
   const [addAttStatus, setAddAttStatus] = useState('On Time');
   const [addWorkVocab, setAddWorkVocab] = useState(false);
   const [addWorkSentences, setAddWorkSentences] = useState(false);
@@ -475,7 +476,7 @@ const AdminDashboard = () => {
   const [intervalsAuditSummary, setIntervalsAuditSummary] = useState<any[]>([]);
   const [verifyingScores, setVerifyingScores] = useState(false);
   
-  const [selectedGradingDate, setSelectedGradingDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedGradingDate, setSelectedGradingDate] = useState(getISTDateString());
   const [examName, setExamName] = useState('');
   const [examMaxPoints, setExamMaxPoints] = useState('100');
   const [examScores, setExamScores] = useState<{ [studentId: string]: number }>({});

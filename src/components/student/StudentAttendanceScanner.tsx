@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { StudentProfile, DailyAttendanceLog } from '../../lib/types';
 import { QrCode, CheckCircle2, AlertCircle, Camera, Key, X, Clock, Award, Sparkles, RefreshCw } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { getISTDateString, getISTTimeString } from '../../lib/dateUtils';
 
 interface StudentAttendanceScannerProps {
   currentStudent: StudentProfile;
@@ -22,7 +23,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
   const [cameraError, setCameraError] = useState<string | null>(null);
   const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getISTDateString();
 
   useEffect(() => {
     fetchTodayLog();
