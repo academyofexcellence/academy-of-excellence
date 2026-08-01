@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
 import { 
   CheckCircle2, 
   HelpCircle, 
@@ -164,6 +165,22 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
   const [subTab, setSubTab] = useState<'grading' | 'exams' | 'matrix' | 'standings' | 'appeals'>('grading');
   const [showArchivedFilter, setShowArchivedFilter] = useState(false);
   const [expandedAppealId, setExpandedAppealId] = useState<string | null>(null);
+  const [qrAttendanceLogs, setQrAttendanceLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchGradingAttendanceLogs = async () => {
+      try {
+        const { data } = await supabase
+          .from('daily_attendance_logs')
+          .select('*')
+          .eq('date', selectedGradingDate);
+        if (data) setQrAttendanceLogs(data);
+      } catch (e) {
+        console.error('Error fetching QR attendance logs:', e);
+      }
+    };
+    fetchGradingAttendanceLogs();
+  }, [selectedGradingDate]);
 
   useEffect(() => {
     if (subTab === 'matrix' && activeInterval?.id) {
@@ -576,11 +593,20 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                           const penaltyObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'penalty');
                           const penaltyPoints = penaltyObj ? Math.round(Math.abs(penaltyObj.points)) : 0;
 
+                          const qrLog = qrAttendanceLogs.find(l => l.student_id === student.id);
+
                           return (
                             <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                               <td style={{ padding: '0.8rem 0.4rem', fontWeight: 650 }}>
                                 {student.roll_number && <span style={{ color: 'var(--primary)', marginRight: '0.3rem', fontWeight: 800 }}>#{student.roll_number}</span>}
                                 {student.name}
+                                {qrLog && (
+                                  <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#16a34a', display: 'flex', alignItems: 'center', gap: '0.2rem', marginTop: '0.15rem' }}>
+                                    <span style={{ background: '#dcfce7', padding: '0.1rem 0.35rem', borderRadius: '4px', border: '1px solid #86efac' }}>
+                                      📷 QR Check-in: {new Date(qrLog.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (+{qrLog.points_awarded || 10} XP)
+                                    </span>
+                                  </div>
+                                )}
                               </td>
                               
                               <td style={{ padding: '0.8rem 0.4rem', textAlign: 'center' }}>
@@ -1248,6 +1274,30 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                               <div style={{ width: `${lvlPercent}%`, height: '100%', background: 'var(--primary)' }} />
                             </div>
                           </div>
+
+                          {/* XP Breakdown Pills */}
+                          {(() => {
+                            const studentScores = (batchScores && batchScores.length > 0 ? batchScores : scoresList).filter(s => s.student_id === entry.student_id);
+                            const attXP = studentScores.filter(s => s.score_type === 'attendance').reduce((sum, s) => sum + (s.points || 0), 0);
+                            const taskXP = studentScores.filter(s => ['daily_vocab', 'daily_sentences', 'weekly_vlog', 'video_reaction', 'hadithul_arabia', 'custom'].includes(s.score_type)).reduce((sum, s) => sum + (s.points || 0), 0);
+                            const examXP = studentScores.filter(s => s.score_type === 'exam').reduce((sum, s) => sum + (s.points || 0), 0);
+
+                            return (
+                              <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.35rem', fontSize: '0.65rem' }}>
+                                <span style={{ background: '#dcfce7', color: '#166534', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                  📷 {attXP} Attendance XP
+                                </span>
+                                <span style={{ background: '#dbeafe', color: '#1e40af', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                  📝 {taskXP} Task XP
+                                </span>
+                                {examXP > 0 && (
+                                  <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    🎓 {examXP} Exam XP
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div style={{ textAlign: 'right' }}>

@@ -197,6 +197,18 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
               
               {/* Grid of Metrics */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
+                <div style={{ background: '#f0fdf4', padding: '0.8rem', borderRadius: '12px', border: '1px solid #bbf7d0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 800, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    📷 QR Attendance XP
+                  </span>
+                  <div style={{ margin: '0.4rem 0' }}>
+                    <span style={{ fontSize: '1.6rem', fontWeight: 850, color: '#15803d' }}>+{onTimeCount * 10 + lateCount * 7 + halfDayCount * 5} XP</span>
+                  </div>
+                  <span style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 600 }}>
+                    {onTimeCount} On-Time ({onTimeCount * 10} XP) • {lateCount} Late ({lateCount * 7} XP)
+                  </span>
+                </div>
+
                 <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Final Attendance Rate</span>
                   <div style={{ margin: '0.4rem 0' }}>

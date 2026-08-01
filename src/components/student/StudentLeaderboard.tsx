@@ -54,10 +54,10 @@ export const StudentLeaderboard: React.FC<StudentLeaderboardProps> = ({
     <div className="glass-card leaderboard-wrapper-card">
       
       {/* Leaderboard Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(201,156,51,0.12)', paddingBottom: '1rem', marginBottom: '1.2rem', gap: '1rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(201,156,51,0.12)', paddingBottom: '1rem', marginBottom: '1rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ fontSize: '1.35rem', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <TrendingUp size={20} className="text-primary" /> Batch Rankings
+            <TrendingUp size={20} className="text-primary" /> Batch Performance Leaderboard
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0.2rem 0 0 0' }}>
             Currently viewing: <strong>{getPeriodLabel()}</strong>
@@ -80,6 +80,11 @@ export const StudentLeaderboard: React.FC<StudentLeaderboardProps> = ({
             ))}
           </select>
         </div>
+      </div>
+
+      {/* QR Attendance Ranking System Notice Banner */}
+      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '0.65rem 1rem', borderRadius: '10px', marginBottom: '1.2rem', fontSize: '0.78rem', color: '#166534', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <span>⚡ <strong>Live Integrated Ranking:</strong> Rank XP = Automatic QR Attendance (+10 XP/On-Time Check-In) + Daily Tasks & Exams!</span>
       </div>
 
       {/* Roster Search bar */}
