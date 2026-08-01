@@ -600,9 +600,9 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                           if (!attVal && qrLog) {
                             if (qrLog.check_in_status === 'on_time' || qrLog.points_awarded === 10) {
                               attVal = 'On Time';
-                            } else if (qrLog.points_awarded === 7 || qrLog.check_in_status === 'late') {
+                            } else if (qrLog.check_in_status === 'late' || qrLog.points_awarded === 5 || qrLog.points_awarded === 7) {
                               attVal = 'Late';
-                            } else if (qrLog.status === 'present_half' || qrLog.points_awarded === 5) {
+                            } else if (qrLog.status === 'present_half') {
                               attVal = 'Half Day';
                             } else if (qrLog.status === 'absent' || qrLog.points_awarded === 0) {
                               attVal = 'Absent';
@@ -646,7 +646,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                                 >
                                   <option value="">- Select -</option>
                                   <option value="On Time">On Time (+10 XP)</option>
-                                  <option value="Late">Late (+7 XP)</option>
+                                  <option value="Late">Late (+5 XP)</option>
                                   <option value="Half Day">Half Day (+5 XP)</option>
                                   <option value="Absent">Absent (0 XP)</option>
                                 </select>
@@ -873,7 +873,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                               >
                                 <option value="">- Select -</option>
                                 <option value="On Time">On Time (+10)</option>
-                                <option value="Late">Late (+7)</option>
+                                <option value="Late">Late (+5)</option>
                                 <option value="Half Day">Half Day (+5)</option>
                                 <option value="Absent">Absent (0)</option>
                               </select>
