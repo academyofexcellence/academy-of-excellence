@@ -2033,6 +2033,7 @@ const AdminDashboard = () => {
             scoresList.push({
               id: `att-log-${log.id}`,
               student_id: log.student_id,
+              interval_id: log.interval_id || activeInterval?.id,
               score_type: 'attendance',
               activity_name: `Attendance: ${statusText}`,
               points: pts,
@@ -2040,6 +2041,8 @@ const AdminDashboard = () => {
               logged_date: log.date,
               created_at: log.created_at || log.check_in_time
             });
+          } else if (!existingScore.interval_id) {
+            existingScore.interval_id = log.interval_id || activeInterval?.id;
           }
         });
       }
@@ -5043,7 +5046,7 @@ const AdminDashboard = () => {
                 (() => {
                   const scores = reportSelectedInterval === 'cumulative'
                     ? studentReportData.scores
-                    : studentReportData.scores.filter(s => s.interval_id === reportSelectedInterval);
+                    : studentReportData.scores.filter(s => !s.interval_id || s.interval_id === reportSelectedInterval);
 
                   const studentIntervals = intervalsList.filter(i => i.course_id === selectedReportStudent?.course_id && i.batch_number === selectedReportStudent?.batch_number);
                   const studentInterval = reportSelectedInterval === 'cumulative'
