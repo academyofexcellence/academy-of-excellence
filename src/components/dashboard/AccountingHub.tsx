@@ -329,17 +329,42 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
     }
 
     try {
-      const receiptNo = `INC-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(4, '0')}`;
-      const validStudentId = activeStudents[0]?.id || studentList[0]?.id;
+      // 1. Get or create a dedicated System Office Profile for Non-Fee Academy Income
+      let systemStudentId: string | null = null;
+      const { data: existingSys } = await supabase
+        .from('student_profiles')
+        .select('id')
+        .eq('roll_number', 'SYS-OFFICE-000')
+        .maybeSingle();
 
-      if (!validStudentId) {
-        alert('Please create at least one student profile before recording transactions.');
+      if (existingSys?.id) {
+        systemStudentId = existingSys.id;
+      } else {
+        const { data: newSys } = await supabase
+          .from('student_profiles')
+          .insert({
+            roll_number: 'SYS-OFFICE-000',
+            name: 'Academy General Office Account',
+            email: 'office@academy.internal',
+            course_id: selectedCourseId,
+            batch_number: Number(selectedBatchNumber) || 1,
+            status: 'active'
+          })
+          .select('id')
+          .maybeSingle();
+
+        systemStudentId = newSys?.id || studentList[0]?.id || activeStudents[0]?.id || null;
+      }
+
+      if (!systemStudentId) {
+        alert('Could not resolve system account. Please ensure at least one course/student exists.');
         return;
       }
 
+      const receiptNo = `INC-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(4, '0')}`;
       const txPayload = {
         receipt_no: receiptNo,
-        student_id: validStudentId,
+        student_id: systemStudentId,
         student_name: `${incomeTitle} (${incomeCategory.replace('_', ' ').toUpperCase()})`,
         course_id: selectedCourseId,
         batch_number: Number(selectedBatchNumber),
