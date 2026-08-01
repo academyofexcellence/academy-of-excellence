@@ -330,9 +330,16 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
 
     try {
       const receiptNo = `INC-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(4, '0')}`;
+      const validStudentId = activeStudents[0]?.id || studentList[0]?.id;
+
+      if (!validStudentId) {
+        alert('Please create at least one student profile before recording transactions.');
+        return;
+      }
+
       const txPayload = {
         receipt_no: receiptNo,
-        student_id: null,
+        student_id: validStudentId,
         student_name: `${incomeTitle} (${incomeCategory.replace('_', ' ').toUpperCase()})`,
         course_id: selectedCourseId,
         batch_number: Number(selectedBatchNumber),
