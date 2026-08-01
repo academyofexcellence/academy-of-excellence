@@ -1297,7 +1297,11 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
 
                           {/* XP Breakdown Pills */}
                           {(() => {
-                            const studentScores = (batchScores && batchScores.length > 0 ? batchScores : scoresList).filter(s => s.student_id === entry.student_id);
+                            const allCombined = [...(batchScores || []), ...(scoresList || [])];
+                            const studentScores = allCombined.filter((s, idx, self) =>
+                              s.student_id === entry.student_id &&
+                              self.findIndex(x => x.student_id === s.student_id && x.score_type === s.score_type && (x.logged_date || x.created_at) === (s.logged_date || s.created_at)) === idx
+                            );
                             const attXP = studentScores.filter(s => s.score_type === 'attendance').reduce((sum, s) => sum + (s.points || 0), 0);
                             const taskXP = studentScores.filter(s => ['daily_vocab', 'daily_sentences', 'weekly_vlog', 'video_reaction', 'hadithul_arabia', 'custom'].includes(s.score_type)).reduce((sum, s) => sum + (s.points || 0), 0);
                             const examXP = studentScores.filter(s => s.score_type === 'exam').reduce((sum, s) => sum + (s.points || 0), 0);

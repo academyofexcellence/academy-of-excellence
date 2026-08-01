@@ -1056,12 +1056,7 @@ const AdminDashboard = () => {
     }
   }, [activeInterval, selectedGradingDate, selectedLeaderboardInterval]);
 
-  // Load batch scores when Matrix view is activated
-  useEffect(() => {
-    if (activeInterval && gradingMode === 'batch_sheet') {
-      fetchBatchScores(activeInterval.id);
-    }
-  }, [activeInterval, gradingMode]);
+
 
   // Fetch overview leaderboard when selected overview interval changes
   useEffect(() => {
@@ -1278,39 +1273,82 @@ const AdminDashboard = () => {
     }
   };
 
-  const fetchBatchScores = useCallback(async (intervalId: string) => {
+  const fetchBatchScores = useCallback(async (targetIntervalId: string) => {
     setLoadingBatchScores(true);
     try {
+      const currentStudents = studentList.filter(s => s.course_id === filterCourse && s.batch_number === parseInt(filterBatch));
+      const studentIds = currentStudents.map(s => s.id);
+
+      if (studentIds.length === 0) {
+        setBatchScores([]);
+        setLoadingBatchScores(false);
+        return;
+      }
+
+      let query = supabase.from('scores').select('*').in('student_id', studentIds);
+
+      if (targetIntervalId && targetIntervalId !== 'cumulative') {
+        query = query.eq('interval_id', targetIntervalId);
+      }
+
       let allScores: any[] = [];
       let from = 0;
       const pageSize = 1000;
       let hasMore = true;
 
       while (hasMore) {
-        const { data, error } = await supabase
-          .from('scores')
-          .select('*')
-          .eq('interval_id', intervalId)
-          .range(from, from + pageSize - 1);
-
+        const { data, error } = await query.range(from, from + pageSize - 1);
         if (error) throw error;
         if (data && data.length > 0) {
           allScores = [...allScores, ...data];
           from += pageSize;
-          if (data.length < pageSize) {
-            hasMore = false;
-          }
+          if (data.length < pageSize) hasMore = false;
         } else {
           hasMore = false;
         }
       }
+
+      const { data: attLogs } = await supabase
+        .from('daily_attendance_logs')
+        .select('*')
+        .in('student_id', studentIds);
+
+      if (attLogs && attLogs.length > 0) {
+        attLogs.forEach(log => {
+          const exists = allScores.some(s => s.student_id === log.student_id && s.score_type === 'attendance' && s.logged_date === log.date);
+          if (!exists) {
+            const statusText = log.check_in_status === 'on_time' ? 'On Time' : 'Late';
+            const pts = log.points_awarded || (statusText === 'On Time' ? 10 : 5);
+            allScores.push({
+              id: `att-log-${log.id}`,
+              student_id: log.student_id,
+              interval_id: targetIntervalId !== 'cumulative' ? targetIntervalId : log.interval_id,
+              score_type: 'attendance',
+              activity_name: `Attendance: ${statusText}`,
+              points: pts,
+              max_points: 10,
+              logged_date: log.date,
+              created_at: log.created_at || log.check_in_time
+            });
+          }
+        });
+      }
+
       setBatchScores(allScores);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch batch scores:', err);
     } finally {
       setLoadingBatchScores(false);
     }
-  }, []);
+  }, [filterCourse, filterBatch, studentList]);
+
+  // Load batch scores when Matrix view or Standings view is active
+  useEffect(() => {
+    const targetInt = selectedLeaderboardInterval || activeInterval?.id;
+    if (targetInt && (gradingMode === 'batch_sheet' || gradingMode === 'leaderboard')) {
+      fetchBatchScores(targetInt);
+    }
+  }, [activeInterval, selectedLeaderboardInterval, gradingMode, filterCourse, filterBatch, fetchBatchScores]);
 
   const handleToggleMatrixCell = async (studentId: string, dateStr: string, scoreType: string, existingRecord: any) => {
     if (!activeInterval || !currentUser) return;
