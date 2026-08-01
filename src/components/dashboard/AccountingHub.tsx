@@ -22,27 +22,27 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const [searchTerm, setSearchTerm] = useState('');
 
   // Batch Fee state
-  const [batchStandardFee, setBatchStandardFee] = useState<number>(25000);
+  const [batchStandardFee, setBatchStandardFee] = useState<number | string>(25000);
 
   // Collect Fee Modal
   const [collectingStudent, setCollectingStudent] = useState<StudentProfile | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState<number>(5000);
+  const [paymentAmount, setPaymentAmount] = useState<number | string>('');
   const [paymentMode, setPaymentMode] = useState<'gpay_bank' | 'office_cash'>('gpay_bank');
   const [installmentLabel, setInstallmentLabel] = useState<string>('Admission Fee (1st Payment)');
   const [paymentNotes, setPaymentNotes] = useState<string>('');
 
   // Net Fee / Discount Modal
   const [discountingStudent, setDiscountingStudent] = useState<StudentProfile | null>(null);
-  const [standardFee, setStandardFee] = useState<number>(25000);
-  const [discountAmount, setDiscountAmount] = useState<number>(0);
-  const [netAgreedFeeInput, setNetAgreedFeeInput] = useState<number>(25000);
+  const [standardFee, setStandardFee] = useState<number | string>(25000);
+  const [discountAmount, setDiscountAmount] = useState<number | string>(0);
+  const [netAgreedFeeInput, setNetAgreedFeeInput] = useState<number | string>(25000);
   const [discountReason, setDiscountReason] = useState<string>('');
 
   // Add Expense Modal
   const [showAddExpense, setShowAddExpense] = useState<boolean>(false);
   const [expenseTitle, setExpenseTitle] = useState<string>('');
   const [expenseCategory, setExpenseCategory] = useState<'rent' | 'utilities' | 'salaries' | 'supplies' | 'marketing' | 'maintenance' | 'other'>('supplies');
-  const [expenseAmount, setExpenseAmount] = useState<number>(1000);
+  const [expenseAmount, setExpenseAmount] = useState<number | string>('');
   const [expenseMode, setExpenseMode] = useState<'office_cash' | 'gpay_bank'>('office_cash');
   const [expenseNotes, setExpenseNotes] = useState<string>('');
 
@@ -103,21 +103,22 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const gpayBankBalance = totalGpayIncome - totalGpayExpense;
   const netLiquidity = officeCashBalance + gpayBankBalance;
 
-  // --- APPLY STANDARD FEE TO ALL STUDENTS IN BATCH ---
+  // --- APPLY STANDARD FEE TO ALL STUDENTS IN SELECTED BATCH ---
   const handleApplyBatchStandardFee = async () => {
-    if (activeStudents.length === 0) {
-      alert('No active students found in this course and batch.');
+    const numBatchFee = Number(batchStandardFee) || 0;
+    if (numBatchFee <= 0) {
+      alert('Please enter a valid batch standard fee amount.');
       return;
     }
-    if (!confirm(`Apply standard fee of ₹${batchStandardFee.toLocaleString()} to ALL ${activeStudents.length} student(s) in Batch ${selectedBatchNumber}?`)) return;
+    if (!confirm(`Apply standard fee of ₹${numBatchFee.toLocaleString()} to ALL ${activeStudents.length} student(s) in Batch ${selectedBatchNumber}?`)) return;
 
     try {
       setLoading(true);
       const recordsToUpsert = activeStudents.map(student => {
         const existing = feeProfiles.find(p => p.student_id === student.id);
-        const discount = existing?.discount_amount || 0;
-        const netAgreed = Math.max(0, batchStandardFee - discount);
-        const paid = existing?.total_paid || 0;
+        const discount = Number(existing?.discount_amount) || 0;
+        const netAgreed = Math.max(0, numBatchFee - discount);
+        const paid = Number(existing?.total_paid) || 0;
         const balance = Math.max(0, netAgreed - paid);
 
         let newStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
@@ -126,7 +127,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
 
         return {
           student_id: student.id,
-          standard_fee: batchStandardFee,
+          standard_fee: numBatchFee,
           discount_amount: discount,
           discount_reason: existing?.discount_reason || null,
           total_agreed_fee: netAgreed,
@@ -139,11 +140,11 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
       const { error } = await supabase.from('student_fee_profiles').upsert(recordsToUpsert, { onConflict: 'student_id' });
       if (error) throw error;
 
-      setMessage(`✅ Updated standard fee to ₹${batchStandardFee.toLocaleString()} for all ${activeStudents.length} student(s) in Batch ${selectedBatchNumber}!`);
+      setMessage(`✅ Updated standard fee to ₹${numBatchFee.toLocaleString()} for all ${activeStudents.length} student(s) in Batch ${selectedBatchNumber}!`);
       await fetchAllFinancialData();
     } catch (err: any) {
       console.error('Error setting batch fee:', err);
-      alert(`Failed to set batch fee: ${err.message}`);
+      alert(`Failed to apply batch fee: ${err.message}`);
     } finally {
       setLoading(false);
       setTimeout(() => setMessage(''), 4000);
@@ -151,23 +152,36 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   };
 
   // --- HANDLERS FOR INDIVIDUAL NET FEE MODAL ---
-  const handleDiscountChange = (val: number) => {
-    setDiscountAmount(val);
-    setNetAgreedFeeInput(Math.max(0, standardFee - val));
+  const handleDiscountChange = (val: number | string) => {
+    const numVal = val === '' ? '' : Number(val);
+    const numStd = Number(standardFee) || 25000;
+    setDiscountAmount(numVal);
+    if (numVal === '') {
+      setNetAgreedFeeInput(numStd);
+    } else {
+      setNetAgreedFeeInput(Math.max(0, numStd - Number(numVal)));
+    }
   };
 
-  const handleNetFeeChange = (val: number) => {
-    setNetAgreedFeeInput(val);
-    setDiscountAmount(Math.max(0, standardFee - val));
+  const handleNetFeeChange = (val: number | string) => {
+    const numVal = val === '' ? '' : Number(val);
+    const numStd = Number(standardFee) || 25000;
+    setNetAgreedFeeInput(numVal);
+    if (numVal === '') {
+      setDiscountAmount(0);
+    } else {
+      setDiscountAmount(Math.max(0, numStd - Number(numVal)));
+    }
   };
 
   const handleSaveDiscount = async () => {
     if (!discountingStudent) return;
     try {
-      const netAgreed = Math.max(0, netAgreedFeeInput);
-      const computedDiscount = Math.max(0, standardFee - netAgreed);
+      const netAgreed = Math.max(0, Number(netAgreedFeeInput) || 0);
+      const numStd = Number(standardFee) || 25000;
+      const computedDiscount = Math.max(0, numStd - netAgreed);
       const existingProfile = feeProfiles.find(p => p.student_id === discountingStudent.id);
-      const paidSoFar = existingProfile?.total_paid || 0;
+      const paidSoFar = Number(existingProfile?.total_paid) || 0;
       const newBalance = Math.max(0, netAgreed - paidSoFar);
 
       let newStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
@@ -176,7 +190,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
 
       const payload = {
         student_id: discountingStudent.id,
-        standard_fee: standardFee,
+        standard_fee: numStd,
         discount_amount: computedDiscount,
         discount_reason: discountReason || null,
         total_agreed_fee: netAgreed,
@@ -202,7 +216,8 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   // --- COLLECT FEE PAYMENT ---
   const handleCollectPayment = async () => {
     if (!collectingStudent) return;
-    if (paymentAmount <= 0) {
+    const numericPayment = Number(paymentAmount) || 0;
+    if (numericPayment <= 0) {
       alert('Please enter a valid payment amount.');
       return;
     }
@@ -216,7 +231,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
         student_name: collectingStudent.name,
         course_id: collectingStudent.course_id,
         batch_number: collectingStudent.batch_number,
-        amount_paid: paymentAmount,
+        amount_paid: numericPayment,
         payment_mode: paymentMode,
         installment_label: installmentLabel,
         notes: paymentNotes || null,
@@ -227,9 +242,9 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
       if (txError) throw txError;
 
       const existingProfile = feeProfiles.find(p => p.student_id === collectingStudent.id);
-      const agreedFee = existingProfile?.total_agreed_fee || 25000;
-      const currentPaid = existingProfile?.total_paid || 0;
-      const newTotalPaid = currentPaid + paymentAmount;
+      const agreedFee = Number(existingProfile?.total_agreed_fee) || 25000;
+      const currentPaid = Number(existingProfile?.total_paid) || 0;
+      const newTotalPaid = currentPaid + numericPayment;
       const newBalance = Math.max(0, agreedFee - newTotalPaid);
 
       let newStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'partially_paid';
@@ -248,7 +263,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
       const { error: profError } = await supabase.from('student_fee_profiles').upsert(profilePayload, { onConflict: 'student_id' });
       if (profError) throw profError;
 
-      setMessage(`✅ Recorded ₹${paymentAmount.toLocaleString()} payment via ${paymentMode === 'gpay_bank' ? 'GPay/Bank' : 'Liquid Office Cash'}!`);
+      setMessage(`✅ Recorded ₹${numericPayment.toLocaleString()} payment via ${paymentMode === 'gpay_bank' ? 'GPay/Bank' : 'Liquid Office Cash'}!`);
       
       if (newTx) {
         setActiveReceipt({ tx: newTx as FeePaymentTransaction, student: collectingStudent });
@@ -266,7 +281,8 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
 
   // --- LOG ACADEMY EXPENSE ---
   const handleSaveExpense = async () => {
-    if (!expenseTitle.trim() || expenseAmount <= 0) {
+    const numericExpense = Number(expenseAmount) || 0;
+    if (!expenseTitle.trim() || numericExpense <= 0) {
       alert('Please enter a valid expense title and amount.');
       return;
     }
@@ -275,7 +291,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
       const payload = {
         title: expenseTitle,
         category: expenseCategory,
-        amount: expenseAmount,
+        amount: numericExpense,
         payment_mode: expenseMode,
         notes: expenseNotes || null,
         logged_by: 'Staff Office'
@@ -602,7 +618,9 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                 <input
                   type="number"
                   value={batchStandardFee}
-                  onChange={(e) => setBatchStandardFee(Number(e.target.value))}
+                  onChange={(e) => setBatchStandardFee(e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  placeholder="25000"
                   style={{ width: '90px', padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}
                 />
                 <button
@@ -639,10 +657,10 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                 <tbody>
                   {activeStudents.map(student => {
                     const prof = feeProfiles.find(p => p.student_id === student.id);
-                    const stdFee = prof?.standard_fee || batchStandardFee;
-                    const discount = prof?.discount_amount || 0;
-                    const agreedFee = prof?.total_agreed_fee || stdFee;
-                    const paid = prof?.total_paid || 0;
+                    const stdFee = Number(prof?.standard_fee) || Number(batchStandardFee) || 25000;
+                    const discount = Number(prof?.discount_amount) || 0;
+                    const agreedFee = Number(prof?.total_agreed_fee) || stdFee;
+                    const paid = Number(prof?.total_paid) || 0;
                     const balance = Math.max(0, agreedFee - paid);
                     const status = prof?.status || (paid >= agreedFee ? 'fully_paid' : (paid > 0 ? 'partially_paid' : 'unpaid'));
 
@@ -909,8 +927,10 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Payment Amount (₹) *</label>
               <input
                 type="number"
+                placeholder="Enter amount (e.g. 5000)"
                 value={paymentAmount}
-                onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                onChange={(e) => setPaymentAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
                 style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '1.1rem', fontWeight: 900, color: '#16a34a' }}
               />
             </div>
@@ -1003,8 +1023,10 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Amount (₹) *</label>
                 <input
                   type="number"
+                  placeholder="e.g. 480"
                   value={expenseAmount}
-                  onChange={(e) => setExpenseAmount(Number(e.target.value))}
+                  onChange={(e) => setExpenseAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 800, color: '#dc2626' }}
                 />
               </div>
@@ -1055,18 +1077,18 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Standard Batch Fee</label>
-                <input type="number" value={standardFee} onChange={(e) => setStandardFee(Number(e.target.value))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }} />
+                <input type="number" value={standardFee} onChange={(e) => setStandardFee(e.target.value === '' ? '' : Number(e.target.value))} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }} />
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Net Agreed Fee (₹) *</label>
-                <input type="number" value={netAgreedFeeInput} onChange={(e) => handleNetFeeChange(Number(e.target.value))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #16a34a', fontSize: '1rem', fontWeight: 900, color: '#15803d', background: '#f0fdf4' }} />
+                <input type="number" value={netAgreedFeeInput} onChange={(e) => handleNetFeeChange(e.target.value === '' ? '' : Number(e.target.value))} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #16a34a', fontSize: '1rem', fontWeight: 900, color: '#15803d', background: '#f0fdf4' }} />
               </div>
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Calculated Discount (₹)</label>
-              <input type="number" value={discountAmount} onChange={(e) => handleDiscountChange(Number(e.target.value))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 800, color: '#b45309' }} />
+              <input type="number" value={discountAmount} onChange={(e) => handleDiscountChange(e.target.value === '' ? '' : Number(e.target.value))} onFocus={(e) => e.target.select()} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 800, color: '#b45309' }} />
             </div>
 
             <div style={{ marginBottom: '1.25rem' }}>
