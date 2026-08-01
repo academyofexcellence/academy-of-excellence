@@ -46,6 +46,14 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const [expenseMode, setExpenseMode] = useState<'office_cash' | 'gpay_bank'>('office_cash');
   const [expenseNotes, setExpenseNotes] = useState<string>('');
 
+  // Add Other Income Modal (Non-Fee Inflow)
+  const [showAddIncome, setShowAddIncome] = useState<boolean>(false);
+  const [incomeTitle, setIncomeTitle] = useState<string>('');
+  const [incomeCategory, setIncomeCategory] = useState<'book_sales' | 'events_seminars' | 'sponsorship' | 'certificates' | 'rent_venue' | 'other_income'>('other_income');
+  const [incomeAmount, setIncomeAmount] = useState<number | string>('');
+  const [incomeMode, setIncomeMode] = useState<'gpay_bank' | 'office_cash'>('gpay_bank');
+  const [incomeNotes, setIncomeNotes] = useState<string>('');
+
   // Printable Receipt Modal
   const [activeReceipt, setActiveReceipt] = useState<{ tx: FeePaymentTransaction; student: StudentProfile | null } | null>(null);
 
@@ -312,6 +320,46 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
     }
   };
 
+  // --- LOG OTHER ACADEMY INCOME (NON-FEE INFLOW) ---
+  const handleSaveOtherIncome = async () => {
+    const numericAmount = Number(incomeAmount) || 0;
+    if (!incomeTitle.trim() || numericAmount <= 0) {
+      alert('Please enter a valid income title and amount.');
+      return;
+    }
+
+    try {
+      const receiptNo = `INC-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(4, '0')}`;
+      const txPayload = {
+        receipt_no: receiptNo,
+        student_id: null,
+        student_name: `${incomeTitle} (${incomeCategory.replace('_', ' ').toUpperCase()})`,
+        course_id: selectedCourseId,
+        batch_number: Number(selectedBatchNumber),
+        amount_paid: numericAmount,
+        payment_mode: incomeMode,
+        installment_label: `Other Income: ${incomeCategory.replace('_', ' ')}`,
+        notes: incomeNotes || null,
+        logged_by: 'Staff Office'
+      };
+
+      const { error } = await supabase.from('fee_payment_transactions').insert(txPayload);
+      if (error) throw error;
+
+      setMessage(`✅ Recorded ₹${numericAmount.toLocaleString()} Other Income ("${incomeTitle}") received into ${incomeMode === 'gpay_bank' ? 'GPay/Bank' : 'Office Cash'}!`);
+      setShowAddIncome(false);
+      setIncomeTitle('');
+      setIncomeAmount('');
+      setIncomeNotes('');
+      await fetchAllFinancialData();
+    } catch (err: any) {
+      console.error('Error saving other income:', err);
+      alert(`Failed to record income: ${err.message}`);
+    } finally {
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
   // Format Payment Reminder message
   const handleSendReminder = (student: StudentProfile) => {
     const prof = feeProfiles.find(p => p.student_id === student.id);
@@ -562,6 +610,14 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               >
                 <span>💸 Record Academy Expense</span>
                 <ArrowDownRight size={18} />
+              </button>
+
+              <button
+                onClick={() => setShowAddIncome(true)}
+                style={{ padding: '0.85rem 1.25rem', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', fontWeight: 800, textAlign: 'left', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span>💰 Record Other Income Inflow</span>
+                <PlusCircle size={18} />
               </button>
 
               <button
@@ -1048,6 +1104,95 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               <button onClick={() => setShowAddExpense(false)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleSaveExpense} style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#dc2626', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
                 Record Outflow
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- ADD OTHER INCOME INFLOW MODAL --- */}
+      {showAddIncome && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+              <h4 style={{ margin: 0, fontWeight: 800, color: '#16a34a', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <PlusCircle size={20} /> Record Other Income Inflow
+              </h4>
+              <button onClick={() => setShowAddIncome(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Income Description / Title *</label>
+              <input
+                type="text"
+                placeholder="e.g. Study Material Book Sales / Sponsorship"
+                value={incomeTitle}
+                onChange={(e) => setIncomeTitle(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Income Category</label>
+                <select
+                  value={incomeCategory}
+                  onChange={(e) => setIncomeCategory(e.target.value as any)}
+                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                >
+                  <option value="book_sales">Books & Study Material</option>
+                  <option value="events_seminars">Events & Seminars</option>
+                  <option value="sponsorship">Sponsorship & Grants</option>
+                  <option value="certificates">Document / Certificate Fee</option>
+                  <option value="rent_venue">Hall / Venue Rent</option>
+                  <option value="other_income">Other Income</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Amount (₹) *</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 1500"
+                  value={incomeAmount}
+                  onChange={(e) => setIncomeAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #16a34a', fontSize: '0.9rem', fontWeight: 800, color: '#16a34a' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Received Into Account *</label>
+              <select
+                value={incomeMode}
+                onChange={(e) => setIncomeMode(e.target.value as any)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
+              >
+                <option value="gpay_bank">💳 GPay / Bank Account</option>
+                <option value="office_cash">💵 Office Hand Cash</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.3rem' }}>Notes / Reference (Optional)</label>
+              <input
+                type="text"
+                placeholder="Optional notes"
+                value={incomeNotes}
+                onChange={(e) => setIncomeNotes(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowAddIncome(false)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleSaveOtherIncome} style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
+                Record Income
               </button>
             </div>
 
