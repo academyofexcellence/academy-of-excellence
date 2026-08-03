@@ -831,7 +831,16 @@ const StudentDashboard = () => {
           name: student.name,
           total_score: totalScore,
           level: level,
-          rank: 1
+          rank: 1,
+          attendance_xp: attendanceXP,
+          vocab_xp: vocabXP,
+          sentence_xp: sentenceXP,
+          vlog_xp: vlogXP,
+          reaction_xp: reactionXP,
+          hadith_xp: hadithXP,
+          exam_xp: examXP,
+          custom_xp: customXP,
+          penalty_xp: penaltyXP
         };
       });
 

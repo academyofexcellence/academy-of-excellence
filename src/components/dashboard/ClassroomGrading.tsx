@@ -1575,34 +1575,61 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
 
                           {/* XP Breakdown Pills */}
                           {(() => {
-                            const allCombined = [...(batchScores || []), ...(scoresList || [])];
-                            const studentScores = allCombined.filter((s, idx, self) =>
-                              s.student_id === entry.student_id &&
-                              self.findIndex(x => x.student_id === s.student_id && x.score_type === s.score_type && (x.logged_date || x.created_at) === (s.logged_date || s.created_at)) === idx
-                            );
-                            
-                            const attScoreXP = studentScores.filter(s => s.score_type === 'attendance').reduce((sum, s) => sum + (s.points || 0), 0);
-                            const studentQrLogs = (qrAttendanceLogs || []).filter(l => l.student_id === entry.student_id);
-                            const attLogXP = studentQrLogs.reduce((sum, l) => {
-                              const hasInScores = studentScores.some(s => s.score_type === 'attendance' && s.logged_date === l.date);
-                              return sum + (hasInScores ? 0 : (l.points_awarded || 0));
-                            }, 0);
-                            const attXP = attScoreXP + attLogXP;
-
-                            const taskXP = studentScores.filter(s => ['daily_vocab', 'daily_sentences', 'weekly_vlog', 'video_reaction', 'hadithul_arabia', 'custom'].includes(s.score_type)).reduce((sum, s) => sum + (s.points || 0), 0);
-                            const examXP = studentScores.filter(s => s.score_type === 'exam').reduce((sum, s) => sum + (s.points || 0), 0);
+                            const attXP = entry.attendance_xp ?? 0;
+                            const vocabXP = entry.vocab_xp ?? 0;
+                            const sentenceXP = entry.sentence_xp ?? 0;
+                            const vlogXP = entry.vlog_xp ?? 0;
+                            const reactionXP = entry.reaction_xp ?? 0;
+                            const hadithXP = entry.hadith_xp ?? 0;
+                            const examXP = entry.exam_xp ?? 0;
+                            const customXP = entry.custom_xp ?? 0;
+                            const penaltyXP = entry.penalty_xp ?? 0;
 
                             return (
                               <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.35rem', fontSize: '0.65rem' }}>
-                                <span style={{ background: '#dcfce7', color: '#166534', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
-                                  📷 {attXP} Attendance XP
-                                </span>
-                                <span style={{ background: '#dbeafe', color: '#1e40af', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
-                                  📝 {taskXP} Task XP
-                                </span>
+                                {attXP > 0 && (
+                                  <span style={{ background: '#dcfce7', color: '#166534', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    📷 {attXP} Attendance
+                                  </span>
+                                )}
+                                {vocabXP > 0 && (
+                                  <span style={{ background: '#dbeafe', color: '#1e40af', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    📖 {vocabXP} Vocab
+                                  </span>
+                                )}
+                                {sentenceXP > 0 && (
+                                  <span style={{ background: '#e0e7ff', color: '#3730a3', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    ✍️ {sentenceXP} Sentences
+                                  </span>
+                                )}
+                                {vlogXP > 0 && (
+                                  <span style={{ background: '#fae8ff', color: '#86198f', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    🎥 {vlogXP} Vlog
+                                  </span>
+                                )}
+                                {reactionXP > 0 && (
+                                  <span style={{ background: '#fce7f3', color: '#9d174d', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    🎬 {reactionXP} Reaction
+                                  </span>
+                                )}
+                                {hadithXP > 0 && (
+                                  <span style={{ background: '#fef3c7', color: '#92400e', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    🕌 {hadithXP} Hadith
+                                  </span>
+                                )}
                                 {examXP > 0 && (
                                   <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
-                                    🎓 {examXP} Exam XP
+                                    🎓 {examXP} Exam
+                                  </span>
+                                )}
+                                {customXP > 0 && (
+                                  <span style={{ background: '#f1f5f9', color: '#334155', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    ⚙️ {customXP} Custom
+                                  </span>
+                                )}
+                                {penaltyXP < 0 && (
+                                  <span style={{ background: '#ffe4e6', color: '#9f1239', padding: '0.1rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                    ⚠️ {penaltyXP} Penalty
                                   </span>
                                 )}
                               </div>

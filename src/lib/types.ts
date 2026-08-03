@@ -87,6 +87,15 @@ export interface LeaderboardEntry {
   total_score: number;
   level: number;
   rank: number;
+  attendance_xp?: number;
+  vocab_xp?: number;
+  sentence_xp?: number;
+  vlog_xp?: number;
+  reaction_xp?: number;
+  hadith_xp?: number;
+  exam_xp?: number;
+  custom_xp?: number;
+  penalty_xp?: number;
 }
 
 export interface ScoreLog {
