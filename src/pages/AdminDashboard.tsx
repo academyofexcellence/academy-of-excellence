@@ -1123,38 +1123,22 @@ const AdminDashboard = () => {
 
   const fetchLeaderboardData = async (intervalId: string, courseId: string, batchNumber: number): Promise<LeaderboardEntry[]> => {
     try {
-      let rpcEntries: LeaderboardEntry[] = [];
-      try {
-        const { data, error } = await supabase.rpc('get_leaderboard', {
-          p_interval_id: intervalId,
-          p_course_id: courseId,
-          p_batch_number: batchNumber
-        });
-        if (!error && data) rpcEntries = data;
-      } catch (e) {
-        console.error('RPC get_leaderboard error:', e);
-      }
+      const { data: students } = await supabase
+        .from('student_profiles')
+        .select('id, name')
+        .eq('course_id', courseId)
+        .eq('batch_number', batchNumber)
+        .eq('status', 'active');
 
-      if (!rpcEntries || rpcEntries.length === 0) {
-        const { data: students } = await supabase
-          .from('student_profiles')
-          .select('id, name')
-          .eq('course_id', courseId)
-          .eq('batch_number', batchNumber)
-          .eq('status', 'active');
+      if (!students || students.length === 0) return [];
 
-        rpcEntries = (students || []).map((s, idx) => ({
-          student_id: s.id,
-          name: s.name,
-          total_score: 0,
-          level: 1,
-          rank: idx + 1
-        }));
-      }
+      const studentIds = students.map(s => s.id);
 
       let scoresQuery = supabase
         .from('scores')
-        .select('*');
+        .select('*')
+        .in('student_id', studentIds);
+
       if (intervalId !== 'cumulative') {
         scoresQuery = scoresQuery.eq('interval_id', intervalId);
       }
@@ -1167,8 +1151,7 @@ const AdminDashboard = () => {
       const { data: rawAttLogs } = await supabase
         .from('daily_attendance_logs')
         .select('*')
-        .eq('course_id', courseId)
-        .eq('batch_number', batchNumber);
+        .in('student_id', studentIds);
 
       const attLogs = (rawAttLogs || []).filter(l => {
         if (!curInterval) return true;
@@ -1177,9 +1160,9 @@ const AdminDashboard = () => {
         return true;
       });
 
-      const updatedEntries = rpcEntries.map(entry => {
-        const studentScores = (scoresData || []).filter(s => s.student_id === entry.student_id);
-        const studentAttLogs = (attLogs || []).filter(l => l.student_id === entry.student_id);
+      const leaderboardEntries: LeaderboardEntry[] = students.map(student => {
+        const studentScores = (scoresData || []).filter(s => s.student_id === student.id);
+        const studentAttLogs = (attLogs || []).filter(l => l.student_id === student.id);
 
         const nonAttScores = studentScores.filter(s => s.score_type !== 'attendance');
         const nonAttTotal = nonAttScores.reduce((sum, s) => sum + (s.points || 0), 0);
@@ -1206,18 +1189,20 @@ const AdminDashboard = () => {
         const level = Math.max(1, Math.floor(totalScore / 100) + 1);
 
         return {
-          ...entry,
+          student_id: student.id,
+          name: student.name,
           total_score: totalScore,
-          level: level
+          level: level,
+          rank: 1
         };
       });
 
-      updatedEntries.sort((a, b) => b.total_score - a.total_score);
-      updatedEntries.forEach((e, idx) => {
+      leaderboardEntries.sort((a, b) => b.total_score - a.total_score);
+      leaderboardEntries.forEach((e, idx) => {
         e.rank = idx + 1;
       });
 
-      return updatedEntries;
+      return leaderboardEntries;
     } catch (err) {
       console.error('Error fetching leaderboard data:', err);
       return [];
