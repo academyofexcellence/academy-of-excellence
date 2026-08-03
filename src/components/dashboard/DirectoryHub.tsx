@@ -10,7 +10,7 @@ interface DirectoryHubProps {
   staffList: StaffProfile[];
   courses: Course[];
   handleUpdateStaff: (staffId: string, role: string, designation: string, status: string) => Promise<void>;
-  handleResetPassword: (userId: string, newPw: string) => Promise<void>;
+  handleResetPassword: (userId: string, newPw: string, email?: string) => Promise<void>;
   handleDeleteAccount: (userId: string, name: string) => Promise<void>;
   handleUpdateStudent: (studentId: string, name: string, courseId: string, batchNumber: number, rollNumber: string, status: string) => Promise<void>;
   handleOpenReport: (student: StudentProfile) => void;
@@ -349,7 +349,7 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
                       student={student} 
                       courses={courses} 
                       onUpdate={handleUpdateStudent} 
-                      onResetPassword={(newPw) => handleResetPassword(student.id, newPw)} 
+                      onResetPassword={(newPw) => handleResetPassword(student.id, newPw, student.email)} 
                       onDeleteAccount={() => handleDeleteAccount(student.id, student.name)} 
                       onOpenReport={handleOpenReport} 
                     />
@@ -398,7 +398,7 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
                     staff={staff} 
                     isSelf={staff.id === currentUser?.id}
                     onUpdate={handleUpdateStaff}
-                    onResetPassword={(newPw) => handleResetPassword(staff.id, newPw)}
+                    onResetPassword={(newPw) => handleResetPassword(staff.id, newPw, staff.email)}
                     onDeleteAccount={() => handleDeleteAccount(staff.id, staff.name)}
                   />
                 ))}

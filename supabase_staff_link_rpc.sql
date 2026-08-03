@@ -66,3 +66,26 @@ BEGIN
     RETURN jsonb_build_object('success', true, 'message', 'Staff profile linked successfully', 'id', found_user_id);
 END;
 $$;
+
+-- Enhanced reset_auth_user_password that matches by user_id OR email
+CREATE OR REPLACE FUNCTION public.reset_auth_user_password(user_id UUID, new_password TEXT, target_email TEXT DEFAULT NULL)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Check if caller is active leadership (gm, md, director)
+  IF NOT EXISTS (
+    SELECT 1 FROM public.staff_profiles 
+    WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
+  ) THEN
+    RAISE EXCEPTION 'Unauthorized: Only active leadership can reset passwords.';
+  END IF;
+
+  -- Update user password in auth.users by user_id OR target_email
+  UPDATE auth.users
+  SET encrypted_password = crypt(new_password, gen_salt('bf')),
+      updated_at = now()
+  WHERE id = user_id OR (target_email IS NOT NULL AND lower(email) = lower(target_email));
+END;
+$$;

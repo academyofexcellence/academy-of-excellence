@@ -3698,7 +3698,7 @@ const AdminDashboard = () => {
   };
 
   // Reset password of student/staff via RPC (Leadership only)
-  const handleResetPassword = async (userId: string, newPw: string) => {
+  const handleResetPassword = async (userId: string, newPw: string, email?: string) => {
     if (!newPw) {
       setMessage('❌ Please enter a new password.');
       setTimeout(() => setMessage(''), 4000);
@@ -3707,7 +3707,8 @@ const AdminDashboard = () => {
     try {
       const { error } = await supabase.rpc('reset_auth_user_password', {
         user_id: userId,
-        new_password: newPw
+        new_password: newPw,
+        target_email: email || null
       });
       if (error) throw error;
       setMessage('✅ Password reset successfully.');
