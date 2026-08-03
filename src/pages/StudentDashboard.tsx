@@ -796,28 +796,34 @@ const StudentDashboard = () => {
         const studentScores = (scoresData || []).filter(s => s.student_id === student.id);
         const studentAttLogs = (attLogs || []).filter(l => l.student_id === student.id);
 
-        const nonAttScores = studentScores.filter(s => s.score_type !== 'attendance');
-        const nonAttTotal = nonAttScores.reduce((sum, s) => sum + (s.points || 0), 0);
+        const vocabXP = studentScores.filter(s => s.score_type === 'daily_vocab').reduce((sum, s) => sum + (s.points || 0), 0);
+        const sentenceXP = studentScores.filter(s => s.score_type === 'daily_sentences').reduce((sum, s) => sum + (s.points || 0), 0);
+        const vlogXP = studentScores.filter(s => s.score_type === 'weekly_vlog').reduce((sum, s) => sum + (s.points || 0), 0);
+        const reactionXP = studentScores.filter(s => s.score_type === 'video_reaction').reduce((sum, s) => sum + (s.points || 0), 0);
+        const hadithXP = studentScores.filter(s => s.score_type === 'hadithul_arabia').reduce((sum, s) => sum + (s.points || 0), 0);
+        const examXP = studentScores.filter(s => s.score_type === 'exam').reduce((sum, s) => sum + (s.points || 0), 0);
+        const customXP = studentScores.filter(s => s.score_type === 'custom').reduce((sum, s) => sum + (s.points || 0), 0);
+        const penaltyXP = studentScores.filter(s => s.score_type === 'penalty').reduce((sum, s) => sum + (s.points || 0), 0);
 
-        const attDates = new Set<string>();
-        let attTotal = 0;
-
+        const attScoresMap = new Map<string, number>();
         studentScores.filter(s => s.score_type === 'attendance').forEach(s => {
-          const dKey = s.logged_date || (s.created_at ? s.created_at.split('T')[0] : '');
-          if (dKey && !attDates.has(dKey)) {
-            attDates.add(dKey);
-            attTotal += (s.points || 0);
-          }
+          const rawDate = s.logged_date || s.created_at || '';
+          const dKey = rawDate ? rawDate.split('T')[0] : '';
+          if (dKey) attScoresMap.set(dKey, s.points || 0);
         });
 
         studentAttLogs.forEach(log => {
-          if (log.date && !attDates.has(log.date)) {
-            attDates.add(log.date);
-            attTotal += (log.points_awarded || 0);
+          const dKey = log.date ? log.date.split('T')[0] : '';
+          if (dKey && !attScoresMap.has(dKey)) {
+            attScoresMap.set(dKey, log.points_awarded || 0);
           }
         });
 
-        const totalScore = nonAttTotal + attTotal;
+        let attendanceXP = 0;
+        attScoresMap.forEach(pts => { attendanceXP += pts; });
+
+        const taskXP = vocabXP + sentenceXP + vlogXP + reactionXP + hadithXP + customXP;
+        const totalScore = attendanceXP + taskXP + examXP + penaltyXP;
         const level = Math.max(1, Math.floor(totalScore / 100) + 1);
 
         return {
