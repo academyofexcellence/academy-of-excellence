@@ -1137,7 +1137,8 @@ const AdminDashboard = () => {
       let scoresQuery = supabase
         .from('scores')
         .select('*')
-        .in('student_id', studentIds);
+        .in('student_id', studentIds)
+        .range(0, 9999);
 
       if (intervalId !== 'cumulative') {
         scoresQuery = scoresQuery.eq('interval_id', intervalId);
@@ -1151,7 +1152,8 @@ const AdminDashboard = () => {
       const { data: rawAttLogs } = await supabase
         .from('daily_attendance_logs')
         .select('*')
-        .in('student_id', studentIds);
+        .in('student_id', studentIds)
+        .range(0, 9999);
 
       const attLogs = (rawAttLogs || []).filter(l => {
         if (!curInterval) return true;
