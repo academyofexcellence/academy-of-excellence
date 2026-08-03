@@ -344,7 +344,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
   }, [selectedGradingDate]);
 
   useEffect(() => {
-    if (subTab === 'matrix' && activeInterval?.id) {
+    if ((subTab === 'matrix' || subTab === 'standings' || subTab === 'attendance') && activeInterval?.id) {
       fetchBatchScores(activeInterval.id);
     }
   }, [subTab, activeInterval?.id, fetchBatchScores]);
@@ -1580,7 +1580,15 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                               s.student_id === entry.student_id &&
                               self.findIndex(x => x.student_id === s.student_id && x.score_type === s.score_type && (x.logged_date || x.created_at) === (s.logged_date || s.created_at)) === idx
                             );
-                            const attXP = studentScores.filter(s => s.score_type === 'attendance').reduce((sum, s) => sum + (s.points || 0), 0);
+                            
+                            const attScoreXP = studentScores.filter(s => s.score_type === 'attendance').reduce((sum, s) => sum + (s.points || 0), 0);
+                            const studentQrLogs = (qrAttendanceLogs || []).filter(l => l.student_id === entry.student_id);
+                            const attLogXP = studentQrLogs.reduce((sum, l) => {
+                              const hasInScores = studentScores.some(s => s.score_type === 'attendance' && s.logged_date === l.date);
+                              return sum + (hasInScores ? 0 : (l.points_awarded || 0));
+                            }, 0);
+                            const attXP = attScoreXP + attLogXP;
+
                             const taskXP = studentScores.filter(s => ['daily_vocab', 'daily_sentences', 'weekly_vlog', 'video_reaction', 'hadithul_arabia', 'custom'].includes(s.score_type)).reduce((sum, s) => sum + (s.points || 0), 0);
                             const examXP = studentScores.filter(s => s.score_type === 'exam').reduce((sum, s) => sum + (s.points || 0), 0);
 
