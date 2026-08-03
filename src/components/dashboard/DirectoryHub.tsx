@@ -51,6 +51,7 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
   const [newStaffDesignation, setNewStaffDesignation] = useState('');
   const [newStaffRole, setNewStaffRole] = useState<'staff' | 'gm' | 'md' | 'director'>('staff');
   const [newStaffStatus, setNewStaffStatus] = useState<'pending' | 'active' | 'inactive'>('active');
@@ -62,31 +63,64 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
     setAddingStaff(true);
     try {
       const emailClean = newStaffEmail.toLowerCase().trim();
-      const { data: existingProfiles } = await supabase
-        .from('staff_profiles')
-        .select('*')
-        .eq('email', emailClean);
+      const pwToUse = newStaffPassword.trim() || 'rashide';
+      
+      let targetUserId = '';
 
-      if (existingProfiles && existingProfiles.length > 0) {
-        await handleUpdateStaff(existingProfiles[0].id, newStaffRole, newStaffDesignation, newStaffStatus);
-      } else {
-        const { error } = await supabase
-          .from('staff_profiles')
-          .insert({
-            id: crypto.randomUUID(),
-            email: emailClean,
+      // 1. Try auth signUp first to create or retrieve auth.users row
+      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+        email: emailClean,
+        password: pwToUse,
+        options: {
+          data: {
+            is_student: false,
             name: newStaffName,
-            designation: newStaffDesignation || 'Staff Member',
-            role: newStaffRole,
-            status: newStaffStatus
-          });
-        if (error) throw error;
+            designation: newStaffDesignation
+          }
+        }
+      });
+
+      if (signUpData?.user?.id) {
+        targetUserId = signUpData.user.id;
+      } else if (signUpErr && signUpErr.message?.toLowerCase().includes('already registered')) {
+        // Attempt sign in to retrieve existing auth.users ID
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+          email: emailClean,
+          password: pwToUse
+        });
+
+        if (signInData?.user?.id) {
+          targetUserId = signInData.user.id;
+        } else if (signInErr) {
+          throw new Error(`Auth account exists for ${emailClean}, but password check failed. Please enter the password specified during signup (e.g. ${pwToUse}): ${signInErr.message}`);
+        }
+      } else if (signUpErr) {
+        throw signUpErr;
       }
+
+      if (!targetUserId) {
+        throw new Error('Unable to resolve user ID from authentication system.');
+      }
+
+      // Upsert into staff_profiles using valid auth.users ID
+      const { error: profileErr } = await supabase
+        .from('staff_profiles')
+        .upsert({
+          id: targetUserId,
+          email: emailClean,
+          name: newStaffName,
+          designation: newStaffDesignation || 'Staff Member',
+          role: newStaffRole,
+          status: newStaffStatus
+        }, { onConflict: 'id' });
+
+      if (profileErr) throw profileErr;
 
       alert(`✅ Staff account profile for ${newStaffName} (${emailClean}) linked successfully!`);
       setShowAddStaffModal(false);
       setNewStaffName('');
       setNewStaffEmail('');
+      setNewStaffPassword('');
       setNewStaffDesignation('');
       window.location.reload();
     } catch (err: any) {
