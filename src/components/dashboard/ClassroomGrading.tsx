@@ -271,8 +271,8 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
     setSavingAttendanceEdit(true);
     try {
       const dateStr = selectedGradingDate;
-      const loginPts = editLoginStatus === 'on_time' ? 5 : (editLoginStatus === 'late' ? 2.5 : 0);
-      const logoutPts = editLogoutStatus === 'on_time' ? 5 : (editLogoutStatus === 'early' ? 2.5 : 0);
+      const loginPts = editLoginStatus === 'on_time' ? 5 : (editLoginStatus === 'late' ? 3 : 0);
+      const logoutPts = editLogoutStatus === 'on_time' ? 5 : (editLogoutStatus === 'early' ? 3 : 0);
       const totalPts = loginPts + logoutPts;
       const overallStatus = totalPts >= 10 ? 'present_full' : (totalPts > 0 ? 'present_half' : 'absent');
 
@@ -1145,7 +1145,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                                   </span>
                                 ) : inStatus === 'late' ? (
                                   <span style={{ background: '#fef3c7', color: '#b45309', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 700, fontSize: '0.75rem' }}>
-                                    Late (+2.5 XP)
+                                    Late (+3 XP)
                                   </span>
                                 ) : (
                                   <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 600, fontSize: '0.75rem' }}>
@@ -1165,7 +1165,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                                   </span>
                                 ) : outStatus === 'early' ? (
                                   <span style={{ background: '#ffedd5', color: '#c2410c', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 700, fontSize: '0.75rem' }}>
-                                    Early (+2.5 XP)
+                                    Early (+3 XP)
                                   </span>
                                 ) : (
                                   <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 600, fontSize: '0.75rem' }}>
@@ -1821,7 +1821,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                       style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', fontWeight: 700 }}
                     >
                       <option value="on_time">On Time (+5 XP)</option>
-                      <option value="late">Late (+2.5 XP)</option>
+                      <option value="late">Late (+3 XP)</option>
                       <option value="none">Not Logged In (0 XP)</option>
                     </select>
                   </div>
@@ -1850,7 +1850,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                       style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', fontWeight: 700 }}
                     >
                       <option value="on_time">On Time (+5 XP)</option>
-                      <option value="early">Early (+2.5 XP)</option>
+                      <option value="early">Early (+3 XP)</option>
                       <option value="none">Not Logged Out (0 XP)</option>
                     </select>
                   </div>

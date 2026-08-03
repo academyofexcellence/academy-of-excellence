@@ -157,7 +157,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
       if (!todayLog) {
         // --- FIRST SCAN OF THE DAY (CHECK-IN / LOGIN) ---
         const checkInStatus = nowDetails.decimalHours <= 10.08 ? 'on_time' : 'late';
-        const initialPoints = checkInStatus === 'on_time' ? 5 : 2.5;
+        const initialPoints = checkInStatus === 'on_time' ? 5 : 3;
         const initialStatus = checkInStatus === 'on_time' ? 'present_full' : 'present_half';
 
         const newLogPayload = {
@@ -226,8 +226,8 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
         }
 
         const checkOutStatus = nowDetails.decimalHours >= 15.95 ? 'on_time' : 'early';
-        const loginPoints = todayLog.check_in_status === 'on_time' ? 5 : 2.5;
-        const logoutPoints = checkOutStatus === 'on_time' ? 5 : 2.5;
+        const loginPoints = todayLog.check_in_status === 'on_time' ? 5 : 3;
+        const logoutPoints = checkOutStatus === 'on_time' ? 5 : 3;
         const totalPoints = loginPoints + logoutPoints;
         const finalStatus = totalPoints >= 10 ? 'present_full' : 'present_half';
 

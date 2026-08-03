@@ -128,8 +128,8 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
       checkOutStatus = outHours >= 15.95 ? 'on_time' : 'early'; // 4:00 PM (16:00) in IST
     }
 
-    const inPts = checkInStatus === 'on_time' ? 5 : (checkInStatus === 'late' ? 2.5 : 0);
-    const outPts = checkOutStatus === 'on_time' ? 5 : (checkOutStatus === 'early' ? 2.5 : 0);
+    const inPts = checkInStatus === 'on_time' ? 5 : (checkInStatus === 'late' ? 3 : 0);
+    const outPts = checkOutStatus === 'on_time' ? 5 : (checkOutStatus === 'early' ? 3 : 0);
     const totalPts = inPts + outPts;
 
     let overallStatus: 'present_full' | 'present_half' | 'absent' = 'absent';
