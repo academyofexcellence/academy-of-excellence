@@ -1160,11 +1160,22 @@ const AdminDashboard = () => {
       }
       const { data: scoresData } = await scoresQuery;
 
-      const { data: attLogs } = await supabase
+      const curInterval = intervalId === 'cumulative'
+        ? null
+        : intervalsList.find(i => i.id === intervalId);
+
+      const { data: rawAttLogs } = await supabase
         .from('daily_attendance_logs')
         .select('*')
         .eq('course_id', courseId)
         .eq('batch_number', batchNumber);
+
+      const attLogs = (rawAttLogs || []).filter(l => {
+        if (!curInterval) return true;
+        if (curInterval.start_date && l.date < curInterval.start_date) return false;
+        if (curInterval.end_date && l.date > curInterval.end_date) return false;
+        return true;
+      });
 
       const updatedEntries = rpcEntries.map(entry => {
         const studentScores = (scoresData || []).filter(s => s.student_id === entry.student_id);
