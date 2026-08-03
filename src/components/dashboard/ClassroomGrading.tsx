@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import QRCode from 'qrcode';
 import { 
   CheckCircle2, 
   HelpCircle, 
@@ -11,14 +12,23 @@ import {
   BarChart2, 
   TrendingUp, 
   Smile, 
-  UserCheck 
+  UserCheck,
+  QrCode,
+  Calendar,
+  Clock,
+  Edit3,
+  RefreshCw,
+  Award,
+  Sparkles,
+  X
 } from 'lucide-react';
 import { 
   StudentProfile, 
   ScoringInterval, 
   Course, 
   LeaderboardEntry,
-  AppealRequest
+  AppealRequest,
+  DailyAttendanceLog
 } from '../../lib/types';
 
 const getDatesRange = (startDateStr: string, endDateStr?: string) => {
@@ -162,10 +172,161 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
   setMatrixActivity,
   getIntervalForDate
 }) => {
-  const [subTab, setSubTab] = useState<'grading' | 'exams' | 'matrix' | 'standings' | 'appeals'>('grading');
+  const [subTab, setSubTab] = useState<'grading' | 'attendance' | 'exams' | 'matrix' | 'standings' | 'appeals'>('grading');
   const [showArchivedFilter, setShowArchivedFilter] = useState(false);
   const [expandedAppealId, setExpandedAppealId] = useState<string | null>(null);
   const [qrAttendanceLogs, setQrAttendanceLogs] = useState<any[]>([]);
+
+  // Attendance Session & QR Edit state
+  const [editingLog, setEditingLog] = useState<any | null>(null);
+  const [editLoginTime, setEditLoginTime] = useState<string>('');
+  const [editLogoutTime, setEditLogoutTime] = useState<string>('');
+  const [editLoginStatus, setEditLoginStatus] = useState<'on_time' | 'late' | 'none'>('on_time');
+  const [editLogoutStatus, setEditLogoutStatus] = useState<'on_time' | 'early' | 'none'>('on_time');
+  const [editNotes, setEditNotes] = useState<string>('');
+  const [savingAttendanceEdit, setSavingAttendanceEdit] = useState<boolean>(false);
+
+  const [showClassroomQrModal, setShowClassroomQrModal] = useState<boolean>(false);
+  const [classroomQrDataUrl, setClassroomQrDataUrl] = useState<string>('');
+  const [qrSecretToken, setQrSecretToken] = useState<string>('');
+  const [generatingQr, setGeneratingQr] = useState<boolean>(false);
+
+  const getOrGenerateQrToken = (courseId: string, batchNum: string | number, forceReset = false) => {
+    const storageKey = `aoe_classroom_qr_secret_${courseId}_${batchNum}`;
+    let secret = localStorage.getItem(storageKey);
+    if (!secret || forceReset) {
+      secret = `AOE-${courseId.slice(0, 6).toUpperCase()}-B${batchNum}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      localStorage.setItem(storageKey, secret);
+    }
+    return secret;
+  };
+
+  const generateClassroomQrCode = async (forceReset = false) => {
+    setGeneratingQr(true);
+    try {
+      const token = getOrGenerateQrToken(filterCourse, filterBatch, forceReset);
+      setQrSecretToken(token);
+      const todayPasskey = Math.abs(
+        selectedGradingDate.split('-').reduce((acc, part) => acc + parseInt(part), 0) * 98765
+      ).toString().slice(0, 6).padStart(6, '9');
+
+      const courseObj = courses.find(c => c.id === filterCourse);
+      const qrPayload = JSON.stringify({
+        type: 'AOE_CLASSROOM_ATTENDANCE',
+        token: token,
+        course_id: filterCourse,
+        course_name: courseObj?.name || 'Course',
+        batch: filterBatch,
+        date: selectedGradingDate,
+        passkey: todayPasskey
+      });
+
+      const url = await QRCode.toDataURL(qrPayload, {
+        width: 360,
+        margin: 2,
+        color: { dark: '#0f172a', light: '#ffffff' }
+      });
+      setClassroomQrDataUrl(url);
+    } catch (err) {
+      console.error('Failed to generate classroom QR code:', err);
+    } finally {
+      setGeneratingQr(false);
+    }
+  };
+
+  const openAttendanceEditModal = (student: StudentProfile, existingLog: any) => {
+    setEditingLog({
+      student_id: student.id,
+      student_name: student.name,
+      id: existingLog?.id
+    });
+    
+    let inStr = '';
+    if (existingLog?.check_in_time) {
+      const d = new Date(existingLog.check_in_time);
+      if (!isNaN(d.getTime())) {
+        const istStr = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false });
+        inStr = istStr.substring(0, 5);
+      }
+    }
+    setEditLoginTime(inStr || '09:00');
+
+    let outStr = '';
+    if (existingLog?.check_out_time) {
+      const d = new Date(existingLog.check_out_time);
+      if (!isNaN(d.getTime())) {
+        const istStr = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false });
+        outStr = istStr.substring(0, 5);
+      }
+    }
+    setEditLogoutTime(outStr || '16:00');
+
+    setEditLoginStatus(existingLog?.check_in_status === 'on_time' ? 'on_time' : (existingLog?.check_in_status === 'late' ? 'late' : 'on_time'));
+    setEditLogoutStatus(existingLog?.check_out_status === 'on_time' ? 'on_time' : (existingLog?.check_out_status === 'early' ? 'early' : 'on_time'));
+    setEditNotes(existingLog?.notes || '');
+  };
+
+  const handleSaveAttendanceEdit = async () => {
+    if (!editingLog) return;
+    setSavingAttendanceEdit(true);
+    try {
+      const dateStr = selectedGradingDate;
+      const loginPts = editLoginStatus === 'on_time' ? 5 : (editLoginStatus === 'late' ? 2.5 : 0);
+      const logoutPts = editLogoutStatus === 'on_time' ? 5 : (editLogoutStatus === 'early' ? 2.5 : 0);
+      const totalPts = loginPts + logoutPts;
+      const overallStatus = totalPts >= 10 ? 'present_full' : (totalPts > 0 ? 'present_half' : 'absent');
+
+      const inIso = editLoginTime ? new Date(`${dateStr}T${editLoginTime}:00`).toISOString() : undefined;
+      const outIso = editLogoutTime ? new Date(`${dateStr}T${editLogoutTime}:00`).toISOString() : undefined;
+
+      const payload = {
+        student_id: editingLog.student_id,
+        student_name: editingLog.student_name,
+        course_id: filterCourse,
+        batch_number: parseInt(filterBatch),
+        date: dateStr,
+        check_in_time: inIso,
+        check_out_time: outIso,
+        check_in_status: editLoginStatus === 'none' ? 'pending' : editLoginStatus,
+        check_out_status: editLogoutStatus === 'none' ? 'pending' : editLogoutStatus,
+        points_awarded: totalPts,
+        status: overallStatus,
+        method: 'manual_override',
+        notes: editNotes || 'Updated by staff'
+      };
+
+      const { error } = await supabase
+        .from('daily_attendance_logs')
+        .upsert(payload, { onConflict: 'student_id,date' });
+
+      if (error) throw error;
+
+      await supabase.from('scores').upsert({
+        student_id: editingLog.student_id,
+        interval_id: activeInterval?.id,
+        score_type: 'attendance',
+        points: totalPts,
+        max_points: 10,
+        activity_name: `Attendance: ${totalPts >= 10 ? 'On Time' : (totalPts > 0 ? 'Late' : 'Absent')}`,
+        logged_by: currentUser?.id,
+        logged_date: dateStr
+      }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
+
+      const { data } = await supabase
+        .from('daily_attendance_logs')
+        .select('*')
+        .eq('date', selectedGradingDate);
+      if (data) setQrAttendanceLogs(data);
+
+      if (activeInterval) fetchBatchScores(activeInterval.id);
+      setEditingLog(null);
+    } catch (err: any) {
+      console.error('Error saving attendance edit:', err);
+      alert(`Failed to save attendance: ${err.message}`);
+    } finally {
+      setSavingAttendanceEdit(false);
+    }
+  };
 
   useEffect(() => {
     const fetchGradingAttendanceLogs = async () => {
@@ -398,6 +559,21 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
           📋 Daily Tasks
         </button>
         <button
+          onClick={() => setSubTab('attendance')}
+          style={{
+            padding: '0.6rem 0.5rem 0.8rem 0.5rem',
+            background: 'none',
+            border: 'none',
+            borderBottom: subTab === 'attendance' ? '3px solid var(--primary)' : '3px solid transparent',
+            color: subTab === 'attendance' ? 'var(--primary-dark)' : 'var(--text-muted)',
+            fontWeight: 700,
+            cursor: 'pointer',
+            fontSize: '0.85rem'
+          }}
+        >
+          📅 Attendance Sessions
+        </button>
+        <button
           onClick={() => setSubTab('exams')}
           style={{
             padding: '0.6rem 0.5rem 0.8rem 0.5rem',
@@ -566,7 +742,6 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                       <thead>
                         <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)' }}>
                           <th style={{ padding: '0.6rem 0.4rem', fontWeight: 700 }}>Student Name</th>
-                          <th style={{ padding: '0.6rem 0.4rem', fontWeight: 700, textAlign: 'center' }}>Attendance (10 XP)</th>
                           <th style={{ padding: '0.6rem 0.4rem', fontWeight: 700, textAlign: 'center' }}>Vocab (+5 XP)</th>
                           <th style={{ padding: '0.6rem 0.4rem', fontWeight: 700, textAlign: 'center' }}>Sentences (+5 XP)</th>
                           <th style={{ padding: '0.6rem 0.4rem', fontWeight: 700, textAlign: 'center' }}>Vlog (+15 XP)</th>
@@ -584,30 +759,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                           const hasVideoReactionToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'video_reaction');
                           const hasHadithulArabiaToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'hadithul_arabia');
 
-                          const attendanceObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'attendance');
                           const qrLog = qrAttendanceLogs.find(l => l.student_id === student.id);
-
-                          let attVal = '';
-                          if (attendanceObj) {
-                            const actName = (attendanceObj.activity_name || '').toLowerCase();
-                            if (actName.includes('on time') || actName.includes('on_time')) attVal = 'On Time';
-                            else if (actName.includes('late')) attVal = 'Late';
-                            else if (actName.includes('half day') || actName.includes('half_day')) attVal = 'Half Day';
-                            else if (actName.includes('absent')) attVal = 'Absent';
-                            else attVal = attendanceObj.activity_name.replace('Attendance: ', '').trim();
-                          }
-
-                          if (!attVal && qrLog) {
-                            if (qrLog.check_in_status === 'on_time' || qrLog.points_awarded === 10) {
-                              attVal = 'On Time';
-                            } else if (qrLog.check_in_status === 'late' || qrLog.points_awarded === 5 || qrLog.points_awarded === 7) {
-                              attVal = 'Late';
-                            } else if (qrLog.status === 'present_half') {
-                              attVal = 'Half Day';
-                            } else if (qrLog.status === 'absent' || qrLog.points_awarded === 0) {
-                              attVal = 'Absent';
-                            }
-                          }
 
                           const talkObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'custom' && s.activity_name === 'One Minute Talk');
                           const talkVal = talkObj ? talkObj.points.toString() : '';
@@ -623,33 +775,10 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                                 {qrLog && (
                                   <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#16a34a', display: 'flex', alignItems: 'center', gap: '0.2rem', marginTop: '0.15rem' }}>
                                     <span style={{ background: '#dcfce7', padding: '0.1rem 0.35rem', borderRadius: '4px', border: '1px solid #86efac' }}>
-                                      📷 QR Check-in: {new Date(qrLog.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (+{qrLog.points_awarded || 10} XP)
+                                      📷 QR Scan: In {qrLog.check_in_time ? new Date(qrLog.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'} | Out {qrLog.check_out_time ? new Date(qrLog.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'} (+{qrLog.points_awarded || 0} XP)
                                     </span>
                                   </div>
                                 )}
-                              </td>
-                              
-                              <td style={{ padding: '0.8rem 0.4rem', textAlign: 'center' }}>
-                                <select
-                                  value={attVal}
-                                  onChange={(e) => handleToggleAttendance(student.id, e.target.value)}
-                                  disabled={updatingScores.includes(`${student.id}-attendance`)}
-                                  style={{
-                                    padding: '0.3rem 0.4rem',
-                                    borderRadius: '6px',
-                                    border: '1px solid rgba(201,156,51,0.25)',
-                                    background: attVal === 'On Time' ? 'rgba(34,197,94,0.08)' : attVal === 'Late' ? 'rgba(180,83,9,0.08)' : attVal === 'Half Day' ? 'rgba(59,130,246,0.08)' : attVal === 'Absent' ? 'rgba(239,68,68,0.08)' : 'white',
-                                    color: attVal === 'On Time' ? '#16a34a' : attVal === 'Late' ? '#b45309' : attVal === 'Half Day' ? '#3b82f6' : attVal === 'Absent' ? '#dc2626' : 'var(--text-muted)',
-                                    fontWeight: attVal ? 700 : 500,
-                                    outline: 'none', cursor: 'pointer', fontSize: '0.8rem'
-                                  }}
-                                >
-                                  <option value="">- Select -</option>
-                                  <option value="On Time">On Time (+10 XP)</option>
-                                  <option value="Late">Late (+5 XP)</option>
-                                  <option value="Half Day">Half Day (+5 XP)</option>
-                                  <option value="Absent">Absent (0 XP)</option>
-                                </select>
                               </td>
 
                               <td style={{ padding: '0.8rem 0.4rem', textAlign: 'center' }}>
@@ -760,9 +889,6 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                       const hasVideoReactionToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'video_reaction');
                       const hasHadithulArabiaToday = scoresList.some(s => s.student_id === student.id && s.score_type === 'hadithul_arabia');
 
-                      const attendanceObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'attendance');
-                      const attVal = attendanceObj ? attendanceObj.activity_name.replace('Attendance: ', '') : '';
-
                       const talkObj = scoresList.find(s => s.student_id === student.id && s.score_type === 'custom' && s.activity_name === 'One Minute Talk');
                       const talkVal = talkObj ? talkObj.points.toString() : '';
 
@@ -856,29 +982,8 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                             </button>
                           </div>
 
-                          {/* Attendance & Talk selectors */}
+                          {/* Talk & Penalty selectors */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderTop: '1px solid rgba(0,0,0,0.04)', paddingTop: '0.5rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>📅 Attendance</span>
-                              <select
-                                value={attVal}
-                                onChange={(e) => handleToggleAttendance(student.id, e.target.value)}
-                                disabled={updatingScores.includes(`${student.id}-attendance`)}
-                                style={{
-                                  padding: '0.2rem 0.4rem', borderRadius: '4px', border: '1px solid rgba(201,156,51,0.25)',
-                                  background: attVal === 'On Time' ? 'rgba(34,197,94,0.08)' : attVal === 'Late' ? 'rgba(180,83,9,0.08)' : attVal === 'Half Day' ? 'rgba(59,130,246,0.08)' : attVal === 'Absent' ? 'rgba(239,68,68,0.08)' : 'white',
-                                  color: attVal === 'On Time' ? '#16a34a' : attVal === 'Late' ? '#b45309' : attVal === 'Half Day' ? '#3b82f6' : attVal === 'Absent' ? '#dc2626' : 'var(--text-muted)',
-                                  fontWeight: attVal ? 700 : 500, fontSize: '0.75rem', outline: 'none', cursor: 'pointer'
-                                }}
-                              >
-                                <option value="">- Select -</option>
-                                <option value="On Time">On Time (+10)</option>
-                                <option value="Late">Late (+5)</option>
-                                <option value="Half Day">Half Day (+5)</option>
-                                <option value="Absent">Absent (0)</option>
-                              </select>
-                            </div>
-
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
                               <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>🎙️ Oral Talk</span>
                               <select
@@ -919,6 +1024,179 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
               )}
             </div>
           )}
+
+          {/* DEDICATED ATTENDANCE SESSIONS SUBTAB */}
+          {subTab === 'attendance' && (() => {
+            const courseObj = courses.find(c => c.id === filterCourse);
+            const totalStudents = sortedFilteredActiveStudents.length;
+
+            const loggedInCount = sortedFilteredActiveStudents.filter(student => {
+              const log = qrAttendanceLogs.find(l => l.student_id === student.id);
+              return log && log.check_in_time;
+            }).length;
+
+            const loggedOutCount = sortedFilteredActiveStudents.filter(student => {
+              const log = qrAttendanceLogs.find(l => l.student_id === student.id);
+              return log && log.check_out_time;
+            }).length;
+
+            const pendingCount = totalStudents - loggedInCount;
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                {/* Header Row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.2rem', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Calendar className="text-primary" size={22} /> Daily Attendance Sessions
+                    </h3>
+                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      Date: <strong>{new Date(selectedGradingDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</strong> • Course: <strong>{courseObj?.name || 'Course'}</strong> • Batch: <strong>{filterBatch}</strong>
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                    <button
+                      onClick={() => {
+                        setShowClassroomQrModal(true);
+                        generateClassroomQrCode();
+                      }}
+                      className="btn btn-primary"
+                      style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '10px' }}
+                    >
+                      <QrCode size={18} /> Classroom QR Code
+                    </button>
+                  </div>
+                </div>
+
+                {/* Summary Metrics Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+                  <div className="glass-card" style={{ padding: '1rem', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(201,156,51,0.08), rgba(201,156,51,0.02))', border: '1px solid rgba(201,156,51,0.2)' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Batch Roster</span>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 850, color: 'var(--primary-dark)', marginTop: '0.3rem' }}>{totalStudents}</div>
+                  </div>
+
+                  <div className="glass-card" style={{ padding: '1rem', borderRadius: '14px', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>Login (Morning Scan)</span>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 850, color: '#15803d', marginTop: '0.3rem' }}>
+                      {loggedInCount} <span style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>({totalStudents > 0 ? Math.round((loggedInCount / totalStudents) * 100) : 0}%)</span>
+                    </div>
+                  </div>
+
+                  <div className="glass-card" style={{ padding: '1rem', borderRadius: '14px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase' }}>Logout (Evening Scan)</span>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 850, color: '#1d4ed8', marginTop: '0.3rem' }}>
+                      {loggedOutCount} <span style={{ fontSize: '0.8rem', color: '#1e40af', fontWeight: 600 }}>({totalStudents > 0 ? Math.round((loggedOutCount / totalStudents) * 100) : 0}%)</span>
+                    </div>
+                  </div>
+
+                  <div className="glass-card" style={{ padding: '1rem', borderRadius: '14px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase' }}>Pending / Absent</span>
+                    <div style={{ fontSize: '1.8rem', fontWeight: 850, color: '#b91c1c', marginTop: '0.3rem' }}>{pendingCount}</div>
+                  </div>
+                </div>
+
+                {/* Attendance Roster Table */}
+                <div className="glass-card" style={{ padding: '1.2rem', borderRadius: '16px' }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid rgba(201,156,51,0.2)' }}>
+                          <th style={{ padding: '0.7rem 0.6rem', fontWeight: 700 }}>Student Name</th>
+                          <th style={{ padding: '0.7rem 0.6rem', fontWeight: 700, textAlign: 'center' }}>Login Time</th>
+                          <th style={{ padding: '0.7rem 0.6rem', fontWeight: 700, textAlign: 'center' }}>Login Status (+5 XP)</th>
+                          <th style={{ padding: '0.7rem 0.6rem', fontWeight: 700, textAlign: 'center' }}>Logout Time</th>
+                          <th style={{ padding: '0.7rem 0.6rem', fontWeight: 700, textAlign: 'center' }}>Logout Status (+5 XP)</th>
+                          <th style={{ padding: '0.7rem 0.6rem', fontWeight: 700, textAlign: 'center' }}>Total Attendance XP</th>
+                          <th style={{ padding: '0.7rem 0.6rem', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedFilteredActiveStudents.map(student => {
+                          const log = qrAttendanceLogs.find(l => l.student_id === student.id);
+
+                          const inTimeStr = log?.check_in_time
+                            ? new Date(log.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : '-';
+
+                          const outTimeStr = log?.check_out_time
+                            ? new Date(log.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : '-';
+
+                          const inStatus = log?.check_in_status || 'pending';
+                          const outStatus = log?.check_out_status || 'pending';
+                          const points = log?.points_awarded ?? 0;
+
+                          return (
+                            <tr key={student.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                              <td style={{ padding: '0.8rem 0.6rem', fontWeight: 650 }}>
+                                {student.roll_number && <span style={{ color: 'var(--primary)', marginRight: '0.3rem', fontWeight: 800 }}>#{student.roll_number}</span>}
+                                {student.name}
+                              </td>
+
+                              <td style={{ padding: '0.8rem 0.6rem', textAlign: 'center', fontWeight: 600 }}>
+                                {inTimeStr}
+                              </td>
+
+                              <td style={{ padding: '0.8rem 0.6rem', textAlign: 'center' }}>
+                                {inStatus === 'on_time' ? (
+                                  <span style={{ background: '#dcfce7', color: '#15803d', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 700, fontSize: '0.75rem' }}>
+                                    On Time (+5 XP)
+                                  </span>
+                                ) : inStatus === 'late' ? (
+                                  <span style={{ background: '#fef3c7', color: '#b45309', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 700, fontSize: '0.75rem' }}>
+                                    Late (+2.5 XP)
+                                  </span>
+                                ) : (
+                                  <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 600, fontSize: '0.75rem' }}>
+                                    Not Logged In
+                                  </span>
+                                )}
+                              </td>
+
+                              <td style={{ padding: '0.8rem 0.6rem', textAlign: 'center', fontWeight: 600 }}>
+                                {outTimeStr}
+                              </td>
+
+                              <td style={{ padding: '0.8rem 0.6rem', textAlign: 'center' }}>
+                                {outStatus === 'on_time' ? (
+                                  <span style={{ background: '#dbeafe', color: '#1d4ed8', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 700, fontSize: '0.75rem' }}>
+                                    On Time (+5 XP)
+                                  </span>
+                                ) : outStatus === 'early' ? (
+                                  <span style={{ background: '#ffedd5', color: '#c2410c', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 700, fontSize: '0.75rem' }}>
+                                    Early (+2.5 XP)
+                                  </span>
+                                ) : (
+                                  <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '0.2rem 0.6rem', borderRadius: '50px', fontWeight: 600, fontSize: '0.75rem' }}>
+                                    Not Logged Out
+                                  </span>
+                                )}
+                              </td>
+
+                              <td style={{ padding: '0.8rem 0.6rem', textAlign: 'center', fontWeight: 850, fontSize: '0.95rem', color: points > 0 ? '#15803d' : '#94a3b8' }}>
+                                +{points} XP
+                              </td>
+
+                              <td style={{ padding: '0.8rem 0.6rem', textAlign: 'right' }}>
+                                <button
+                                  onClick={() => openAttendanceEditModal(student, log)}
+                                  className="btn btn-outline"
+                                  style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', fontWeight: 700, borderRadius: '6px' }}
+                                >
+                                  <Edit3 size={13} style={{ marginRight: '0.2rem' }} /> Edit
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {subTab === 'exams' && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
@@ -1493,6 +1771,205 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
             </div>
           )}
         </>
+      )}
+
+      {/* ATTENDANCE CORRECTION EDIT MODAL */}
+      {editingLog && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1100, padding: '1rem'
+        }}>
+          <div className="glass-card" style={{
+            width: '100%', maxWidth: '480px', background: 'white', borderRadius: '18px',
+            padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: '0.8rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>
+                ✏️ Edit Attendance Record
+              </h3>
+              <button onClick={() => setEditingLog(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.2rem' }}>
+              Student: <strong style={{ color: 'var(--text-main)' }}>{editingLog.student_name}</strong> • Date: <strong>{selectedGradingDate}</strong>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+              {/* Login Controls */}
+              <div style={{ background: 'rgba(34,197,94,0.04)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(34,197,94,0.15)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#166534', marginBottom: '0.5rem' }}>🌅 Morning Login (Check-in)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '0.2rem' }}>Login Time</label>
+                    <input
+                      type="time"
+                      value={editLoginTime}
+                      onChange={(e) => setEditLoginTime(e.target.value)}
+                      style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '0.2rem' }}>Login Status</label>
+                    <select
+                      value={editLoginStatus}
+                      onChange={(e) => setEditLoginStatus(e.target.value as any)}
+                      style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', fontWeight: 700 }}
+                    >
+                      <option value="on_time">On Time (+5 XP)</option>
+                      <option value="late">Late (+2.5 XP)</option>
+                      <option value="none">Not Logged In (0 XP)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Logout Controls */}
+              <div style={{ background: 'rgba(59,130,246,0.04)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(59,130,246,0.15)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1e40af', marginBottom: '0.5rem' }}>🌆 Evening Logout (Check-out)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '0.2rem' }}>Logout Time</label>
+                    <input
+                      type="time"
+                      value={editLogoutTime}
+                      onChange={(e) => setEditLogoutTime(e.target.value)}
+                      style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '0.2rem' }}>Logout Status</label>
+                    <select
+                      value={editLogoutStatus}
+                      onChange={(e) => setEditLogoutStatus(e.target.value as any)}
+                      style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.85rem', fontWeight: 700 }}
+                    >
+                      <option value="on_time">On Time (+5 XP)</option>
+                      <option value="early">Early (+2.5 XP)</option>
+                      <option value="none">Not Logged Out (0 XP)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '0.2rem' }}>Reason / Notes</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Manual override due to device issue"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  style={{ width: '100%', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+              <button onClick={() => setEditingLog(null)} className="btn btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAttendanceEdit}
+                disabled={savingAttendanceEdit}
+                className="btn btn-primary"
+                style={{ padding: '0.4rem 1.2rem', fontSize: '0.8rem', fontWeight: 700 }}
+              >
+                {savingAttendanceEdit ? 'Saving...' : 'Save Attendance'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRINTABLE CLASSROOM QR CODE MODAL */}
+      {showClassroomQrModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15,23,42,0.7)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1200, padding: '1rem'
+        }}>
+          <div className="glass-card printable-qr-card" style={{
+            width: '100%', maxWidth: '520px', background: 'white', borderRadius: '24px',
+            padding: '2rem', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => setShowClassroomQrModal(false)}
+              style={{ position: 'absolute', top: '1.2rem', right: '1.2rem', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+            >
+              <X size={22} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <Sparkles className="text-primary" size={24} />
+              <h2 style={{ fontSize: '1.3rem', margin: 0, fontWeight: 850, color: 'var(--primary-dark)' }}>
+                Academy of Excellence
+              </h2>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 1.2rem 0', fontWeight: 600 }}>
+              Official Classroom Attendance QR Poster
+            </p>
+
+            <div style={{ background: 'rgba(201,156,51,0.08)', padding: '0.6rem 1rem', borderRadius: '12px', display: 'inline-block', marginBottom: '1.2rem', border: '1px solid rgba(201,156,51,0.2)' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary-dark)' }}>
+                {courses.find(c => c.id === filterCourse)?.name || 'Course'} • Batch {filterBatch}
+              </span>
+            </div>
+
+            {generatingQr ? (
+              <div style={{ padding: '3rem 0', color: 'var(--text-muted)' }}>Generating high-res QR code...</div>
+            ) : (
+              <div>
+                {classroomQrDataUrl && (
+                  <img
+                    src={classroomQrDataUrl}
+                    alt="Classroom Attendance QR Code"
+                    style={{ width: '240px', height: '240px', display: 'block', margin: '0 auto 1rem auto', borderRadius: '12px', border: '4px solid #f1f5f9' }}
+                  />
+                )}
+
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem', fontWeight: 700, textTransform: 'uppercase' }}>
+                  6-DIGIT DAILY CLASSROOM PASSKEY
+                </div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 900, letterSpacing: '0.3em', color: 'var(--primary-dark)', fontFamily: 'monospace', marginBottom: '1.2rem' }}>
+                  {Math.abs(selectedGradingDate.split('-').reduce((acc, part) => acc + parseInt(part), 0) * 98765).toString().slice(0, 6).padStart(6, '9')}
+                </div>
+
+                <div style={{ fontSize: '0.75rem', color: '#64748b', background: '#f8fafc', padding: '0.8rem', borderRadius: '10px', marginBottom: '1.5rem', textAlign: 'left' }}>
+                  📌 <strong>Classroom Instructions:</strong> Scan this QR code using your phone camera or Student App to record morning <strong>Login (+5 XP)</strong> and afternoon <strong>Logout (+5 XP)</strong>.
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => window.print()}
+                className="btn btn-primary"
+                style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '10px' }}
+              >
+                <Printer size={16} /> Print QR Poster
+              </button>
+
+              <button
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to regenerate the classroom QR token? Old printed QR codes for this batch will become invalid.')) {
+                    generateClassroomQrCode(true);
+                  }
+                }}
+                className="btn btn-outline"
+                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '10px' }}
+              >
+                <RefreshCw size={16} /> Regenerate Token
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

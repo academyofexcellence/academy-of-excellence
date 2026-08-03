@@ -155,9 +155,9 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
       const nowIso = now.toISOString();
 
       if (!todayLog) {
-        // --- FIRST SCAN OF THE DAY (CHECK-IN) ---
+        // --- FIRST SCAN OF THE DAY (CHECK-IN / LOGIN) ---
         const checkInStatus = nowDetails.decimalHours <= 10.08 ? 'on_time' : 'late';
-        const initialPoints = checkInStatus === 'on_time' ? 10 : 5;
+        const initialPoints = checkInStatus === 'on_time' ? 5 : 2.5;
         const initialStatus = checkInStatus === 'on_time' ? 'present_full' : 'present_half';
 
         const newLogPayload = {
@@ -198,9 +198,9 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           targetIntervalId = latestInt?.id;
         }
 
-        const attStatusText = checkInStatus === 'on_time' ? 'On Time' : 'Late';
+        const attStatusText = checkInStatus === 'on_time' ? 'Login On Time' : 'Login Late';
 
-        // Sync points to scores leaderboard under active term interval
+        // Sync login points to scores leaderboard
         await supabase.from('scores').upsert({
           student_id: currentStudent.id,
           interval_id: targetIntervalId,
@@ -215,23 +215,26 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
         setTodayLog(inserted as DailyAttendanceLog);
         setMessage({
           type: 'success',
-          text: `🎉 Check-In Successful at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}! Status: ${attStatusText} (+${initialPoints} XP)`
+          text: `🎉 Login Successful at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}! Status: ${checkInStatus === 'on_time' ? 'On Time' : 'Late'} (+${initialPoints} XP)`
         });
 
       } else {
-        // --- SECOND SCAN OF THE DAY (CHECK-OUT) ---
+        // --- SECOND SCAN OF THE DAY (CHECK-OUT / LOGOUT) ---
         if (todayLog.check_out_time) {
           setMessage({ type: 'success', text: `✅ You have already completed Check-In & Check-Out for today!` });
           return;
         }
 
-        const checkOutStatus = nowDetails.hour >= 16 ? 'on_time' : 'early';
-        const { points: finalPoints, status: finalStatus } = calculatePoints(todayLog.check_in_time, nowIso);
+        const checkOutStatus = nowDetails.decimalHours >= 15.95 ? 'on_time' : 'early';
+        const loginPoints = todayLog.check_in_status === 'on_time' ? 5 : 2.5;
+        const logoutPoints = checkOutStatus === 'on_time' ? 5 : 2.5;
+        const totalPoints = loginPoints + logoutPoints;
+        const finalStatus = totalPoints >= 10 ? 'present_full' : 'present_half';
 
         const updatePayload = {
           check_out_time: nowIso,
           check_out_status: checkOutStatus,
-          points_awarded: finalPoints,
+          points_awarded: totalPoints,
           status: finalStatus
         };
 
@@ -266,14 +269,14 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
           targetIntervalId = latestInt?.id;
         }
 
-        const finalStatusText = finalPoints === 10 ? 'On Time' : (finalPoints === 5 ? 'Late' : 'Absent');
+        const finalStatusText = totalPoints >= 10 ? 'On Time' : 'Late';
 
         // Update score log for afternoon completion
         await supabase.from('scores').upsert({
           student_id: currentStudent.id,
           interval_id: targetIntervalId,
           score_type: 'attendance',
-          points: finalPoints,
+          points: totalPoints,
           max_points: 10,
           activity_name: `Attendance: ${finalStatusText}`,
           logged_by: currentStudent.id,
@@ -283,7 +286,7 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
         setTodayLog(updated as DailyAttendanceLog);
         setMessage({
           type: 'success',
-          text: `🎯 Check-Out Recorded at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}! Final Today Points: +${finalPoints} XP (${finalStatusText})`
+          text: `🎉 Check-Out Successful at ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}! Logout (${logoutPoints} XP, Total Today: ${totalPoints} XP)`
         });
       }
 

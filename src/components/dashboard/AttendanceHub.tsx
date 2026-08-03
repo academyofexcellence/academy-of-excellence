@@ -128,13 +128,15 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
       checkOutStatus = outHours >= 15.95 ? 'on_time' : 'early'; // 4:00 PM (16:00) in IST
     }
 
-    if (checkInStatus === 'on_time' && checkOutStatus === 'on_time') {
-      return { points: 10, status: 'present_full', check_in_status: checkInStatus, check_out_status: checkOutStatus };
-    } else if (checkInStatus !== 'pending' || checkOutStatus !== 'pending') {
-      return { points: 5, status: 'present_half', check_in_status: checkInStatus, check_out_status: checkOutStatus };
-    }
+    const inPts = checkInStatus === 'on_time' ? 5 : (checkInStatus === 'late' ? 2.5 : 0);
+    const outPts = checkOutStatus === 'on_time' ? 5 : (checkOutStatus === 'early' ? 2.5 : 0);
+    const totalPts = inPts + outPts;
 
-    return { points: 0, status: 'absent', check_in_status: checkInStatus, check_out_status: checkOutStatus };
+    let overallStatus: 'present_full' | 'present_half' | 'absent' = 'absent';
+    if (totalPts >= 10) overallStatus = 'present_full';
+    else if (totalPts > 0) overallStatus = 'present_half';
+
+    return { points: totalPts, status: overallStatus, check_in_status: checkInStatus, check_out_status: checkOutStatus };
   };
 
   // Save / Update Attendance Record manually or via override
