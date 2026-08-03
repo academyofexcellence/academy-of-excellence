@@ -1991,6 +1991,12 @@ const AdminDashboard = () => {
         }
       }
 
+      // Fetch daily attendance logs to include attendance check-in points
+      const { data: rawAttLogs } = await supabase
+        .from('daily_attendance_logs')
+        .select('student_id, points_awarded, date')
+        .in('student_id', students.map(s => s.id));
+
       // Calculate intervals audit summary (dates logged vs configured start)
       const intervalSummary = intervals.map(interval => {
         const intervalScores = allScores.filter(s => s.interval_id === interval.id);
@@ -2018,14 +2024,49 @@ const AdminDashboard = () => {
       });
       setIntervalsAuditSummary(intervalSummary);
 
-      const targetIntervalId = selectedLeaderboardInterval || activeInterval?.id || '';
+      const targetIntervalId = selectedLeaderboardInterval || activeInterval?.id || 'cumulative';
+      
+      // Fetch target leaderboard entries for targetIntervalId so comparison is 1:1
+      const targetLeaderboard = await fetchLeaderboardData(
+        targetIntervalId,
+        filterCourse,
+        parseInt(filterBatch)
+      );
+
       const report = students.map(student => {
         const termScores: { [termName: string]: number } = {};
         let calculatedSum = 0;
         
         intervals.forEach(interval => {
           const intervalScores = (allScores || []).filter(s => s.student_id === student.id && s.interval_id === interval.id);
-          const sum = intervalScores.reduce((acc, s) => acc + s.points, 0);
+          const nonAttScores = intervalScores.filter(s => s.score_type !== 'attendance');
+          const nonAttSum = nonAttScores.reduce((acc, s) => acc + (s.points || 0), 0);
+
+          const attScoresMap = new Map<string, number>();
+          intervalScores.filter(s => s.score_type === 'attendance').forEach(s => {
+            const rawDate = s.logged_date || s.created_at || '';
+            const dKey = rawDate ? rawDate.split('T')[0] : '';
+            if (dKey) attScoresMap.set(dKey, s.points || 0);
+          });
+
+          (rawAttLogs || [])
+            .filter(l => l.student_id === student.id)
+            .filter(l => {
+              if (interval.start_date && l.date < interval.start_date) return false;
+              if (interval.end_date && l.date > interval.end_date) return false;
+              return true;
+            })
+            .forEach(l => {
+              const dKey = l.date ? l.date.split('T')[0] : '';
+              if (dKey && !attScoresMap.has(dKey)) {
+                attScoresMap.set(dKey, l.points_awarded || 0);
+              }
+            });
+
+          let attSum = 0;
+          attScoresMap.forEach(pts => { attSum += pts; });
+
+          const sum = nonAttSum + attSum;
           termScores[interval.name] = sum;
           
           if (targetIntervalId === 'cumulative' || interval.id === targetIntervalId) {
@@ -2033,7 +2074,7 @@ const AdminDashboard = () => {
           }
         });
 
-        const entry = classroomLeaderboard.find(e => e.student_id === student.id);
+        const entry = targetLeaderboard.find(e => e.student_id === student.id);
         const scoreboardScore = entry ? entry.total_score : 0;
 
         return {
