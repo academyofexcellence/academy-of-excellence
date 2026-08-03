@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Users, UserCheck, ShieldAlert, KeyRound, Trash2, GraduationCap } from 'lucide-react';
+import { Users, UserCheck, ShieldAlert, KeyRound, Trash2, GraduationCap, PlusCircle } from 'lucide-react';
 import { StudentProfile, StaffProfile, Course } from '../../lib/types';
+import { supabase } from '../../lib/supabase';
 
 interface DirectoryHubProps {
   isLeadership: boolean;
@@ -46,6 +47,54 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
       </div>
     );
   }
+
+  const [showAddStaffModal, setShowAddStaffModal] = useState(false);
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffDesignation, setNewStaffDesignation] = useState('');
+  const [newStaffRole, setNewStaffRole] = useState<'staff' | 'gm' | 'md' | 'director'>('staff');
+  const [newStaffStatus, setNewStaffStatus] = useState<'pending' | 'active' | 'inactive'>('active');
+  const [addingStaff, setAddingStaff] = useState(false);
+
+  const handleAddStaffAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffEmail || !newStaffName) return;
+    setAddingStaff(true);
+    try {
+      const emailClean = newStaffEmail.toLowerCase().trim();
+      const { data: existingProfiles } = await supabase
+        .from('staff_profiles')
+        .select('*')
+        .eq('email', emailClean);
+
+      if (existingProfiles && existingProfiles.length > 0) {
+        await handleUpdateStaff(existingProfiles[0].id, newStaffRole, newStaffDesignation, newStaffStatus);
+      } else {
+        const { error } = await supabase
+          .from('staff_profiles')
+          .insert({
+            id: crypto.randomUUID(),
+            email: emailClean,
+            name: newStaffName,
+            designation: newStaffDesignation || 'Staff Member',
+            role: newStaffRole,
+            status: newStaffStatus
+          });
+        if (error) throw error;
+      }
+
+      alert(`✅ Staff account profile for ${newStaffName} (${emailClean}) linked successfully!`);
+      setShowAddStaffModal(false);
+      setNewStaffName('');
+      setNewStaffEmail('');
+      setNewStaffDesignation('');
+      window.location.reload();
+    } catch (err: any) {
+      alert(`Error linking staff account: ${err.message}`);
+    } finally {
+      setAddingStaff(false);
+    }
+  };
 
   // Filter students roster
   const filteredStudents = studentList.filter(student => {
@@ -259,10 +308,21 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
       ) : (
         /* STAFF DIRECTORY */
         <div className="glass-card" style={{ border: '1px solid rgba(201, 156, 51, 0.15)', padding: '1.5rem' }}>
-          <h3 style={{ fontSize: '1.25rem', marginBottom: '0.25rem', fontWeight: 800 }}>Staff Roster & Job Titles</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.5rem' }}>
-            Manage staff designations, role privileges, and account activations.
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', marginBottom: '0.25rem', fontWeight: 800 }}>Staff Roster & Job Titles</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                Manage staff designations, role privileges, and account activations.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowAddStaffModal(true)}
+              className="btn btn-primary"
+              style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '8px' }}
+            >
+              ➕ Add / Link Staff Profile
+            </button>
+          </div>
 
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '850px', fontSize: '0.85rem' }}>
@@ -290,6 +350,116 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Link Missing Staff Profile Modal */}
+      {showAddStaffModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 999, padding: '1rem'
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '16px', maxWidth: '480px', width: '100%',
+            padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
+                ➕ Add / Link Missing Staff Account
+              </h3>
+              <button 
+                onClick={() => setShowAddStaffModal(false)}
+                style={{ border: 'none', background: '#f1f5f9', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddStaffAccount} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Staff Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. Rashide@gmail.com"
+                  value={newStaffEmail}
+                  onChange={(e) => setNewStaffEmail(e.target.value)}
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rashid E"
+                  value={newStaffName}
+                  onChange={(e) => setNewStaffName(e.target.value)}
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Designation (Job Title)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Spoken Arabic Trainer"
+                  value={newStaffDesignation}
+                  onChange={(e) => setNewStaffDesignation(e.target.value)}
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Access Role</label>
+                  <select
+                    value={newStaffRole}
+                    onChange={(e) => setNewStaffRole(e.target.value as any)}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+                  >
+                    <option value="staff">Staff</option>
+                    <option value="gm">GM (General Manager)</option>
+                    <option value="md">MD (Managing Director)</option>
+                    <option value="director">Director</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>Status</label>
+                  <select
+                    value={newStaffStatus}
+                    onChange={(e) => setNewStaffStatus(e.target.value as any)}
+                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+                  >
+                    <option value="active">Active</option>
+                    <option value="pending">Pending Approval</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddStaffModal(false)}
+                  style={{ padding: '0.5rem 1rem', borderRadius: '8px', background: '#f1f5f9', border: 'none', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingStaff}
+                  style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', background: 'var(--primary-dark)', color: 'white', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {addingStaff ? 'Saving...' : 'Link Staff Account'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

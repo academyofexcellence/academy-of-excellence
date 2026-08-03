@@ -174,9 +174,19 @@ const AdminLogin = () => {
         return;
       }
 
-      // If registered in Auth but not in either profile table
+      // If registered in Auth but missing from both profile tables, auto-heal into staff_profiles
+      const meta = authData.user.user_metadata || {};
+      await supabase.from('staff_profiles').upsert({
+        id: authData.user.id,
+        email: authData.user.email || email,
+        name: meta.name || fullName || 'Staff Member',
+        designation: meta.designation || 'Staff Member',
+        role: 'staff',
+        status: 'pending'
+      }, { onConflict: 'id' });
+
       await supabase.auth.signOut();
-      throw new Error('Staff/Student profile not found. Please contact administration.');
+      throw new Error('🎉 Staff profile has been linked! Your account is now pending approval in the Staff Directory by management.');
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
       setLoading(false);
@@ -202,13 +212,38 @@ const AdminLogin = () => {
         },
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        if (signUpError.message?.toLowerCase().includes('already registered')) {
+          // Auto-heal orphaned auth.users account by signing in with the provided password
+          const { data: signInData } = await supabase.auth.signInWithPassword({
+            email,
+            password
+          });
+
+          if (signInData?.user) {
+            await supabase.from('staff_profiles').upsert({
+              id: signInData.user.id,
+              email: email.toLowerCase().trim(),
+              name: fullName,
+              designation: designation || 'Staff Member',
+              role: 'staff',
+              status: 'pending'
+            }, { onConflict: 'id' });
+
+            await supabase.auth.signOut();
+            setSuccessMsg(`🎉 Account profile linked for ${fullName}! Your staff account is now registered and pending approval in the Staff Directory.`);
+            resetForm();
+            return;
+          }
+        }
+        throw signUpError;
+      }
 
       // Guaranteed direct insert safeguard into staff_profiles table
       if (authData?.user) {
         await supabase.from('staff_profiles').upsert({
           id: authData.user.id,
-          email: email,
+          email: email.toLowerCase().trim(),
           name: fullName,
           designation: designation || 'Staff Member',
           role: 'staff',
