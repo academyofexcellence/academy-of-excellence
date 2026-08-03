@@ -1134,26 +1134,73 @@ const AdminDashboard = () => {
 
       const studentIds = students.map(s => s.id);
 
-      let scoresQuery = supabase
-        .from('scores')
-        .select('*')
-        .in('student_id', studentIds)
-        .range(0, 9999);
+      // Paginated fetch of all scores for batch students
+      let scoresData: any[] = [];
+      let fromScore = 0;
+      const pageSize = 1000;
+      let hasMoreScores = true;
 
-      if (intervalId !== 'cumulative') {
-        scoresQuery = scoresQuery.eq('interval_id', intervalId);
+      while (hasMoreScores) {
+        let q = supabase
+          .from('scores')
+          .select('student_id, interval_id, score_type, points, logged_date, created_at')
+          .in('student_id', studentIds)
+          .range(fromScore, fromScore + pageSize - 1);
+
+        if (intervalId !== 'cumulative') {
+          q = q.eq('interval_id', intervalId);
+        }
+
+        const { data, error } = await q;
+        if (error) {
+          console.error('Error fetching scores page:', error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          scoresData = scoresData.concat(data);
+          if (data.length < pageSize) {
+            hasMoreScores = false;
+          } else {
+            fromScore += pageSize;
+          }
+        } else {
+          hasMoreScores = false;
+        }
       }
-      const { data: scoresData } = await scoresQuery;
 
       const curInterval = intervalId === 'cumulative'
         ? null
         : intervalsList.find(i => i.id === intervalId);
 
-      const { data: rawAttLogs } = await supabase
-        .from('daily_attendance_logs')
-        .select('*')
-        .in('student_id', studentIds)
-        .range(0, 9999);
+      // Paginated fetch of all daily attendance logs for batch students
+      let rawAttLogs: any[] = [];
+      let fromAtt = 0;
+      let hasMoreAtt = true;
+
+      while (hasMoreAtt) {
+        const { data, error } = await supabase
+          .from('daily_attendance_logs')
+          .select('student_id, points_awarded, date')
+          .in('student_id', studentIds)
+          .range(fromAtt, fromAtt + pageSize - 1);
+
+        if (error) {
+          console.error('Error fetching attendance logs page:', error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          rawAttLogs = rawAttLogs.concat(data);
+          if (data.length < pageSize) {
+            hasMoreAtt = false;
+          } else {
+            fromAtt += pageSize;
+          }
+        } else {
+          hasMoreAtt = false;
+        }
+      }
 
       const attLogs = (rawAttLogs || []).filter(l => {
         if (!curInterval) return true;
@@ -1974,7 +2021,7 @@ const AdminDashboard = () => {
       while (hasMore) {
         const { data: pageData, error: scoreErr } = await supabase
           .from('scores')
-          .select('student_id, interval_id, points, logged_date')
+          .select('student_id, interval_id, score_type, points, logged_date, created_at')
           .in('interval_id', intervalIds)
           .in('student_id', students.map(s => s.id))
           .range(from, from + pageSize - 1);
@@ -1991,11 +2038,29 @@ const AdminDashboard = () => {
         }
       }
 
-      // Fetch daily attendance logs to include attendance check-in points
-      const { data: rawAttLogs } = await supabase
-        .from('daily_attendance_logs')
-        .select('student_id, points_awarded, date')
-        .in('student_id', students.map(s => s.id));
+      // Paginated fetch of daily attendance logs to include attendance check-in points
+      let rawAttLogs: any[] = [];
+      let fromAtt = 0;
+      let hasMoreAtt = true;
+
+      while (hasMoreAtt) {
+        const { data: pageAtt, error: attErr } = await supabase
+          .from('daily_attendance_logs')
+          .select('student_id, points_awarded, date')
+          .in('student_id', students.map(s => s.id))
+          .range(fromAtt, fromAtt + pageSize - 1);
+
+        if (attErr) throw attErr;
+        if (pageAtt && pageAtt.length > 0) {
+          rawAttLogs = [...rawAttLogs, ...pageAtt];
+          fromAtt += pageSize;
+          if (pageAtt.length < pageSize) {
+            hasMoreAtt = false;
+          }
+        } else {
+          hasMoreAtt = false;
+        }
+      }
 
       // Calculate intervals audit summary (dates logged vs configured start)
       const intervalSummary = intervals.map(interval => {

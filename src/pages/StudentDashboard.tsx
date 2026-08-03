@@ -764,26 +764,73 @@ const StudentDashboard = () => {
 
       const studentIds = students.map(s => s.id);
 
-      let scoresQuery = supabase
-        .from('scores')
-        .select('*')
-        .in('student_id', studentIds)
-        .range(0, 9999);
+      // Paginated fetch of all scores for batch students
+      let scoresData: any[] = [];
+      let fromScore = 0;
+      const pageSize = 1000;
+      let hasMoreScores = true;
 
-      if (intervalId !== 'cumulative') {
-        scoresQuery = scoresQuery.eq('interval_id', intervalId);
+      while (hasMoreScores) {
+        let q = supabase
+          .from('scores')
+          .select('student_id, interval_id, score_type, points, logged_date, created_at')
+          .in('student_id', studentIds)
+          .range(fromScore, fromScore + pageSize - 1);
+
+        if (intervalId !== 'cumulative') {
+          q = q.eq('interval_id', intervalId);
+        }
+
+        const { data, error } = await q;
+        if (error) {
+          console.error('Error fetching scores page:', error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          scoresData = scoresData.concat(data);
+          if (data.length < pageSize) {
+            hasMoreScores = false;
+          } else {
+            fromScore += pageSize;
+          }
+        } else {
+          hasMoreScores = false;
+        }
       }
-      const { data: scoresData } = await scoresQuery;
 
       const curInterval = intervalId === 'cumulative'
         ? null
         : intervals.find(i => i.id === intervalId);
 
-      const { data: rawAttLogs } = await supabase
-        .from('daily_attendance_logs')
-        .select('*')
-        .in('student_id', studentIds)
-        .range(0, 9999);
+      // Paginated fetch of all daily attendance logs for batch students
+      let rawAttLogs: any[] = [];
+      let fromAtt = 0;
+      let hasMoreAtt = true;
+
+      while (hasMoreAtt) {
+        const { data, error } = await supabase
+          .from('daily_attendance_logs')
+          .select('student_id, points_awarded, date')
+          .in('student_id', studentIds)
+          .range(fromAtt, fromAtt + pageSize - 1);
+
+        if (error) {
+          console.error('Error fetching attendance logs page:', error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          rawAttLogs = rawAttLogs.concat(data);
+          if (data.length < pageSize) {
+            hasMoreAtt = false;
+          } else {
+            fromAtt += pageSize;
+          }
+        } else {
+          hasMoreAtt = false;
+        }
+      }
 
       const attLogs = (rawAttLogs || []).filter(l => {
         if (!curInterval) return true;
