@@ -2062,19 +2062,30 @@ const AdminDashboard = () => {
         }
       }
 
-      // Calculate intervals audit summary (dates logged vs configured start)
+      // Calculate intervals audit summary (combining scores table + daily_attendance_logs)
       const intervalSummary = intervals.map(interval => {
         const intervalScores = allScores.filter(s => s.interval_id === interval.id);
-        const dates = intervalScores.map(s => s.logged_date).filter(Boolean);
-        
+        const intervalAttLogs = rawAttLogs.filter(l => {
+          if (interval.start_date && l.date < interval.start_date) return false;
+          if (interval.end_date && l.date > interval.end_date) return false;
+          return true;
+        });
+
+        const scoreDates = intervalScores.map(s => s.logged_date ? s.logged_date.split('T')[0] : '').filter(Boolean);
+        const attDates = intervalAttLogs.map(l => l.date ? l.date.split('T')[0] : '').filter(Boolean);
+        const allDates = [...scoreDates, ...attDates];
+
         let actualStart = 'N/A';
         let actualEnd = 'N/A';
-        if (dates.length > 0) {
-          actualStart = dates.reduce((min, d) => d < min ? d : min);
-          actualEnd = dates.reduce((max, d) => d > max ? d : max);
+        if (allDates.length > 0) {
+          actualStart = allDates.reduce((min, d) => d < min ? d : min);
+          actualEnd = allDates.reduce((max, d) => d > max ? d : max);
         }
         
-        const totalPoints = intervalScores.reduce((sum, s) => sum + s.points, 0);
+        const totalPointsFromScores = intervalScores.reduce((sum, s) => sum + (s.points || 0), 0);
+        const totalPointsFromAtt = intervalAttLogs.reduce((sum, l) => sum + (l.points_awarded || 0), 0);
+        const totalPoints = totalPointsFromScores + totalPointsFromAtt;
+        const totalCount = intervalScores.length + intervalAttLogs.length;
 
         return {
           id: interval.id,
@@ -2084,7 +2095,7 @@ const AdminDashboard = () => {
           actualStart,
           actualEnd,
           totalPoints,
-          count: intervalScores.length
+          count: totalCount
         };
       });
       setIntervalsAuditSummary(intervalSummary);
