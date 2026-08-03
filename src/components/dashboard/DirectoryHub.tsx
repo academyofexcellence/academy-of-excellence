@@ -57,6 +57,8 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
     return matchesSearch && matchesCourse && matchesBatch && matchesStatus;
   });
 
+  const pendingStaffCount = staffList.filter(s => s.status === 'pending').length;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
@@ -109,7 +111,12 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
             gap: '0.4rem'
           }}
         >
-          <UserCheck size={15} /> Staff Directory
+          <UserCheck size={15} /> Staff Directory & Approvals
+          {pendingStaffCount > 0 && (
+            <span style={{ background: '#ef4444', color: 'white', fontSize: '0.65rem', padding: '0.1rem 0.45rem', borderRadius: '10px', fontWeight: 800 }}>
+              {pendingStaffCount} Pending
+            </span>
+          )}
         </button>
       </div>
 

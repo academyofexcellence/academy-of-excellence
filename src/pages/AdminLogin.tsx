@@ -190,7 +190,7 @@ const AdminLogin = () => {
     setSuccessMsg('');
 
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -203,6 +203,18 @@ const AdminLogin = () => {
       });
 
       if (signUpError) throw signUpError;
+
+      // Guaranteed direct insert safeguard into staff_profiles table
+      if (authData?.user) {
+        await supabase.from('staff_profiles').upsert({
+          id: authData.user.id,
+          email: email,
+          name: fullName,
+          designation: designation || 'Staff Member',
+          role: 'staff',
+          status: 'pending'
+        }, { onConflict: 'id' });
+      }
       
       setSuccessMsg('🎉 Staff registration successful! Your account is pending approval by the MD or GM.');
       resetForm();
