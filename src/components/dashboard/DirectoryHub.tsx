@@ -64,10 +64,30 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
     try {
       const emailClean = newStaffEmail.toLowerCase().trim();
       const pwToUse = newStaffPassword.trim() || 'rashide';
+
+      // 1. Try RPC function link_or_create_staff_profile first
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('link_or_create_staff_profile', {
+        target_email: emailClean,
+        target_name: newStaffName,
+        target_designation: newStaffDesignation || 'Staff Member',
+        target_role: newStaffRole,
+        target_status: newStaffStatus
+      });
+
+      if (!rpcErr && rpcRes?.success) {
+        alert(`✅ Staff account profile for ${newStaffName} (${emailClean}) linked successfully!`);
+        setShowAddStaffModal(false);
+        setNewStaffName('');
+        setNewStaffEmail('');
+        setNewStaffPassword('');
+        setNewStaffDesignation('');
+        window.location.reload();
+        return;
+      }
       
       let targetUserId = '';
 
-      // 1. Try auth signUp first to create or retrieve auth.users row
+      // 2. Fallback to auth signUp
       const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
         email: emailClean,
         password: pwToUse,
@@ -92,7 +112,7 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
         if (signInData?.user?.id) {
           targetUserId = signInData.user.id;
         } else if (signInErr) {
-          throw new Error(`Auth account exists for ${emailClean}, but password check failed. Please enter the password specified during signup (e.g. ${pwToUse}): ${signInErr.message}`);
+          throw new Error(`Account ${emailClean} exists in authentication records, but password check failed. If you know the password entered during signup, enter it in the Password field below. Otherwise, ask ${newStaffName} to click "Submit Registration Request" on the main login page to auto-heal their account!`);
         }
       } else if (signUpErr) {
         throw signUpErr;
