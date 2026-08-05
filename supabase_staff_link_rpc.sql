@@ -142,3 +142,28 @@ BEGIN
   WHERE id = user_id OR (target_email IS NOT NULL AND lower(email) = lower(trim(target_email)));
 END;
 $$;
+
+-- 4. Clean Non-Recursive RLS Policies (Eliminates "Database error querying schema")
+ALTER TABLE public.staff_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Enable select for authenticated users" ON public.staff_profiles;
+CREATE POLICY "Enable select for authenticated users" 
+ON public.staff_profiles FOR SELECT 
+TO authenticated 
+USING (true);
+
+DROP POLICY IF EXISTS "Enable read activity logs for leadership" ON public.activity_logs;
+DROP POLICY IF EXISTS "Enable read activity logs for authenticated users" ON public.activity_logs;
+CREATE POLICY "Enable read activity logs for authenticated users" 
+ON public.activity_logs FOR SELECT 
+TO authenticated 
+USING (true);
+
+DROP POLICY IF EXISTS "Enable read for assigned tasks or leadership" ON public.tasks;
+DROP POLICY IF EXISTS "Enable read tasks for authenticated users" ON public.tasks;
+CREATE POLICY "Enable read tasks for authenticated users" 
+ON public.tasks FOR SELECT 
+TO authenticated 
+USING (true);

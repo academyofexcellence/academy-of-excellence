@@ -633,15 +633,19 @@ const AdminDashboard = () => {
 
   // --- LEADERSHIP & CLASSROOM FETCHES ---
   const fetchLeadershipDashboardData = async () => {
+    // 1. Fetch Staff Roster
     try {
-      // 1. Fetch Staff Roster
       const { data: staff } = await supabase
         .from('staff_profiles')
         .select('*')
         .order('name', { ascending: true });
       if (staff) setStaffList(staff);
+    } catch (e) {
+      console.warn('Error loading staff roster:', e);
+    }
 
-      // 2. Fetch Staff Tasks
+    // 2. Fetch Staff Tasks
+    try {
       const { data: tasks } = await supabase
         .from('tasks')
         .select(`
@@ -650,8 +654,12 @@ const AdminDashboard = () => {
         `)
         .order('created_at', { ascending: false });
       if (tasks) setTaskList(tasks);
+    } catch (e) {
+      console.warn('Error loading tasks:', e);
+    }
 
-       // 3. Fetch daily task logs for today
+    // 3. Fetch daily task logs for today
+    try {
       const todayStr = new Date().toISOString().split('T')[0];
       const { data: logs } = await supabase
         .from('daily_task_logs')
@@ -659,22 +667,29 @@ const AdminDashboard = () => {
         .eq('completed_date', todayStr);
       if (logs) setDailyLogs(logs);
 
-      // Fetch today's student scores (attendance, vocabulary, penalties, etc.)
       const { data: todaySc } = await supabase
         .from('scores')
         .select('*')
         .eq('logged_date', todayStr);
       if (todaySc) setTodayScores(todaySc);
+    } catch (e) {
+      console.warn('Error loading daily logs/scores:', e);
+    }
 
-      // 4. Fetch Activity Logs
+    // 4. Fetch Activity Logs
+    try {
       const { data: actLogs } = await supabase
         .from('activity_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(60);
       if (actLogs) setActivityLogs(actLogs);
+    } catch (e) {
+      console.warn('Error loading activity logs:', e);
+    }
 
-      // 5. Fetch Courses, Students and Intervals
+    // 5. Fetch Courses, Students and Intervals
+    try {
       const { data: courseData } = await supabase.from('courses').select('*').order('name', { ascending: true });
       if (courseData) {
         setCourses(courseData);
@@ -692,14 +707,22 @@ const AdminDashboard = () => {
 
       const { data: intervals } = await supabase.from('scoring_intervals').select('*').order('created_at', { ascending: false });
       if (intervals) setIntervalsList(intervals);
+    } catch (e) {
+      console.warn('Error loading courses/students/intervals:', e);
+    }
 
-      // 6. Fetch Website Content
+    // 6. Fetch Website Content
+    try {
       fetchWebsiteContent();
+    } catch (e) {
+      console.warn('Error loading website content:', e);
+    }
 
-      // 7. Fetch Correction Requests (Appeals)
+    // 7. Fetch Correction Requests (Appeals)
+    try {
       await fetchAdminAppeals();
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
+    } catch (e) {
+      console.warn('Error loading appeals:', e);
     }
   };
 
