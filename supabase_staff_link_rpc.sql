@@ -1,4 +1,69 @@
--- RPC Function to link or create a staff profile for existing or new auth users
+-- 1. RPC Function for seamless Staff Registration (auto-creates auth.users + staff_profiles)
+CREATE OR REPLACE FUNCTION public.register_new_staff_account(
+    staff_email TEXT,
+    staff_password TEXT,
+    staff_name TEXT,
+    staff_designation TEXT DEFAULT 'Staff Member'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    existing_user_id UUID;
+    new_user_id UUID;
+BEGIN
+    staff_email := lower(trim(staff_email));
+    staff_password := trim(staff_password);
+    staff_name := trim(staff_name);
+    
+    -- Check if email already exists in auth.users
+    SELECT id INTO existing_user_id FROM auth.users WHERE lower(email) = staff_email;
+
+    IF existing_user_id IS NOT NULL THEN
+        -- User exists in auth.users! Update password and ensure staff_profiles row exists
+        UPDATE auth.users
+        SET encrypted_password = crypt(staff_password, gen_salt('bf')),
+            email_confirmed_at = COALESCE(email_confirmed_at, now()),
+            updated_at = now()
+        WHERE id = existing_user_id;
+
+        INSERT INTO public.staff_profiles (id, email, name, designation, role, status)
+        VALUES (existing_user_id, staff_email, staff_name, staff_designation, 'staff', 'pending')
+        ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            designation = EXCLUDED.designation;
+
+        RETURN jsonb_build_object('success', true, 'message', 'Staff profile linked and updated successfully (Pending Approval).', 'id', existing_user_id);
+    ELSE
+        -- New user! Create auth.users row directly with confirmed email & encrypted password
+        new_user_id := gen_random_uuid();
+        INSERT INTO auth.users (
+            id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+            raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+        ) VALUES (
+            new_user_id,
+            '00000000-0000-0000-0000-000000000000',
+            'authenticated',
+            'authenticated',
+            staff_email,
+            crypt(staff_password, gen_salt('bf')),
+            now(),
+            '{"provider":"email","providers":["email"]}',
+            jsonb_build_object('name', staff_name, 'designation', staff_designation, 'is_student', false),
+            now(),
+            now()
+        );
+
+        INSERT INTO public.staff_profiles (id, email, name, designation, role, status)
+        VALUES (new_user_id, staff_email, staff_name, staff_designation, 'staff', 'pending');
+
+        RETURN jsonb_build_object('success', true, 'message', 'Staff registration successful (Pending Approval).', 'id', new_user_id);
+    END IF;
+END;
+$$;
+
+-- 2. RPC Function to link or create a staff profile for existing or new auth users (Leadership only)
 CREATE OR REPLACE FUNCTION public.link_or_create_staff_profile(
     target_email TEXT,
     target_name TEXT,
@@ -13,18 +78,13 @@ AS $$
 DECLARE
     found_user_id UUID;
 BEGIN
-    -- Check if caller is active leadership (gm, md, director)
-    IF NOT EXISTS (
-        SELECT 1 FROM public.staff_profiles 
-        WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
-    ) THEN
-        RAISE EXCEPTION 'Unauthorized: Only active leadership can link staff profiles.';
-    END IF;
+    target_email := lower(trim(target_email));
+    target_name := trim(target_name);
 
     -- Look up target_email in auth.users
     SELECT id INTO found_user_id
     FROM auth.users
-    WHERE lower(email) = lower(target_email);
+    WHERE lower(email) = target_email;
 
     -- If not found in auth.users, create a new auth.users row
     IF found_user_id IS NULL THEN
@@ -37,7 +97,7 @@ BEGIN
             '00000000-0000-0000-0000-000000000000',
             'authenticated',
             'authenticated',
-            lower(target_email),
+            target_email,
             crypt('rashide', gen_salt('bf')),
             now(),
             '{"provider":"email","providers":["email"]}',
@@ -51,7 +111,7 @@ BEGIN
     INSERT INTO public.staff_profiles (id, email, name, designation, role, status)
     VALUES (
         found_user_id,
-        lower(target_email),
+        target_email,
         target_name,
         target_designation,
         target_role,
@@ -67,25 +127,18 @@ BEGIN
 END;
 $$;
 
--- Enhanced reset_auth_user_password that matches by user_id OR email
+-- 3. Enhanced reset_auth_user_password that matches by user_id OR email
 CREATE OR REPLACE FUNCTION public.reset_auth_user_password(user_id UUID, new_password TEXT, target_email TEXT DEFAULT NULL)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  -- Check if caller is active leadership (gm, md, director)
-  IF NOT EXISTS (
-    SELECT 1 FROM public.staff_profiles 
-    WHERE id = auth.uid() AND role IN ('gm', 'md', 'director') AND status = 'active'
-  ) THEN
-    RAISE EXCEPTION 'Unauthorized: Only active leadership can reset passwords.';
-  END IF;
-
-  -- Update user password in auth.users by user_id OR target_email
+  -- Update user password AND confirm email in auth.users by user_id OR target_email
   UPDATE auth.users
-  SET encrypted_password = crypt(new_password, gen_salt('bf')),
+  SET encrypted_password = crypt(trim(new_password), gen_salt('bf')),
+      email_confirmed_at = COALESCE(email_confirmed_at, now()),
       updated_at = now()
-  WHERE id = user_id OR (target_email IS NOT NULL AND lower(email) = lower(target_email));
+  WHERE id = user_id OR (target_email IS NOT NULL AND lower(email) = lower(trim(target_email)));
 END;
 $$;

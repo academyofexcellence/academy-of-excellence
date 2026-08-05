@@ -125,10 +125,13 @@ const AdminLogin = () => {
     setError('');
     setSuccessMsg('');
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: cleanEmail,
+        password: cleanPassword,
       });
 
       if (authError) throw authError;
@@ -178,7 +181,7 @@ const AdminLogin = () => {
       const meta = authData.user.user_metadata || {};
       await supabase.from('staff_profiles').upsert({
         id: authData.user.id,
-        email: authData.user.email || email,
+        email: authData.user.email || cleanEmail,
         name: meta.name || fullName || 'Staff Member',
         designation: meta.designation || 'Staff Member',
         role: 'staff',
@@ -199,15 +202,35 @@ const AdminLogin = () => {
     setError('');
     setSuccessMsg('');
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    const cleanName = fullName.trim();
+    const cleanDesignation = designation.trim() || 'Staff Member';
+
     try {
+      // 1. Try RPC function register_new_staff_account first
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('register_new_staff_account', {
+        staff_email: cleanEmail,
+        staff_password: cleanPassword,
+        staff_name: cleanName,
+        staff_designation: cleanDesignation
+      });
+
+      if (!rpcErr && rpcRes?.success) {
+        setSuccessMsg('🎉 Staff registration successful! Your account is pending approval by the MD or GM.');
+        resetForm();
+        return;
+      }
+
+      // 2. Fallback to auth.signUp
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
+        email: cleanEmail,
+        password: cleanPassword,
         options: {
           data: {
             is_student: false,
-            name: fullName,
-            designation: designation,
+            name: cleanName,
+            designation: cleanDesignation,
           },
         },
       });
@@ -216,22 +239,22 @@ const AdminLogin = () => {
         if (signUpError.message?.toLowerCase().includes('already registered')) {
           // Auto-heal orphaned auth.users account by signing in with the provided password
           const { data: signInData } = await supabase.auth.signInWithPassword({
-            email,
-            password
+            email: cleanEmail,
+            password: cleanPassword
           });
 
           if (signInData?.user) {
             await supabase.from('staff_profiles').upsert({
               id: signInData.user.id,
-              email: email.toLowerCase().trim(),
-              name: fullName,
-              designation: designation || 'Staff Member',
+              email: cleanEmail,
+              name: cleanName,
+              designation: cleanDesignation,
               role: 'staff',
               status: 'pending'
             }, { onConflict: 'id' });
 
             await supabase.auth.signOut();
-            setSuccessMsg(`🎉 Account profile linked for ${fullName}! Your staff account is now registered and pending approval in the Staff Directory.`);
+            setSuccessMsg(`🎉 Account profile linked for ${cleanName}! Your staff account is now registered and pending approval in the Staff Directory.`);
             resetForm();
             return;
           }
@@ -243,9 +266,9 @@ const AdminLogin = () => {
       if (authData?.user) {
         await supabase.from('staff_profiles').upsert({
           id: authData.user.id,
-          email: email.toLowerCase().trim(),
-          name: fullName,
-          designation: designation || 'Staff Member',
+          email: cleanEmail,
+          name: cleanName,
+          designation: cleanDesignation,
           role: 'staff',
           status: 'pending'
         }, { onConflict: 'id' });
