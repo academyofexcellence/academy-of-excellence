@@ -134,7 +134,12 @@ const AdminLogin = () => {
         password: cleanPassword,
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        if (authError.message?.toLowerCase().includes('database error querying schema') || authError.message?.toLowerCase().includes('schema')) {
+          throw new Error('⚠️ Supabase Database permissions patch required! Please run the 1-step SQL script (FIX_DATABASE_SCHEMA_ERROR.sql) in your Supabase SQL Editor once to grant schema permissions to your database.');
+        }
+        throw authError;
+      }
       if (!authData.user) throw new Error('Authentication failed.');
 
       // 1. Try get_my_staff_profile RPC first (bypasses RLS policy errors)
