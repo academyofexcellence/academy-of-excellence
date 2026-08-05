@@ -1159,9 +1159,29 @@ const AdminDashboard = () => {
   }, [selectedConfigIntervalId, intervalsList]);
 
   const loadClassroomActiveInterval = () => {
-    const active = intervalsList.find(
+    // 1. First check if current filterCourse & filterBatch has an active interval
+    let active = intervalsList.find(
       i => i.course_id === filterCourse && i.batch_number === parseInt(filterBatch) && i.is_active
     );
+
+    // 2. If not, auto-detect ANY active live interval across all courses/batches
+    if (!active) {
+      const anyActive = intervalsList.find(i => i.is_active);
+      if (anyActive) {
+        setFilterCourse(anyActive.course_id);
+        setFilterBatch(String(anyActive.batch_number));
+        active = anyActive;
+      }
+    }
+
+    // 3. Fallback: If no interval has is_active set to true, select the most recent interval
+    if (!active && intervalsList.length > 0) {
+      const latest = intervalsList[0];
+      setFilterCourse(latest.course_id);
+      setFilterBatch(String(latest.batch_number));
+      active = latest;
+    }
+
     if (active) {
       setActiveInterval(active);
       setSelectedLeaderboardInterval(active.id);
