@@ -142,17 +142,21 @@ const AdminLogin = () => {
             user_password: cleanPassword
           });
 
-          if (!rpcErr && customLogin?.success) {
-            if (customLogin.status !== 'active') {
-              throw new Error(
-                customLogin.status === 'pending'
-                  ? 'Your staff account is pending approval by management.'
-                  : 'Your staff account has been deactivated.'
-              );
+          if (!rpcErr && customLogin) {
+            if (customLogin.success) {
+              if (customLogin.status !== 'active') {
+                throw new Error(
+                  customLogin.status === 'pending'
+                    ? 'Your staff account is pending approval by management.'
+                    : 'Your staff account has been deactivated.'
+                );
+              }
+              localStorage.setItem('aoe_fallback_user', JSON.stringify(customLogin));
+              navigate('/admin/dashboard');
+              return;
+            } else if (customLogin.message) {
+              throw new Error(customLogin.message);
             }
-            localStorage.setItem('aoe_fallback_user', JSON.stringify(customLogin));
-            navigate('/admin/dashboard');
-            return;
           }
         } catch (rpcE: any) {
           if (rpcE.message && !rpcE.message.includes('custom_staff_login')) throw rpcE;
