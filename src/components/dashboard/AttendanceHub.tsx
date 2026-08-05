@@ -172,13 +172,22 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
   };
 
   // Save / Update Attendance Record manually or via override
-  const handleQuickMarkAttendance = async (student: StudentProfile, pointsOverride: number, statusOverride: string) => {
+  const handleQuickMarkAttendance = async (
+    student: StudentProfile,
+    pointsOverride: number,
+    statusOverride: string,
+    inStatusOverride?: string,
+    outStatusOverride?: string
+  ) => {
     try {
       const nowIso = new Date().toISOString();
       const existingLog = attendanceLogs.find(l => l.student_id === student.id);
 
       let checkInTime = existingLog?.check_in_time || (pointsOverride > 0 ? nowIso : undefined);
       let checkOutTime = existingLog?.check_out_time || (pointsOverride === 10 ? nowIso : undefined);
+
+      const inStatus = inStatusOverride || (pointsOverride >= 5 ? 'on_time' : (pointsOverride === 3 ? 'late' : 'pending'));
+      const outStatus = outStatusOverride || (pointsOverride === 10 ? 'on_time' : 'pending');
 
       const recordToUpsert = {
         student_id: student.id,
@@ -188,8 +197,8 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
         date: selectedDate,
         check_in_time: checkInTime,
         check_out_time: checkOutTime,
-        check_in_status: pointsOverride === 10 ? 'on_time' : (pointsOverride === 5 ? 'late' : 'pending'),
-        check_out_status: pointsOverride === 10 ? 'on_time' : (pointsOverride === 5 ? 'early' : 'pending'),
+        check_in_status: inStatus,
+        check_out_status: outStatus,
         points_awarded: pointsOverride,
         status: statusOverride,
         method: 'manual_override',
@@ -241,6 +250,156 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
       }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
     } catch (err) {
       console.error('Error syncing score:', err);
+    }
+  };
+
+  // Print Daily Attendance Register
+  const handlePrintAttendanceRegister = () => {
+    const courseName = selectedCourse?.name || 'Academic Course';
+    const totalCount = activeStudents.length;
+    const inCount = activeStudents.filter(s => {
+      const log = attendanceLogs.find(l => l.student_id === s.id);
+      return log && (log.check_in_time || log.points_awarded > 0);
+    }).length;
+    const outCount = activeStudents.filter(s => {
+      const log = attendanceLogs.find(l => l.student_id === s.id);
+      return log && (log.check_out_time || log.points_awarded === 10);
+    }).length;
+    const absCount = Math.max(0, totalCount - inCount);
+
+    const rowsHtml = activeStudents.map((s, idx) => {
+      const log = attendanceLogs.find(l => l.student_id === s.id);
+      const inTime = log?.check_in_time ? new Date(log.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+      const outTime = log?.check_out_time ? new Date(log.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+      const inStat = log?.check_in_status === 'on_time' ? 'On Time (+5 XP)' : (log?.check_in_status === 'late' ? 'Late (+3 XP)' : 'Not Logged In');
+      const outStat = log?.check_out_status === 'on_time' ? 'On Time (+5 XP)' : (log?.check_out_status === 'early' ? 'Early (+3 XP)' : 'Not Logged Out');
+      const pts = log?.points_awarded ?? 0;
+
+      return `
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">#${idx + 1} ${s.name} ${s.roll_number ? `(Roll #${s.roll_number})` : ''}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${inTime}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold; color: ${log?.check_in_status === 'on_time' ? '#15803d' : (log?.check_in_status === 'late' ? '#b45309' : '#888')};">${inStat}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${outTime}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold; color: ${log?.check_out_status === 'on_time' ? '#1d4ed8' : '#888'};">${outStat}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold; color: ${pts > 0 ? '#15803d' : '#888'};">+${pts} XP</td>
+        </tr>
+      `;
+    }).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Daily Attendance Register - ${courseName} Batch ${selectedBatchNumber}</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #1e293b; }
+          .header { text-align: center; border-bottom: 3px solid #c99c33; padding-bottom: 15px; margin-bottom: 20px; }
+          .header h2 { margin: 0; color: #0f172a; font-size: 22px; }
+          .header p { margin: 5px 0 0 0; color: #64748b; font-size: 13px; }
+          .stats { display: flex; justify-content: space-around; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; }
+          .stat-box { text-align: center; }
+          .stat-box .num { font-size: 20px; font-weight: bold; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 13px; }
+          th { background: #0f172a; color: white; padding: 10px; text-align: left; }
+          th.center { text-align: center; }
+          .footer { margin-top: 40px; display: flex; justify-content: space-between; font-size: 12px; color: #64748b; }
+          .signature { border-top: 1px solid #94a3b8; width: 200px; text-align: center; padding-top: 5px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h2>ACADEMY OF EXCELLENCE</h2>
+          <p>Official Daily Classroom Attendance Register</p>
+          <p style="font-weight: bold; color: #c99c33; font-size: 14px; margin-top: 5px;">
+            ${courseName} • Batch ${selectedBatchNumber} • Date: ${new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+          </p>
+        </div>
+
+        <div class="stats">
+          <div class="stat-box"><div>Total Roster</div><div class="num" style="color:#c99c33">${totalCount}</div></div>
+          <div class="stat-box"><div>Morning Login</div><div class="num" style="color:#15803d">${inCount} (${totalCount > 0 ? Math.round((inCount/totalCount)*100) : 0}%)</div></div>
+          <div class="stat-box"><div>Evening Logout</div><div class="num" style="color:#1d4ed8">${outCount} (${totalCount > 0 ? Math.round((outCount/totalCount)*100) : 0}%)</div></div>
+          <div class="stat-box"><div>Pending / Absent</div><div class="num" style="color:#b91c1c">${absCount}</div></div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Student Name</th>
+              <th class="center">Login Time</th>
+              <th class="center">Login Status (+5 XP)</th>
+              <th class="center">Logout Time</th>
+              <th class="center">Logout Status (+5 XP)</th>
+              <th class="center">Total XP</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <div class="signature">Staff Instructor Signature</div>
+          <div class="signature">Academic Director Signature</div>
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+
+    const printWin = window.open('', '_blank');
+    if (printWin) {
+      printWin.document.write(html);
+      printWin.document.close();
+    }
+  };
+
+  // Print Classroom QR Code Poster
+  const handlePrintQrCodePoster = () => {
+    const courseName = selectedCourse?.name || 'Academic Course';
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Classroom QR Code Poster - ${courseName}</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 40px; color: #0f172a; background: white; }
+          .poster { border: 8px solid #c99c33; padding: 40px; border-radius: 24px; max-width: 600px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+          .logo { height: 80px; margin-bottom: 20px; }
+          h1 { margin: 0; color: #0f172a; font-size: 28px; font-weight: 900; }
+          h2 { margin: 10px 0 20px 0; color: #c99c33; font-size: 20px; font-weight: 700; }
+          .qr-img { width: 320px; height: 320px; margin: 20px auto; display: block; border: 4px solid #0f172a; border-radius: 16px; padding: 10px; }
+          .instructions { background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 15px; margin-top: 20px; font-size: 14px; color: #334155; }
+        </style>
+      </head>
+      <body>
+        <div class="poster">
+          <img src="https://rcppfmlyvackmemjousp.supabase.co/storage/v1/object/public/gallery-images/academylogom.svg" class="logo" alt="Logo" />
+          <h1>ACADEMY OF EXCELLENCE</h1>
+          <h2>${courseName} • Batch ${selectedBatchNumber}</h2>
+          <p style="font-size: 16px; font-weight: 700; color: #475569;">DAILY CLASSROOM ATTENDANCE SCANNER</p>
+          <img src="${qrDataUrl}" class="qr-img" alt="QR Code" />
+          <div class="instructions">
+            <strong>📲 How Students Scan:</strong><br/>
+            1. Open your Student Portal on your phone.<br/>
+            2. Tap <strong>Scan QR Attendance</strong>.<br/>
+            3. Point your camera at this code to log your daily attendance instantly!
+          </div>
+        </div>
+        <script>
+          window.onload = function() { window.print(); }
+        </script>
+      </body>
+      </html>
+    `;
+    const printWin = window.open('', '_blank');
+    if (printWin) {
+      printWin.document.write(html);
+      printWin.document.close();
     }
   };
 
@@ -456,17 +615,17 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                 </p>
               </div>
 
-              {/* Selectors & QR Button */}
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Selectors & QR / Print Buttons */}
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <button
                   onClick={() => setSubTab('qr_screen')}
                   style={{
-                    padding: '0.5rem 1.1rem',
+                    padding: '0.5rem 1rem',
                     borderRadius: '50px',
                     background: 'linear-gradient(135deg, #c99c33 0%, #a47c20 100%)',
                     color: 'white',
                     fontWeight: 800,
-                    fontSize: '0.85rem',
+                    fontSize: '0.82rem',
                     border: 'none',
                     cursor: 'pointer',
                     display: 'flex',
@@ -475,7 +634,45 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                     boxShadow: '0 4px 12px rgba(201, 156, 51, 0.3)'
                   }}
                 >
-                  <QrCode size={18} /> Classroom QR Code
+                  <QrCode size={16} /> Classroom QR Code
+                </button>
+
+                <button
+                  onClick={handlePrintQrCodePoster}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '50px',
+                    background: '#0f172a',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <Printer size={16} /> Print QR Poster
+                </button>
+
+                <button
+                  onClick={handlePrintAttendanceRegister}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '50px',
+                    background: '#15803d',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <Printer size={16} /> Print Register
                 </button>
 
                 <select
@@ -611,22 +808,32 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                           </td>
 
                           <td style={{ padding: '0.9rem 1rem', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
+                            <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                               <button
-                                onClick={() => handleQuickMarkAttendance(student, 10, 'present_full')}
-                                style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#16a34a', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
+                                onClick={() => handleQuickMarkAttendance(student, 5, 'present_half', 'on_time', 'pending')}
+                                title="Mark Morning Login On Time (+5 XP)"
+                                style={{ padding: '0.3rem 0.55rem', borderRadius: '6px', background: '#16a34a', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}
                               >
-                                +10 Pts
+                                +5 Login
                               </button>
                               <button
-                                onClick={() => handleQuickMarkAttendance(student, 5, 'present_half')}
-                                style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#d97706', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
+                                onClick={() => handleQuickMarkAttendance(student, 3, 'present_half', 'late', 'pending')}
+                                title="Mark Morning Login Late (+3 XP)"
+                                style={{ padding: '0.3rem 0.55rem', borderRadius: '6px', background: '#d97706', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}
                               >
-                                +5 Pts
+                                +3 Late
                               </button>
                               <button
-                                onClick={() => handleQuickMarkAttendance(student, 0, 'absent')}
-                                style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#dc2626', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
+                                onClick={() => handleQuickMarkAttendance(student, 10, 'present_full', 'on_time', 'on_time')}
+                                title="Mark Full Day Present (+10 XP)"
+                                style={{ padding: '0.3rem 0.55rem', borderRadius: '6px', background: '#2563eb', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}
+                              >
+                                +10 Full Day
+                              </button>
+                              <button
+                                onClick={() => handleQuickMarkAttendance(student, 0, 'absent', 'pending', 'pending')}
+                                title="Mark Absent (0 XP)"
+                                style={{ padding: '0.3rem 0.55rem', borderRadius: '6px', background: '#dc2626', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}
                               >
                                 Absent
                               </button>
