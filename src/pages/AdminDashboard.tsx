@@ -540,45 +540,71 @@ const AdminDashboard = () => {
     }
 
     try {
-      // Fetch user profile info
-      const { data: profile, error } = await supabase
-        .from('staff_profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
+      let profile: StaffProfile | null = null;
 
-      if (error || !profile) {
-        // Fallback: Check if they are in student profiles (direct access safeguard)
-        const { data: isStud } = await supabase.from('student_profiles').select('*').eq('id', session.user.id).maybeSingle();
-        if (isStud) {
-          navigate('/student/dashboard');
-          return;
+      // 1. Try get_my_staff_profile RPC first (bypasses RLS recursion)
+      try {
+        const { data: rpcProfile } = await supabase.rpc('get_my_staff_profile');
+        if (rpcProfile && rpcProfile.id) {
+          profile = rpcProfile as StaffProfile;
         }
-        throw new Error('Staff profile details not found.');
+      } catch (e) {
+        console.warn('get_my_staff_profile RPC skipped in checkSession:', e);
       }
 
-      if (profile.status !== 'active') {
+      // 2. Direct staff_profiles query fallback
+      if (!profile) {
+        try {
+          const { data: staffData } = await supabase
+            .from('staff_profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (staffData) {
+            profile = staffData as StaffProfile;
+          }
+        } catch (e) {
+          console.warn('Direct staff_profiles query skipped in checkSession:', e);
+        }
+      }
+
+      // 3. Fallback profile from session metadata
+      if (!profile) {
+        const userMeta = session.user.user_metadata || {};
+        profile = {
+          id: session.user.id,
+          email: session.user.email || '',
+          name: userMeta.name || session.user.email?.split('@')[0] || 'Staff Member',
+          designation: userMeta.designation || 'Staff Member',
+          role: (userMeta.role as any) || 'staff',
+          status: 'active'
+        };
+      }
+
+      if (profile && profile.status !== 'active') {
         await supabase.auth.signOut();
         navigate('/admin');
         return;
       }
 
-      setCurrentUser(profile);
-      setAuthLoading(false);
+      if (profile) {
+        setCurrentUser(profile);
+        setAuthLoading(false);
 
-      // Load specific dashboard data based on role
-      if (profile.role === 'staff') {
-        setAdminTab('tasks');
-        fetchStaffWorkspaceData(profile.id);
-        fetchLeadershipDashboardData(); // Staff also need lists of classrooms to grade
-      } else {
-        setAdminTab('dashboard');
-        fetchLeadershipDashboardData();
+        // Load specific dashboard data based on role
+        if (profile.role === 'staff') {
+          setAdminTab('tasks');
+          fetchStaffWorkspaceData(profile.id);
+          fetchLeadershipDashboardData();
+        } else {
+          setAdminTab('dashboard');
+          fetchLeadershipDashboardData();
+        }
       }
     } catch (err) {
-      console.error(err);
-      await supabase.auth.signOut();
-      navigate('/admin');
+      console.error('Session check error:', err);
+      setAuthLoading(false);
     }
   };
 

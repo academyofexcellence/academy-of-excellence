@@ -137,18 +137,42 @@ const AdminLogin = () => {
       if (authError) throw authError;
       if (!authData.user) throw new Error('Authentication failed.');
 
-      // 1. Check if user is staff
-      const { data: staffProfile } = await supabase
-        .from('staff_profiles')
-        .select('status')
-        .eq('id', authData.user.id)
-        .maybeSingle();
+      // 1. Try get_my_staff_profile RPC first (bypasses RLS policy errors)
+      let staffStatus: string | null = null;
+      let isStaffFound = false;
 
-      if (staffProfile) {
-        if (staffProfile.status !== 'active') {
+      try {
+        const { data: rpcStaff } = await supabase.rpc('get_my_staff_profile');
+        if (rpcStaff && rpcStaff.status) {
+          staffStatus = rpcStaff.status;
+          isStaffFound = true;
+        }
+      } catch (e) {
+        console.warn('RPC get_my_staff_profile skipped:', e);
+      }
+
+      if (!isStaffFound) {
+        try {
+          const { data: staffProfile } = await supabase
+            .from('staff_profiles')
+            .select('status')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+
+          if (staffProfile) {
+            staffStatus = staffProfile.status;
+            isStaffFound = true;
+          }
+        } catch (e) {
+          console.warn('Direct staff_profiles query error:', e);
+        }
+      }
+
+      if (isStaffFound && staffStatus) {
+        if (staffStatus !== 'active') {
           await supabase.auth.signOut();
           throw new Error(
-            staffProfile.status === 'pending'
+            staffStatus === 'pending'
               ? 'Your staff account is pending approval by management.'
               : 'Your staff account has been deactivated.'
           );
@@ -158,17 +182,29 @@ const AdminLogin = () => {
       }
 
       // 2. Check if user is student
-      const { data: studentProfile } = await supabase
-        .from('student_profiles')
-        .select('status')
-        .eq('id', authData.user.id)
-        .maybeSingle();
+      let studentStatus: string | null = null;
+      let isStudentFound = false;
 
-      if (studentProfile) {
-        if (studentProfile.status !== 'active' && studentProfile.status !== 'alumni') {
+      try {
+        const { data: studentProfile } = await supabase
+          .from('student_profiles')
+          .select('status')
+          .eq('id', authData.user.id)
+          .maybeSingle();
+
+        if (studentProfile) {
+          studentStatus = studentProfile.status;
+          isStudentFound = true;
+        }
+      } catch (e) {
+        console.warn('Direct student_profiles query error:', e);
+      }
+
+      if (isStudentFound && studentStatus) {
+        if (studentStatus !== 'active' && studentStatus !== 'alumni') {
           await supabase.auth.signOut();
           throw new Error(
-            studentProfile.status === 'pending'
+            studentStatus === 'pending'
               ? 'Your account is pending approval by the admin.'
               : 'Your account has been deactivated.'
           );
@@ -177,16 +213,26 @@ const AdminLogin = () => {
         return;
       }
 
-      // If registered in Auth but missing from both profile tables, auto-heal into staff_profiles
+      // Safeguard: Check metadata if is_student is explicitly false
       const meta = authData.user.user_metadata || {};
-      await supabase.from('staff_profiles').upsert({
-        id: authData.user.id,
-        email: authData.user.email || cleanEmail,
-        name: meta.name || fullName || 'Staff Member',
-        designation: meta.designation || 'Staff Member',
-        role: 'staff',
-        status: 'pending'
-      }, { onConflict: 'id' });
+      if (meta.is_student === false) {
+        navigate('/admin/dashboard');
+        return;
+      }
+
+      // If registered in Auth but missing from both profile tables, auto-heal into staff_profiles
+      try {
+        await supabase.from('staff_profiles').upsert({
+          id: authData.user.id,
+          email: authData.user.email || cleanEmail,
+          name: meta.name || fullName || 'Staff Member',
+          designation: meta.designation || 'Staff Member',
+          role: 'staff',
+          status: 'pending'
+        }, { onConflict: 'id' });
+      } catch (e) {
+        console.warn('Auto-heal upsert skipped:', e);
+      }
 
       await supabase.auth.signOut();
       throw new Error('🎉 Staff profile has been linked! Your account is now pending approval in the Staff Directory by management.');

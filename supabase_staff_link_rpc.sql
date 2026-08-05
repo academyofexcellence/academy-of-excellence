@@ -143,14 +143,38 @@ BEGIN
 END;
 $$;
 
--- 4. Clean Non-Recursive RLS Policies (Eliminates "Database error querying schema")
+-- 4. SECURITY DEFINER helper to fetch caller's staff profile with zero RLS policy recursion
+CREATE OR REPLACE FUNCTION public.get_my_staff_profile()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    res JSONB;
+BEGIN
+    SELECT to_jsonb(p) INTO res
+    FROM public.staff_profiles p
+    WHERE p.id = auth.uid();
+    
+    RETURN res;
+END;
+$$;
+
+-- 5. Clean Non-Recursive RLS Policies (Eliminates "Database error querying schema")
 ALTER TABLE public.staff_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.student_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Enable select for authenticated users" ON public.staff_profiles;
 CREATE POLICY "Enable select for authenticated users" 
 ON public.staff_profiles FOR SELECT 
+TO authenticated 
+USING (true);
+
+DROP POLICY IF EXISTS "Enable select for authenticated users" ON public.student_profiles;
+CREATE POLICY "Enable select for authenticated users" 
+ON public.student_profiles FOR SELECT 
 TO authenticated 
 USING (true);
 
