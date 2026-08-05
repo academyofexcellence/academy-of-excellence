@@ -146,6 +146,25 @@ export function StudentAttendanceScanner({ currentStudent, onAttendanceMarked }:
       return;
     }
 
+    let payload: any = null;
+    try {
+      if (codeOrPasskey.trim().startsWith('{')) {
+        payload = JSON.parse(codeOrPasskey);
+      }
+    } catch (e) {}
+
+    // Verify token type & batch matching if JSON payload is scanned
+    if (payload && payload.type) {
+      if (payload.type !== 'AOE_PERSISTENT_QR' && payload.type !== 'AOE_ATTENDANCE_TOKEN') {
+        setMessage({ type: 'error', text: 'Invalid QR Code. Please scan the official Academy of Excellence classroom QR poster.' });
+        return;
+      }
+      if (payload.batch && Number(payload.batch) !== Number(currentStudent.batch_number)) {
+        setMessage({ type: 'error', text: `This QR code is for Batch ${payload.batch}. You are registered in Batch ${currentStudent.batch_number}.` });
+        return;
+      }
+    }
+
     setLoading(true);
     setMessage(null);
 

@@ -80,14 +80,17 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
     activeStudents = studentList.filter(s => s.status === 'active' || !s.status);
   }
 
+  const [qrMode, setQrMode] = useState<'persistent' | 'daily'>('persistent');
+  const [passkeySeed, setPasskeySeed] = useState<number>(123456);
+
   useEffect(() => {
     fetchLogs();
   }, [selectedDate, selectedCourseId, selectedBatchNumber]);
 
-  // Regenerate live QR code
+  // Regenerate live / persistent QR code
   useEffect(() => {
     generateQrToken();
-  }, [selectedDate, selectedCourseId, selectedBatchNumber, qrType]);
+  }, [selectedDate, selectedCourseId, selectedBatchNumber, qrType, qrMode, passkeySeed]);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -107,27 +110,45 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
     }
   };
 
-  // Generate QR token with 6-digit daily passkey
+  // Generate QR token (Persistent Wall Poster vs Dynamic Daily Token)
   const generateQrToken = async () => {
     try {
-      const todayPasskey = Math.abs(
-        selectedDate.split('-').reduce((acc, part) => acc + parseInt(part), 0) * 98765
-      ).toString().slice(0, 6).padStart(6, '9');
+      let qrPayload = '';
+      if (qrMode === 'persistent') {
+        qrPayload = JSON.stringify({
+          type: 'AOE_PERSISTENT_QR',
+          course_id: selectedCourseId,
+          batch: selectedBatchNumber,
+          station: 'AOE_CLASSROOM_STATION',
+          passkey: String(passkeySeed)
+        });
+      } else {
+        const todayPasskey = Math.abs(
+          (selectedDate.split('-').reduce((acc, part) => acc + parseInt(part), 0) + passkeySeed) * 98765
+        ).toString().slice(0, 6).padStart(6, '9');
 
-      const qrPayload = JSON.stringify({
-        type: 'AOE_ATTENDANCE_TOKEN',
-        slot: qrType,
-        date: selectedDate,
-        course_id: selectedCourseId,
-        batch: selectedBatchNumber,
-        passkey: todayPasskey
-      });
+        qrPayload = JSON.stringify({
+          type: 'AOE_ATTENDANCE_TOKEN',
+          slot: qrType,
+          date: selectedDate,
+          course_id: selectedCourseId,
+          batch: selectedBatchNumber,
+          passkey: todayPasskey
+        });
+      }
 
-      const url = await QRCode.toDataURL(qrPayload, { width: 320, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
+      const url = await QRCode.toDataURL(qrPayload, { width: 340, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
       setQrDataUrl(url);
     } catch (err) {
       console.error('QR generation error:', err);
     }
+  };
+
+  const handleRegenerateCode = () => {
+    const newSeed = Math.floor(100000 + Math.random() * 900000);
+    setPasskeySeed(newSeed);
+    setMessage('✅ New Secret Passkey / QR Code Generated successfully!');
+    setTimeout(() => setMessage(''), 3000);
   };
 
   // Helper to extract decimal hours in IST (Asia/Kolkata UTC+5:30)
@@ -855,35 +876,83 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
       {subTab === 'qr_screen' && (
         <div className="glass-card" style={{ padding: '2rem', borderRadius: '16px', textAlign: 'center', background: '#0f172a', color: 'white' }}>
           
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+          {/* Mode Switcher: Persistent vs Daily */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
             <button
-              onClick={() => setQrType('check_in')}
+              onClick={() => setQrMode('persistent')}
               style={{
-                padding: '0.6rem 1.5rem',
-                borderRadius: '10px',
+                padding: '0.65rem 1.4rem',
+                borderRadius: '50px',
                 border: 'none',
-                background: qrType === 'check_in' ? '#22c55e' : 'rgba(255,255,255,0.1)',
+                background: qrMode === 'persistent' ? 'linear-gradient(135deg, #c99c33 0%, #a47c20 100%)' : 'rgba(255,255,255,0.1)',
                 color: 'white',
                 fontWeight: 800,
-                cursor: 'pointer'
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                boxShadow: qrMode === 'persistent' ? '0 4px 12px rgba(201, 156, 51, 0.4)' : 'none'
               }}
             >
-              ☀️ Morning Check-In QR (≤ 10:00 AM)
+              📌 Persistent Wall Poster (Never Expires)
             </button>
 
             <button
-              onClick={() => setQrType('check_out')}
+              onClick={() => setQrMode('daily')}
               style={{
-                padding: '0.6rem 1.5rem',
-                borderRadius: '10px',
+                padding: '0.65rem 1.4rem',
+                borderRadius: '50px',
                 border: 'none',
-                background: qrType === 'check_out' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+                background: qrMode === 'daily' ? '#2563eb' : 'rgba(255,255,255,0.1)',
                 color: 'white',
                 fontWeight: 800,
-                cursor: 'pointer'
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem'
               }}
             >
-              🌙 Afternoon Check-Out QR (≥ 04:00 PM)
+              ⚡ Live Daily Passkey Mode
+            </button>
+
+            <button
+              onClick={handleRegenerateCode}
+              style={{
+                padding: '0.65rem 1.2rem',
+                borderRadius: '50px',
+                border: '1px solid rgba(255,255,255,0.2)',
+                background: 'rgba(255,255,255,0.08)',
+                color: '#facc15',
+                fontWeight: 800,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <RefreshCw size={16} /> 🔄 Regenerate Secret Passkey
+            </button>
+
+            <button
+              onClick={handlePrintQrCodePoster}
+              style={{
+                padding: '0.65rem 1.2rem',
+                borderRadius: '50px',
+                border: 'none',
+                background: '#15803d',
+                color: 'white',
+                fontWeight: 800,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <Printer size={16} /> 🖨️ Print Wall Poster
             </button>
           </div>
 
@@ -896,17 +965,17 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
           </div>
 
           <div style={{ marginTop: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: qrType === 'check_in' ? '#4ade80' : '#60a5fa', margin: '0 0 0.5rem 0' }}>
-              {qrType === 'check_in' ? 'Scan to Check-In (On-Time before 10:00 AM)' : 'Scan to Check-Out (Full Day after 04:00 PM)'}
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#4ade80', margin: '0 0 0.5rem 0' }}>
+              {qrMode === 'persistent' ? '📌 Persistent Classroom QR Poster (Print & Display on Wall)' : '⚡ Live Passkey Mode'}
             </h3>
             <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 0 }}>
-              {selectedCourse?.name} • Batch {selectedBatchNumber} • Date: {selectedDate}
+              {selectedCourse?.name || 'Academic Course'} • Batch {selectedBatchNumber}
             </p>
 
             <div style={{ background: 'rgba(255,255,255,0.05)', padding: '0.75rem 1.5rem', borderRadius: '12px', display: 'inline-block', marginTop: '1rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.2rem' }}>6-DIGIT DAILY CLASSROOM PASSKEY</span>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.2rem' }}>CLASSROOM SECRET PASSKEY</span>
               <strong style={{ fontSize: '1.8rem', letterSpacing: '0.25em', color: '#facc15' }}>
-                {Math.abs(selectedDate.split('-').reduce((acc, part) => acc + parseInt(part), 0) * 98765).toString().slice(0, 6).padStart(6, '9')}
+                {passkeySeed}
               </strong>
             </div>
           </div>
