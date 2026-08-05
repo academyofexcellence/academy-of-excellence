@@ -428,132 +428,221 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
       </div>
 
       {/* --- SUB-TAB 1: DAILY REGISTER --- */}
-      {subTab === 'daily_register' && (
-        <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '16px' }}>
-          
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                Classroom Attendance Register ({selectedDate})
-              </h3>
-              <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
-                {selectedCourse?.name || 'Academic Course'} • Batch {selectedBatchNumber} ({activeStudents.length} Active Students)
-              </p>
+      {subTab === 'daily_register' && (() => {
+        const totalStudents = activeStudents.length;
+        const loggedInCount = activeStudents.filter(s => {
+          const log = attendanceLogs.find(l => l.student_id === s.id);
+          return log && (log.check_in_time || log.points_awarded > 0);
+        }).length;
+
+        const loggedOutCount = activeStudents.filter(s => {
+          const log = attendanceLogs.find(l => l.student_id === s.id);
+          return log && (log.check_out_time || log.points_awarded === 10);
+        }).length;
+
+        const pendingCount = Math.max(0, totalStudents - loggedInCount);
+
+        return (
+          <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '16px' }}>
+            
+            {/* Header Bar matching screenshot */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Calendar className="text-primary" size={22} /> Daily Attendance Sessions
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '0.3rem 0 0 0' }}>
+                  Date: <strong>{new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</strong> • Course: <strong>{selectedCourse?.name || 'Academic Course'}</strong> • Batch: <strong>{selectedBatchNumber}</strong>
+                </p>
+              </div>
+
+              {/* Selectors & QR Button */}
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setSubTab('qr_screen')}
+                  style={{
+                    padding: '0.5rem 1.1rem',
+                    borderRadius: '50px',
+                    background: 'linear-gradient(135deg, #c99c33 0%, #a47c20 100%)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    boxShadow: '0 4px 12px rgba(201, 156, 51, 0.3)'
+                  }}
+                >
+                  <QrCode size={18} /> Classroom QR Code
+                </button>
+
+                <select
+                  value={selectedCourseId}
+                  onChange={(e) => setSelectedCourseId(e.target.value)}
+                  style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600 }}
+                >
+                  {coursesList.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={selectedBatchNumber}
+                  onChange={(e) => setSelectedBatchNumber(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Batch #"
+                  style={{ width: '80px', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
+                />
+              </div>
             </div>
 
-            {/* Selectors */}
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <select
-                value={selectedCourseId}
-                onChange={(e) => setSelectedCourseId(e.target.value)}
-                style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-              >
-                {coursesList.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+            {/* 4 Summary Cards matching user screenshot */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div className="glass-card" style={{ padding: '1rem 1.25rem', borderRadius: '14px', background: 'linear-gradient(135deg, rgba(201,156,51,0.08), rgba(201,156,51,0.02))', border: '1px solid rgba(201,156,51,0.2)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Batch Roster</span>
+                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#c99c33', marginTop: '0.2rem' }}>{totalStudents}</div>
+              </div>
 
-              <input
-                type="text"
-                inputMode="numeric"
-                value={selectedBatchNumber}
-                onChange={(e) => setSelectedBatchNumber(e.target.value.replace(/[^0-9]/g, ''))}
-                placeholder="Batch #"
-                style={{ width: '80px', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700 }}
-              />
+              <div className="glass-card" style={{ padding: '1rem 1.25rem', borderRadius: '14px', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Login (Morning Scan)</span>
+                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#15803d', marginTop: '0.2rem' }}>
+                  {loggedInCount} <span style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 700 }}>({totalStudents > 0 ? Math.round((loggedInCount / totalStudents) * 100) : 0}%)</span>
+                </div>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1rem 1.25rem', borderRadius: '14px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Logout (Evening Scan)</span>
+                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#1d4ed8', marginTop: '0.2rem' }}>
+                  {loggedOutCount} <span style={{ fontSize: '0.85rem', color: '#1e40af', fontWeight: 700 }}>({totalStudents > 0 ? Math.round((loggedOutCount / totalStudents) * 100) : 0}%)</span>
+                </div>
+              </div>
+
+              <div className="glass-card" style={{ padding: '1rem 1.25rem', borderRadius: '14px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pending / Absent</span>
+                <div style={{ fontSize: '2rem', fontWeight: 900, color: '#b91c1c', marginTop: '0.2rem' }}>{pendingCount}</div>
+              </div>
             </div>
+
+            {activeStudents.length === 0 ? (
+              <div style={{ padding: '3rem 1.5rem', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1', color: '#64748b' }}>
+                No active students found in this course and batch. Select another course or batch above.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
+                      <th style={{ padding: '0.85rem 1rem', fontWeight: 800 }}>Student Name</th>
+                      <th style={{ padding: '0.85rem 1rem', fontWeight: 800, textAlign: 'center' }}>Login Time</th>
+                      <th style={{ padding: '0.85rem 1rem', fontWeight: 800, textAlign: 'center' }}>Login Status (+5 XP)</th>
+                      <th style={{ padding: '0.85rem 1rem', fontWeight: 800, textAlign: 'center' }}>Logout Time</th>
+                      <th style={{ padding: '0.85rem 1rem', fontWeight: 800, textAlign: 'center' }}>Logout Status (+5 XP)</th>
+                      <th style={{ padding: '0.85rem 1rem', fontWeight: 800, textAlign: 'center' }}>Total Attendance XP</th>
+                      <th style={{ padding: '0.85rem 1rem', fontWeight: 800, textAlign: 'right' }}>Quick Staff Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeStudents.map((student, idx) => {
+                      const log = attendanceLogs.find(l => l.student_id === student.id);
+                      const inTimeStr = log?.check_in_time
+                        ? new Date(log.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : '-';
+                      const outTimeStr = log?.check_out_time
+                        ? new Date(log.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : '-';
+
+                      const inStatus = log?.check_in_status || (log?.check_in_time ? 'on_time' : 'pending');
+                      const outStatus = log?.check_out_status || (log?.check_out_time ? 'on_time' : 'pending');
+                      const points = log?.points_awarded ?? 0;
+
+                      return (
+                        <tr key={student.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '0.9rem 1rem', fontWeight: 700, color: '#0f172a' }}>
+                            <span style={{ color: '#c99c33', fontWeight: 800, marginRight: '0.4rem' }}>#{idx + 1}</span>
+                            {student.name}
+                            {student.roll_number && <span style={{ color: '#64748b', fontSize: '0.75rem', marginLeft: '0.4rem', fontWeight: 500 }}>(Roll #{student.roll_number})</span>}
+                          </td>
+
+                          <td style={{ padding: '0.9rem 1rem', textAlign: 'center', fontWeight: 700, color: log?.check_in_time ? '#15803d' : '#94a3b8' }}>
+                            {inTimeStr}
+                          </td>
+
+                          <td style={{ padding: '0.9rem 1rem', textAlign: 'center' }}>
+                            {inStatus === 'on_time' ? (
+                              <span style={{ background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.65rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.75rem' }}>
+                                On Time (+5 XP)
+                              </span>
+                            ) : inStatus === 'late' ? (
+                              <span style={{ background: '#fef3c7', color: '#b45309', padding: '0.25rem 0.65rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.75rem' }}>
+                                Late (+3 XP)
+                              </span>
+                            ) : (
+                              <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '0.25rem 0.65rem', borderRadius: '50px', fontWeight: 600, fontSize: '0.75rem' }}>
+                                Not Logged In
+                              </span>
+                            )}
+                          </td>
+
+                          <td style={{ padding: '0.9rem 1rem', textAlign: 'center', fontWeight: 700, color: log?.check_out_time ? '#1d4ed8' : '#94a3b8' }}>
+                            {outTimeStr}
+                          </td>
+
+                          <td style={{ padding: '0.9rem 1rem', textAlign: 'center' }}>
+                            {outStatus === 'on_time' ? (
+                              <span style={{ background: '#dbeafe', color: '#1d4ed8', padding: '0.25rem 0.65rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.75rem' }}>
+                                On Time (+5 XP)
+                              </span>
+                            ) : outStatus === 'early' ? (
+                              <span style={{ background: '#ffedd5', color: '#c2410c', padding: '0.25rem 0.65rem', borderRadius: '50px', fontWeight: 800, fontSize: '0.75rem' }}>
+                                Early (+3 XP)
+                              </span>
+                            ) : (
+                              <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '0.25rem 0.65rem', borderRadius: '50px', fontWeight: 600, fontSize: '0.75rem' }}>
+                                Not Logged Out
+                              </span>
+                            )}
+                          </td>
+
+                          <td style={{ padding: '0.9rem 1rem', textAlign: 'center', fontWeight: 900, fontSize: '0.95rem', color: points === 10 ? '#16a34a' : (points === 5 ? '#b45309' : '#94a3b8') }}>
+                            +{points} XP
+                          </td>
+
+                          <td style={{ padding: '0.9rem 1rem', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => handleQuickMarkAttendance(student, 10, 'present_full')}
+                                style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#16a34a', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
+                              >
+                                +10 Pts
+                              </button>
+                              <button
+                                onClick={() => handleQuickMarkAttendance(student, 5, 'present_half')}
+                                style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#d97706', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
+                              >
+                                +5 Pts
+                              </button>
+                              <button
+                                onClick={() => handleQuickMarkAttendance(student, 0, 'absent')}
+                                style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#dc2626', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
+                              >
+                                Absent
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
           </div>
-
-          {activeStudents.length === 0 ? (
-            <div style={{ padding: '3rem 1.5rem', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1', color: '#64748b' }}>
-              No active students found in this course and batch. Select another course or batch above.
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#475569' }}>
-                    <th style={{ padding: '0.75rem 1rem' }}>Student Name</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Check-In Time</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Check-Out Time</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Today Status</th>
-                    <th style={{ padding: '0.75rem 1rem' }}>Points Awarded</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Quick Staff Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeStudents.map(student => {
-                    const log = attendanceLogs.find(l => l.student_id === student.id);
-                    const checkInStr = log?.check_in_time ? new Date(log.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
-                    const checkOutStr = log?.check_out_time ? new Date(log.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
-                    const points = log ? log.points_awarded : 0;
-
-                    return (
-                      <tr key={student.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#0f172a' }}>
-                          {student.name}
-                          {student.roll_number && <span style={{ color: '#64748b', fontSize: '0.75rem', marginLeft: '0.4rem', fontWeight: 500 }}>(Roll #{student.roll_number})</span>}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem', color: log?.check_in_time ? '#15803d' : '#94a3b8', fontWeight: log?.check_in_time ? 700 : 400 }}>
-                          {checkInStr}
-                          {log?.check_in_status === 'on_time' && <span style={{ marginLeft: '0.3rem', color: '#16a34a', fontSize: '0.7rem' }}>✓ On Time</span>}
-                          {log?.check_in_status === 'late' && <span style={{ marginLeft: '0.3rem', color: '#d97706', fontSize: '0.7rem' }}>⚠ Late</span>}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem', color: log?.check_out_time ? '#15803d' : '#94a3b8', fontWeight: log?.check_out_time ? 700 : 400 }}>
-                          {checkOutStr}
-                          {log?.check_out_status === 'on_time' && <span style={{ marginLeft: '0.3rem', color: '#16a34a', fontSize: '0.7rem' }}>✓ Full Day</span>}
-                          {log?.check_out_status === 'early' && <span style={{ marginLeft: '0.3rem', color: '#dc2626', fontSize: '0.7rem' }}>⚠ Early</span>}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem' }}>
-                          {log?.status === 'present_full' ? (
-                            <span style={{ background: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 800 }}>Present (Full Day)</span>
-                          ) : log?.status === 'present_half' ? (
-                            <span style={{ background: 'rgba(217, 119, 6, 0.1)', color: '#b45309', padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 800 }}>Half Day / Late</span>
-                          ) : (
-                            <span style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', padding: '0.2rem 0.55rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 800 }}>Absent / Unmarked</span>
-                          )}
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: points === 10 ? '#16a34a' : (points === 5 ? '#b45309' : '#94a3b8') }}>
-                          +{points} XP
-                        </td>
-
-                        <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end' }}>
-                            <button
-                              onClick={() => handleQuickMarkAttendance(student, 10, 'present_full')}
-                              style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#16a34a', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
-                            >
-                              +10 Pts
-                            </button>
-                            <button
-                              onClick={() => handleQuickMarkAttendance(student, 5, 'present_half')}
-                              style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#d97706', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
-                            >
-                              +5 Pts
-                            </button>
-                            <button
-                              onClick={() => handleQuickMarkAttendance(student, 0, 'absent')}
-                              style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#dc2626', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}
-                            >
-                              Absent
-                            </button>
-                          </div>
-                        </td>
-
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-        </div>
-      )}
+        );
+      })()}
 
       {/* --- SUB-TAB 2: CLASSROOM QR SCREEN --- */}
       {subTab === 'qr_screen' && (
