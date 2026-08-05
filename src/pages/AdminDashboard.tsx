@@ -534,7 +534,9 @@ const AdminDashboard = () => {
 
   const checkSession = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const fallbackUserRaw = localStorage.getItem('aoe_fallback_user');
+    
+    if (!session && !fallbackUserRaw) {
       navigate('/admin');
       return;
     }
@@ -542,18 +544,38 @@ const AdminDashboard = () => {
     try {
       let profile: StaffProfile | null = null;
 
-      // 1. Try get_my_staff_profile RPC first (bypasses RLS recursion)
-      try {
-        const { data: rpcProfile } = await supabase.rpc('get_my_staff_profile');
-        if (rpcProfile && rpcProfile.id) {
-          profile = rpcProfile as StaffProfile;
+      if (fallbackUserRaw) {
+        try {
+          const parsed = JSON.parse(fallbackUserRaw);
+          if (parsed && parsed.user_id) {
+            profile = {
+              id: parsed.user_id,
+              email: parsed.email || '',
+              name: parsed.name || 'Staff Member',
+              designation: 'Staff Member',
+              role: (parsed.role as any) || 'staff',
+              status: parsed.status || 'active'
+            };
+          }
+        } catch (e) {
+          console.warn('Error parsing fallback user:', e);
         }
-      } catch (e) {
-        console.warn('get_my_staff_profile RPC skipped in checkSession:', e);
+      }
+
+      // 1. Try get_my_staff_profile RPC if session exists
+      if (!profile && session) {
+        try {
+          const { data: rpcProfile } = await supabase.rpc('get_my_staff_profile');
+          if (rpcProfile && rpcProfile.id) {
+            profile = rpcProfile as StaffProfile;
+          }
+        } catch (e) {
+          console.warn('get_my_staff_profile RPC skipped in checkSession:', e);
+        }
       }
 
       // 2. Direct staff_profiles query fallback
-      if (!profile) {
+      if (!profile && session) {
         try {
           const { data: staffData } = await supabase
             .from('staff_profiles')
@@ -570,7 +592,7 @@ const AdminDashboard = () => {
       }
 
       // 3. Fallback profile from session metadata
-      if (!profile) {
+      if (!profile && session) {
         const userMeta = session.user.user_metadata || {};
         profile = {
           id: session.user.id,
@@ -584,6 +606,7 @@ const AdminDashboard = () => {
 
       if (profile && profile.status !== 'active') {
         await supabase.auth.signOut();
+        localStorage.removeItem('aoe_fallback_user');
         navigate('/admin');
         return;
       }
@@ -609,6 +632,7 @@ const AdminDashboard = () => {
   };
 
   const handleLogout = async () => {
+    localStorage.removeItem('aoe_fallback_user');
     await supabase.auth.signOut();
     navigate('/admin');
   };

@@ -135,6 +135,29 @@ const AdminLogin = () => {
       });
 
       if (authError) {
+        // Fallback 1: Try custom_staff_login RPC which bypasses GoTrue Auth schema errors
+        try {
+          const { data: customLogin, error: rpcErr } = await supabase.rpc('custom_staff_login', {
+            user_email: cleanEmail,
+            user_password: cleanPassword
+          });
+
+          if (!rpcErr && customLogin?.success) {
+            if (customLogin.status !== 'active') {
+              throw new Error(
+                customLogin.status === 'pending'
+                  ? 'Your staff account is pending approval by management.'
+                  : 'Your staff account has been deactivated.'
+              );
+            }
+            localStorage.setItem('aoe_fallback_user', JSON.stringify(customLogin));
+            navigate('/admin/dashboard');
+            return;
+          }
+        } catch (rpcE: any) {
+          if (rpcE.message && !rpcE.message.includes('custom_staff_login')) throw rpcE;
+        }
+
         if (authError.message?.toLowerCase().includes('database error querying schema') || authError.message?.toLowerCase().includes('schema')) {
           throw new Error('⚠️ Supabase Database permissions patch required! Please run the 1-step SQL script (FIX_DATABASE_SCHEMA_ERROR.sql) in your Supabase SQL Editor once to grant schema permissions to your database.');
         }
