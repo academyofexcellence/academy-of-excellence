@@ -10,10 +10,28 @@ interface AttendanceHubProps {
 }
 
 export default function AttendanceHub({ coursesList, studentList }: AttendanceHubProps) {
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(coursesList[0]?.id || '');
-  const [selectedBatchNumber, setSelectedBatchNumber] = useState<number | string>(26);
+  // Dynamically detect default course & batch from studentList
+  const defaultCourseId = coursesList[0]?.id || studentList[0]?.course_id || '';
+  const foundBatches = Array.from(new Set(studentList.map(s => Number(s.batch_number)))).filter(Boolean).sort((a, b) => a - b);
+  const defaultBatch = foundBatches.length > 0 ? foundBatches[0] : 26;
+
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(defaultCourseId);
+  const [selectedBatchNumber, setSelectedBatchNumber] = useState<number | string>(defaultBatch);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [subTab, setSubTab] = useState<'qr_screen' | 'daily_register' | 'history_logs' | 'test_simulator'>('daily_register');
+
+  // Auto-align selectedCourseId & selectedBatchNumber when props update
+  useEffect(() => {
+    if (coursesList.length > 0 && !selectedCourseId) {
+      setSelectedCourseId(coursesList[0].id);
+    }
+    if (studentList.length > 0) {
+      const batches = Array.from(new Set(studentList.map(s => Number(s.batch_number)))).filter(Boolean).sort((a, b) => a - b);
+      if (batches.length > 0 && !batches.includes(Number(selectedBatchNumber))) {
+        setSelectedBatchNumber(batches[0]);
+      }
+    }
+  }, [coursesList, studentList]);
 
   // Logs & Loading
   const [attendanceLogs, setAttendanceLogs] = useState<DailyAttendanceLog[]>([]);
@@ -44,9 +62,23 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
   } | null>(null);
 
   const selectedCourse = coursesList.find(c => c.id === selectedCourseId);
-  const activeStudents = studentList.filter(
-    s => s.course_id === selectedCourseId && Number(s.batch_number) === Number(selectedBatchNumber) && s.status === 'active'
+
+  // Unstoppable Active Student Filtering (With Resilient Fallbacks)
+  let activeStudents = studentList.filter(
+    s => (s.course_id === selectedCourseId || !selectedCourseId) &&
+         (Number(s.batch_number) === Number(selectedBatchNumber) || !selectedBatchNumber) &&
+         s.status === 'active'
   );
+
+  // Fallback 1: If no exact batch match, show all active students for selected course
+  if (activeStudents.length === 0 && selectedCourseId) {
+    activeStudents = studentList.filter(s => s.course_id === selectedCourseId && s.status === 'active');
+  }
+
+  // Fallback 2: If still empty, show all active students in the entire academy
+  if (activeStudents.length === 0) {
+    activeStudents = studentList.filter(s => s.status === 'active' || !s.status);
+  }
 
   useEffect(() => {
     fetchLogs();

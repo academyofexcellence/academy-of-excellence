@@ -6,7 +6,6 @@ import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import StudentDashboard from './pages/StudentDashboard';
 import VerifyCertificate from './pages/VerifyCertificate';
-import NetworkSyncBanner from './components/NetworkSyncBanner';
 import { Menu, X } from 'lucide-react';
 
 const Navigation = () => {
@@ -75,7 +74,6 @@ const Navigation = () => {
 function App() {
   return (
     <Router>
-      <NetworkSyncBanner />
       <Navigation />
       <Routes>
         <Route path="/" element={<Home />} />
