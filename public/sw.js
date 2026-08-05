@@ -1,20 +1,31 @@
 // Service Worker for Academy of Excellence PWA
-const CACHE_NAME = 'aoe-portal-cache-v1';
+const CACHE_NAME = 'aoe-portal-cache-v2026.08.05';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Purging old Service Worker cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
-// Network-first fetch fallback strategy for offline checks
+// Network-first fetch strategy for fresh content delivery
 self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
-        return caches.match('/admin') || caches.match('/');
+        return caches.match(event.request) || caches.match('/admin') || caches.match('/');
       })
     );
   } else {
