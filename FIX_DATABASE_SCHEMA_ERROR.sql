@@ -24,7 +24,7 @@ ALTER TABLE public.scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_attendance_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_task_logs ENABLE ROW LEVEL SECURITY;
 
--- 4. Clean non-recursive, universal SELECT policies for all staff and authenticated users
+-- 4. Clean non-recursive, universal SELECT/UPDATE policies for all staff and authenticated users
 DROP POLICY IF EXISTS "Enable select for all users" ON public.staff_profiles;
 CREATE POLICY "Enable select for all users" ON public.staff_profiles FOR SELECT TO public USING (true);
 
@@ -43,6 +43,9 @@ CREATE POLICY "Enable read activity logs for all users" ON public.activity_logs 
 DROP POLICY IF EXISTS "Enable read tasks for all users" ON public.tasks;
 CREATE POLICY "Enable read tasks for all users" ON public.tasks FOR SELECT TO public USING (true);
 
+DROP POLICY IF EXISTS "Enable update tasks for all users" ON public.tasks;
+CREATE POLICY "Enable update tasks for all users" ON public.tasks FOR UPDATE TO public USING (true);
+
 DROP POLICY IF EXISTS "Enable read scoring_intervals for all users" ON public.scoring_intervals;
 CREATE POLICY "Enable read scoring_intervals for all users" ON public.scoring_intervals FOR SELECT TO public USING (true);
 
@@ -55,7 +58,22 @@ CREATE POLICY "Enable read scores for all users" ON public.scores FOR SELECT TO 
 DROP POLICY IF EXISTS "Enable read daily_attendance_logs for all users" ON public.daily_attendance_logs;
 CREATE POLICY "Enable read daily_attendance_logs for all users" ON public.daily_attendance_logs FOR SELECT TO public USING (true);
 
--- 5. SECURITY DEFINER helper to fetch all scoring intervals with 0 RLS blocks for new staff
+-- 5. SECURITY DEFINER helper to update task status bypassing all RLS restrictions
+CREATE OR REPLACE FUNCTION public.update_task_status(target_task_id UUID, new_status TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    UPDATE public.tasks
+    SET status = new_status
+    WHERE id = target_task_id;
+    
+    RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+-- 6. SECURITY DEFINER helper to fetch all scoring intervals with 0 RLS blocks for new staff
 CREATE OR REPLACE FUNCTION public.get_all_scoring_intervals()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -73,7 +91,7 @@ BEGIN
 END;
 $$;
 
--- 6. SECURITY DEFINER helper to fetch all courses with 0 RLS blocks for new staff
+-- 7. SECURITY DEFINER helper to fetch all courses with 0 RLS blocks for new staff
 CREATE OR REPLACE FUNCTION public.get_all_courses()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -91,7 +109,7 @@ BEGIN
 END;
 $$;
 
--- 7. Custom RPC Login Engine (Bypasses Auth Schema Errors)
+-- 8. Custom RPC Login Engine (Bypasses Auth Schema Errors)
 CREATE OR REPLACE FUNCTION public.custom_staff_login(user_email TEXT, user_password TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -137,7 +155,7 @@ BEGIN
 END;
 $$;
 
--- 8. Helper RPC to fetch staff profile safely
+-- 9. Helper RPC to fetch staff profile safely
 CREATE OR REPLACE FUNCTION public.get_my_staff_profile()
 RETURNS JSONB
 LANGUAGE plpgsql

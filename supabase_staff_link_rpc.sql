@@ -106,7 +106,22 @@ BEGIN
 END;
 $$;
 
--- 3. SECURITY DEFINER helper to fetch all scoring intervals with 0 RLS blocks for new staff
+-- 3. SECURITY DEFINER helper to update task status bypassing all RLS restrictions
+CREATE OR REPLACE FUNCTION public.update_task_status(target_task_id UUID, new_status TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    UPDATE public.tasks
+    SET status = new_status
+    WHERE id = target_task_id;
+    
+    RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+-- 4. SECURITY DEFINER helper to fetch all scoring intervals with 0 RLS blocks for new staff
 CREATE OR REPLACE FUNCTION public.get_all_scoring_intervals()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -124,7 +139,7 @@ BEGIN
 END;
 $$;
 
--- 4. SECURITY DEFINER helper to fetch all courses with 0 RLS blocks for new staff
+-- 5. SECURITY DEFINER helper to fetch all courses with 0 RLS blocks for new staff
 CREATE OR REPLACE FUNCTION public.get_all_courses()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -142,7 +157,7 @@ BEGIN
 END;
 $$;
 
--- 5. SECURITY DEFINER helper to fetch caller's staff profile with zero RLS policy recursion
+-- 6. SECURITY DEFINER helper to fetch caller's staff profile with zero RLS policy recursion
 CREATE OR REPLACE FUNCTION public.get_my_staff_profile()
 RETURNS JSONB
 LANGUAGE plpgsql

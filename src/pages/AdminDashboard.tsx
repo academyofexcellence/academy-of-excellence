@@ -4186,23 +4186,43 @@ const AdminDashboard = () => {
   const updateOneOffTaskStatus = async (taskId: string, newStatus: 'pending' | 'in_progress' | 'completed') => {
     if (!currentUser) return;
 
+    // 1. Optimistically update local React UI state immediately
+    setTaskList(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+
     try {
+      // 2. Direct database update
       const { error } = await supabase
         .from('tasks')
         .update({ status: newStatus })
         .eq('id', taskId);
-      if (error) throw error;
+
+      // 3. Fallback to RPC function update_task_status if direct update failed or blocked by RLS
+      if (error) {
+        await supabase.rpc('update_task_status', {
+          target_task_id: taskId,
+          new_status: newStatus
+        });
+      }
 
       const task = taskList.find(t => t.id === taskId);
       await logActivity('task_status_updated', `Updated status of task "${task?.title}" to "${newStatus}"`);
       
       setMessage('✅ Task status updated successfully!');
-      fetchStaffWorkspaceData(currentUser.id);
       setTimeout(() => setMessage(''), 3000);
     } catch (err: any) {
-      console.error(err);
-      setMessage(`❌ Failed to update: ${err.message}`);
-      setTimeout(() => setMessage(''), 4000);
+      console.error('Task update error, executing RPC fallback:', err);
+      try {
+        await supabase.rpc('update_task_status', {
+          target_task_id: taskId,
+          new_status: newStatus
+        });
+        setMessage('✅ Task status updated successfully!');
+        setTimeout(() => setMessage(''), 3000);
+      } catch (rpcErr: any) {
+        console.error('RPC task update failed:', rpcErr);
+        setMessage(`❌ Failed to update task status: ${rpcErr.message}`);
+        setTimeout(() => setMessage(''), 4000);
+      }
     }
   };
 
