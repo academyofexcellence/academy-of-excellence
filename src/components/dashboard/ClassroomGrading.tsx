@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { ensureValidUuid } from '../../pages/AdminDashboard';
 import QRCode from 'qrcode';
 import { 
   CheckCircle2, 
@@ -303,7 +304,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
 
       await supabase.from('scores').upsert({
         student_id: editingLog.student_id,
-        interval_id: activeInterval?.id,
+        interval_id: ensureValidUuid(activeInterval?.id),
         score_type: 'attendance',
         points: totalPts,
         max_points: 10,

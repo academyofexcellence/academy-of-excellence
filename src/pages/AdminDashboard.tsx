@@ -45,6 +45,13 @@ import CertificateHub from '../components/dashboard/CertificateHub';
 import AttendanceHub from '../components/dashboard/AttendanceHub';
 import AccountingHub from '../components/dashboard/AccountingHub';
 
+export const ensureValidUuid = (idStr?: string | null): string => {
+  if (!idStr) return '00000000-0000-0000-0000-000000000000';
+  const match = idStr.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (match) return match[0];
+  return '00000000-0000-0000-0000-000000000000';
+};
+
 interface StaffProfile {
   id: string;
   email: string;
@@ -1264,7 +1271,7 @@ const AdminDashboard = () => {
     if (!active && courses.length > 0) {
       const defaultCourse = courses.find(c => c.id === filterCourse) || courses[0];
       active = {
-        id: `default-${defaultCourse.id}-${currentBatchNum || 27}`,
+        id: ensureValidUuid(defaultCourse.id),
         course_id: defaultCourse.id,
         batch_number: currentBatchNum || 27,
         name: `${defaultCourse.name} (Batch ${currentBatchNum || 27})`,
@@ -1546,7 +1553,7 @@ const AdminDashboard = () => {
         const { error } = await supabase.from('scores').upsert([
           {
             student_id: studentId,
-            interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+            interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
             score_type: scoreType,
             points: pointsMap[scoreType],
             max_points: pointsMap[scoreType],
@@ -1704,7 +1711,7 @@ const AdminDashboard = () => {
           .insert([
             {
               student_id: studentId,
-              interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+              interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
               score_type: scoreType,
               points: pointsMap[scoreType as 'daily_vocab'],
               max_points: pointsMap[scoreType as 'daily_vocab'],
@@ -1790,7 +1797,7 @@ const AdminDashboard = () => {
           .insert([
             {
               student_id: studentId,
-              interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+              interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
               score_type: 'attendance',
               points: points,
               max_points: points,
@@ -1865,7 +1872,7 @@ const AdminDashboard = () => {
           const { error: insertError } = await supabase.from('scores').insert([
             {
               student_id: studentId,
-              interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+              interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
               score_type: 'penalty',
               points: -2,
               max_points: 0,
@@ -1969,7 +1976,7 @@ const AdminDashboard = () => {
             .insert([
               {
                 student_id: studentId,
-                interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+                interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
                 points: pointsValue,
                 max_points: 10,
                 score_type: 'attendance',
@@ -2045,7 +2052,7 @@ const AdminDashboard = () => {
             .insert([
               {
                 student_id: studentId,
-                interval_id: targetInterval ? targetInterval.id : activeInterval.id,
+                interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
                 points: pointsValue,
                 max_points: 10,
                 score_type: 'custom',
