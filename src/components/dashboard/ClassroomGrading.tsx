@@ -358,8 +358,17 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
     return !isCurrentBatch && a.status === 'pending';
   });
 
+  const parseBatchNumber = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const cleaned = String(val).replace(/[^0-9]/g, '');
+    return cleaned ? parseInt(cleaned, 10) : 0;
+  };
+
   const filteredActiveStudents = studentList.filter(
-    s => s.course_id === filterCourse && s.batch_number === parseInt(filterBatch) && s.status === 'active'
+    s => s.course_id === filterCourse &&
+         parseBatchNumber(s.batch_number) === parseBatchNumber(filterBatch) &&
+         s.status !== 'pending' && s.status !== 'inactive'
   );
   
   const sortedFilteredActiveStudents = [...filteredActiveStudents].sort((a, b) => {
@@ -418,13 +427,38 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
 
         {/* Quick-Access Row of Active Batches */}
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {intervalsList.filter(i => i.is_active).length === 0 ? (
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
-              No live scoring periods running. Create one in settings.
-            </span>
+          {intervalsList.length === 0 ? (
+            courses.map(course => (
+              <button
+                key={course.id}
+                onClick={() => {
+                  setFilterCourse(course.id);
+                  setFilterBatch('27');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.45rem 1rem',
+                  borderRadius: '50px',
+                  border: '1px solid',
+                  borderColor: filterCourse === course.id ? 'var(--primary)' : 'rgba(0, 0, 0, 0.08)',
+                  background: filterCourse === course.id ? 'rgba(201, 156, 51, 0.06)' : 'white',
+                  color: filterCourse === course.id ? 'var(--primary-dark)' : 'var(--text-muted)',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer'
+                }}
+              >
+                🎓 {course.name} (B-27)
+              </button>
+            ))
           ) : (
-            intervalsList.filter(i => i.is_active).map(interval => {
-              const isSelected = filterCourse === interval.course_id && parseInt(filterBatch) === interval.batch_number;
+            (intervalsList.filter(i => i.is_active).length > 0
+              ? intervalsList.filter(i => i.is_active)
+              : intervalsList
+            ).map(interval => {
+              const isSelected = filterCourse === interval.course_id && parseBatchNumber(filterBatch) === parseBatchNumber(interval.batch_number);
               return (
                 <button
                   key={interval.id}
@@ -487,8 +521,8 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
                 Scoreboard: {activeInterval.name}
               </span>
             ) : (
-              <span style={{ fontSize: '0.75rem', background: 'rgba(239,68,68,0.1)', color: '#dc2626', padding: '0.25rem 0.6rem', borderRadius: '50px', fontWeight: 700, display: 'flex', alignItems: 'center' }}>
-                ⚠️ Inactive Term
+              <span style={{ fontSize: '0.75rem', background: 'rgba(59,130,246,0.1)', color: '#2563eb', padding: '0.25rem 0.6rem', borderRadius: '50px', fontWeight: 700, display: 'flex', alignItems: 'center' }}>
+                🎓 Batch {filterBatch} Classroom
               </span>
             )}
           </div>
@@ -707,11 +741,7 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
       )}
 
       {/* Tab Panels */}
-      {!activeInterval ? (
-        <div className="glass-card text-center" style={{ padding: '3rem', border: '1px solid rgba(239,68,68,0.15)' }}>
-          <p style={{ color: '#dc2626', fontWeight: 600 }}>⚠️ Select an active course and batch, or configure a scoring period in settings.</p>
-        </div>
-      ) : (
+      {true && (
         <>
           {subTab === 'grading' && (
             <div>

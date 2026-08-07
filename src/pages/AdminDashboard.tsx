@@ -1206,13 +1206,29 @@ const AdminDashboard = () => {
     }
   }, [selectedConfigIntervalId, intervalsList]);
 
+  const parseBatchNumber = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const cleaned = String(val).replace(/[^0-9]/g, '');
+    return cleaned ? parseInt(cleaned, 10) : 0;
+  };
+
   const loadClassroomActiveInterval = () => {
+    const currentBatchNum = parseBatchNumber(filterBatch);
+
     // 1. First check if current filterCourse & filterBatch has an active interval
     let active = intervalsList.find(
-      i => i.course_id === filterCourse && i.batch_number === parseInt(filterBatch) && i.is_active
+      i => i.course_id === filterCourse && parseBatchNumber(i.batch_number) === currentBatchNum && i.is_active
     );
 
-    // 2. If not, auto-detect ANY active live interval across all courses/batches
+    // 2. If not, check if current filterCourse & filterBatch has ANY interval
+    if (!active) {
+      active = intervalsList.find(
+        i => i.course_id === filterCourse && parseBatchNumber(i.batch_number) === currentBatchNum
+      );
+    }
+
+    // 3. If not, auto-detect ANY active live interval across all courses/batches
     if (!active) {
       const anyActive = intervalsList.find(i => i.is_active);
       if (anyActive) {
@@ -1222,7 +1238,7 @@ const AdminDashboard = () => {
       }
     }
 
-    // 3. Fallback: If no interval has is_active set to true, select the most recent interval
+    // 4. Fallback: If no interval matches, select the most recent interval
     if (!active && intervalsList.length > 0) {
       const latest = intervalsList[0];
       setFilterCourse(latest.course_id);
@@ -1230,21 +1246,29 @@ const AdminDashboard = () => {
       active = latest;
     }
 
+    // 5. Ultimate Fallback: Create a synthetic active interval object so no staff is EVER blocked!
+    if (!active && courses.length > 0) {
+      const defaultCourse = courses.find(c => c.id === filterCourse) || courses[0];
+      active = {
+        id: `default-${defaultCourse.id}-${currentBatchNum || 27}`,
+        course_id: defaultCourse.id,
+        batch_number: currentBatchNum || 27,
+        name: `${defaultCourse.name} (Batch ${currentBatchNum || 27})`,
+        is_active: true,
+        total_working_days: 20,
+        total_vocab_tasks: 20,
+        total_sentences_tasks: 20,
+        total_vlog_tasks: 4,
+        total_reaction_tasks: 4,
+        total_hadithul_tasks: 4,
+        created_at: new Date().toISOString()
+      } as ScoringInterval;
+    }
+
     if (active) {
       setActiveInterval(active);
       setSelectedLeaderboardInterval(active.id);
       setSelectedConfigIntervalId(active.id);
-    } else {
-      setActiveInterval(null);
-      setSelectedLeaderboardInterval('');
-      setScoresList([]);
-      
-      const courseInts = intervalsList.filter(i => i.course_id === filterCourse && i.batch_number === parseInt(filterBatch));
-      if (courseInts.length > 0) {
-        setSelectedConfigIntervalId(courseInts[0].id);
-      } else {
-        setSelectedConfigIntervalId('');
-      }
     }
   };
 
