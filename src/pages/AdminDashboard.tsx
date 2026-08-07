@@ -653,6 +653,20 @@ const AdminDashboard = () => {
     }
   };
 
+  const applyTaskStatusCache = (tasksList: Task[]): Task[] => {
+    return tasksList.map(t => {
+      try {
+        const cached = localStorage.getItem(`aoe_task_status_${t.id}`);
+        if (cached === 'pending' || cached === 'in_progress' || cached === 'completed') {
+          return { ...t, status: cached as any };
+        }
+      } catch (e) {
+        // ignore localStorage errors
+      }
+      return t;
+    });
+  };
+
   // --- STAFF WORKSPACE FETCHES ---
   const fetchStaffWorkspaceData = async (staffId: string) => {
     try {
@@ -667,7 +681,7 @@ const AdminDashboard = () => {
         .eq('assigned_to', staffId)
         .order('created_at', { ascending: false });
 
-      if (tasks) setTaskList(tasks);
+      if (tasks) setTaskList(applyTaskStatusCache(tasks));
 
       const { data: logs } = await supabase
         .from('daily_task_logs')
@@ -703,7 +717,7 @@ const AdminDashboard = () => {
           staff_profiles:assigned_to (name, designation)
         `)
         .order('created_at', { ascending: false });
-      if (tasks) setTaskList(tasks);
+      if (tasks) setTaskList(applyTaskStatusCache(tasks));
     } catch (e) {
       console.warn('Error loading tasks:', e);
     }
@@ -4185,6 +4199,12 @@ const AdminDashboard = () => {
 
   const updateOneOffTaskStatus = async (taskId: string, newStatus: 'pending' | 'in_progress' | 'completed') => {
     if (!currentUser) return;
+
+    try {
+      localStorage.setItem(`aoe_task_status_${taskId}`, newStatus);
+    } catch (e) {
+      console.warn('localStorage save failed:', e);
+    }
 
     // 1. Optimistically update local React UI state immediately
     setTaskList(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
