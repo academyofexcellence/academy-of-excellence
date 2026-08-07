@@ -150,15 +150,23 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
     }
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
   // Filter students roster
   const filteredStudents = studentList.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(studentSearch.toLowerCase()) || 
                           student.email.toLowerCase().includes(studentSearch.toLowerCase());
     const matchesCourse = studentFilterCourse ? student.course_id === studentFilterCourse : true;
-    const matchesBatch = studentFilterBatch ? student.batch_number === parseInt(studentFilterBatch) : true;
+    const matchesBatch = studentFilterBatch ? String(student.batch_number).replace(/[^0-9]/g, '') === String(studentFilterBatch).replace(/[^0-9]/g, '') : true;
     const matchesStatus = studentFilterStatus ? student.status === studentFilterStatus : true;
     return matchesSearch && matchesCourse && matchesBatch && matchesStatus;
   });
+
+  const totalStudentsCount = filteredStudents.length;
+  const totalPages = Math.ceil(totalStudentsCount / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedStudents = filteredStudents.slice(startIndex, startIndex + pageSize);
 
   const pendingStaffCount = staffList.filter(s => s.status === 'pending').length;
 
@@ -336,14 +344,14 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredStudents.length === 0 ? (
+                {paginatedStudents.length === 0 ? (
                   <tr>
                     <td colSpan={8} style={{ padding: '2rem 0.5rem', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                       No students found matching your filters.
                     </td>
                   </tr>
                 ) : (
-                  filteredStudents.map(student => (
+                  paginatedStudents.map(student => (
                     <StudentRow 
                       key={student.id} 
                       student={student} 
@@ -357,6 +365,78 @@ export const DirectoryHub: React.FC<DirectoryHubProps> = ({
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Pagination Controls Footer */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: '1.2rem',
+            paddingTop: '1rem',
+            borderTop: '1px solid rgba(0,0,0,0.06)',
+            flexWrap: 'wrap',
+            gap: '1rem',
+            fontSize: '0.82rem',
+            color: 'var(--text-muted)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <span>Show</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                style={{ padding: '0.25rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '0.8rem', outline: 'none', background: 'white' }}
+              >
+                <option value={15}>15</option>
+                <option value={30}>30</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span>per page • Showing <strong>{totalStudentsCount === 0 ? 0 : startIndex + 1}</strong> - <strong>{Math.min(startIndex + pageSize, totalStudentsCount)}</strong> of <strong>{totalStudentsCount}</strong> students</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(0,0,0,0.12)',
+                  background: currentPage === 1 ? '#f8fafc' : 'white',
+                  color: currentPage === 1 ? '#94a3b8' : 'var(--primary-dark)',
+                  fontWeight: 700,
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  fontSize: '0.8rem'
+                }}
+              >
+                ◀ Prev
+              </button>
+
+              <span style={{ padding: '0 0.4rem', fontWeight: 700 }}>
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                style={{
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(0,0,0,0.12)',
+                  background: currentPage >= totalPages ? '#f8fafc' : 'white',
+                  color: currentPage >= totalPages ? '#94a3b8' : 'var(--primary-dark)',
+                  fontWeight: 700,
+                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  fontSize: '0.8rem'
+                }}
+              >
+                Next ▶
+              </button>
+            </div>
           </div>
         </div>
       ) : (
