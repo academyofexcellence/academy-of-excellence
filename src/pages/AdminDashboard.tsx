@@ -738,9 +738,31 @@ const AdminDashboard = () => {
       console.warn('Error loading activity logs:', e);
     }
 
-    // 5. Fetch Courses, Students and Intervals
+    // 5. Fetch Courses, Students and Intervals (with Security Definer RPC Fallback for New Staff)
     try {
-      const { data: courseData } = await supabase.from('courses').select('*').order('name', { ascending: true });
+      let courseData: Course[] | null = null;
+      let studentData: StudentProfile[] | null = null;
+      let intervalsData: ScoringInterval[] | null = null;
+
+      // 5a. Fetch Courses
+      try {
+        const { data, error } = await supabase.from('courses').select('*').order('name', { ascending: true });
+        if (!error && data && data.length > 0) courseData = data as Course[];
+      } catch (e) {
+        console.warn('Direct courses fetch failed:', e);
+      }
+
+      if (!courseData || courseData.length === 0) {
+        try {
+          const { data: rpcCourses } = await supabase.rpc('get_all_courses');
+          if (rpcCourses && Array.isArray(rpcCourses) && rpcCourses.length > 0) {
+            courseData = rpcCourses as Course[];
+          }
+        } catch (e) {
+          console.warn('get_all_courses RPC fallback skipped:', e);
+        }
+      }
+
       if (courseData) {
         setCourses(courseData);
         if (courseData.length > 0 && !filterCourse) {
@@ -749,14 +771,40 @@ const AdminDashboard = () => {
         }
       }
 
-      const { data: studentData } = await supabase.from('student_profiles').select(`
-        *,
-        courses:course_id (name)
-      `).order('name', { ascending: true });
+      // 5b. Fetch Students
+      try {
+        const { data: stdData } = await supabase.from('student_profiles').select(`
+          *,
+          courses:course_id (name)
+        `).order('name', { ascending: true });
+        if (stdData) studentData = stdData as StudentProfile[];
+      } catch (e) {
+        console.warn('Direct student_profiles fetch failed:', e);
+      }
       if (studentData) setStudentList(studentData);
 
-      const { data: intervals } = await supabase.from('scoring_intervals').select('*').order('created_at', { ascending: false });
-      if (intervals) setIntervalsList(intervals);
+      // 5c. Fetch Scoring Intervals
+      try {
+        const { data, error } = await supabase.from('scoring_intervals').select('*').order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) intervalsData = data as ScoringInterval[];
+      } catch (e) {
+        console.warn('Direct scoring_intervals fetch failed:', e);
+      }
+
+      if (!intervalsData || intervalsData.length === 0) {
+        try {
+          const { data: rpcIntervals } = await supabase.rpc('get_all_scoring_intervals');
+          if (rpcIntervals && Array.isArray(rpcIntervals) && rpcIntervals.length > 0) {
+            intervalsData = rpcIntervals as ScoringInterval[];
+          }
+        } catch (e) {
+          console.warn('get_all_scoring_intervals RPC fallback skipped:', e);
+        }
+      }
+
+      if (intervalsData) {
+        setIntervalsList(intervalsData);
+      }
     } catch (e) {
       console.warn('Error loading courses/students/intervals:', e);
     }
