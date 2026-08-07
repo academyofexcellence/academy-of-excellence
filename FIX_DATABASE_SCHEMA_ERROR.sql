@@ -24,7 +24,7 @@ ALTER TABLE public.scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_attendance_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_task_logs ENABLE ROW LEVEL SECURITY;
 
--- 4. Clean non-recursive, universal SELECT/UPDATE policies for all staff and authenticated users
+-- 4. Clean non-recursive, universal SELECT/UPDATE/INSERT policies for all users
 DROP POLICY IF EXISTS "Enable select for all users" ON public.staff_profiles;
 CREATE POLICY "Enable select for all users" ON public.staff_profiles FOR SELECT TO public USING (true);
 
@@ -40,6 +40,9 @@ CREATE POLICY "Enable select for all users" ON public.student_profiles FOR SELEC
 DROP POLICY IF EXISTS "Enable read activity logs for all users" ON public.activity_logs;
 CREATE POLICY "Enable read activity logs for all users" ON public.activity_logs FOR SELECT TO public USING (true);
 
+DROP POLICY IF EXISTS "Enable all access for activity_logs" ON public.activity_logs;
+CREATE POLICY "Enable all access for activity_logs" ON public.activity_logs FOR ALL TO public USING (true) WITH CHECK (true);
+
 DROP POLICY IF EXISTS "Enable read tasks for all users" ON public.tasks;
 CREATE POLICY "Enable read tasks for all users" ON public.tasks FOR SELECT TO public USING (true);
 
@@ -52,14 +55,25 @@ CREATE POLICY "Enable read scoring_intervals for all users" ON public.scoring_in
 DROP POLICY IF EXISTS "Enable read courses for all users" ON public.courses;
 CREATE POLICY "Enable read courses for all users" ON public.courses FOR SELECT TO public USING (true);
 
+-- SCORES TABLE RLS POLICIES (UNIVERSAL PERMISSIONS)
 DROP POLICY IF EXISTS "Enable read scores for all users" ON public.scores;
 DROP POLICY IF EXISTS "Enable all access for scores" ON public.scores;
-CREATE POLICY "Enable all access for scores" ON public.scores FOR ALL TO public USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Enable all access for authenticated scores" ON public.scores;
+DROP POLICY IF EXISTS "Enable all access for anon scores" ON public.scores;
 
+CREATE POLICY "Enable all access for scores" ON public.scores FOR ALL TO public USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for authenticated scores" ON public.scores FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for anon scores" ON public.scores FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- DAILY ATTENDANCE LOGS RLS POLICIES
 DROP POLICY IF EXISTS "Enable read daily_attendance_logs for all users" ON public.daily_attendance_logs;
 DROP POLICY IF EXISTS "Enable all access for daily_attendance_logs" ON public.daily_attendance_logs;
-CREATE POLICY "Enable all access for daily_attendance_logs" ON public.daily_attendance_logs FOR ALL TO public USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Enable all access for authenticated daily_attendance_logs" ON public.daily_attendance_logs;
 
+CREATE POLICY "Enable all access for daily_attendance_logs" ON public.daily_attendance_logs FOR ALL TO public USING (true) WITH CHECK (true);
+CREATE POLICY "Enable all access for authenticated daily_attendance_logs" ON public.daily_attendance_logs FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+-- DAILY TASK LOGS RLS POLICIES
 DROP POLICY IF EXISTS "Enable all access for daily_task_logs" ON public.daily_task_logs;
 CREATE POLICY "Enable all access for daily_task_logs" ON public.daily_task_logs FOR ALL TO public USING (true) WITH CHECK (true);
 
@@ -177,7 +191,7 @@ BEGIN
 END;
 $$;
 
--- 10. Security Definer RPC helper to upsert student score bypassing RLS restrictions
+-- 10. Security Definer RPC helper to log student score bypassing all RLS restrictions
 CREATE OR REPLACE FUNCTION public.log_student_score(
     p_student_id UUID,
     p_interval_id UUID,
@@ -193,22 +207,24 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
+    -- Delete previous entry if exists to avoid conflict without requiring unique index constraints
+    DELETE FROM public.scores
+    WHERE student_id = p_student_id
+      AND logged_date = p_logged_date
+      AND score_type = p_score_type
+      AND activity_name = p_activity_name;
+
     INSERT INTO public.scores (
         student_id, interval_id, score_type, points, max_points, activity_name, logged_by, logged_date
     ) VALUES (
         p_student_id, p_interval_id, p_score_type, p_points, p_max_points, p_activity_name, p_logged_by, p_logged_date
-    )
-    ON CONFLICT (student_id, logged_date, score_type, activity_name)
-    DO UPDATE SET
-        points = EXCLUDED.points,
-        max_points = EXCLUDED.max_points,
-        logged_by = EXCLUDED.logged_by;
+    );
         
     RETURN jsonb_build_object('success', true);
 END;
 $$;
 
--- 11. Security Definer RPC helper to delete student score bypassing RLS restrictions
+-- 11. Security Definer RPC helper to delete student score bypassing all RLS restrictions
 CREATE OR REPLACE FUNCTION public.delete_student_score(
     p_student_id UUID,
     p_score_type TEXT,

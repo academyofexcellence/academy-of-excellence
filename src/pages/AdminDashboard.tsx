@@ -1576,7 +1576,10 @@ const AdminDashboard = () => {
             p_logged_by: currentUser.id,
             p_logged_date: targetDate
           });
-          if (rpcErr) throw error;
+          if (rpcErr) {
+            console.error('RPC log_student_score error:', rpcErr);
+            throw new Error('Database RLS permission required. Please run FIX_DATABASE_SCHEMA_ERROR.sql in your Supabase SQL Editor.');
+          }
         }
 
         const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
@@ -1596,7 +1599,10 @@ const AdminDashboard = () => {
             p_score_type: scoreType,
             p_logged_date: targetDate
           });
-          if (rpcErr) throw error;
+          if (rpcErr) {
+            console.error('RPC delete_student_score error:', rpcErr);
+            throw new Error('Database RLS permission required. Please run FIX_DATABASE_SCHEMA_ERROR.sql in your Supabase SQL Editor.');
+          }
         }
 
         const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
@@ -1608,12 +1614,14 @@ const AdminDashboard = () => {
       await fetchClassroomLeaderboard(activeInterval.id);
     } catch (err: any) {
       console.error(err);
-      if (err.code === '23505') {
+      if (err.code === '42501' || (err.message && err.message.includes('row-level security'))) {
+        setMessage(`⚠️ Database permission error: Please run FIX_DATABASE_SCHEMA_ERROR.sql once in your Supabase SQL Editor to grant scores table access.`);
+      } else if (err.code === '23505') {
         setMessage(`❌ Activity already logged for this student today.`);
       } else {
         setMessage(`❌ Failed toggling mark: ${err.message}`);
       }
-      setTimeout(() => setMessage(''), 4000);
+      setTimeout(() => setMessage(''), 6000);
     } finally {
       setUpdatingScores(prev => prev.filter(k => k !== lockKey));
     }
