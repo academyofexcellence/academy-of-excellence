@@ -302,9 +302,10 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
 
       if (error) throw error;
 
-      await supabase.from('scores').upsert({
+      const validIntervalId = ensureValidUuid(activeInterval?.id);
+      const { error: scoreErr } = await supabase.from('scores').upsert({
         student_id: editingLog.student_id,
-        interval_id: ensureValidUuid(activeInterval?.id),
+        interval_id: validIntervalId,
         score_type: 'attendance',
         points: totalPts,
         max_points: 10,
@@ -312,6 +313,19 @@ export const ClassroomGrading: React.FC<ClassroomGradingProps> = ({
         logged_by: currentUser?.id,
         logged_date: dateStr
       }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
+
+      if (scoreErr) {
+        await supabase.rpc('log_student_score', {
+          p_student_id: editingLog.student_id,
+          p_interval_id: validIntervalId,
+          p_score_type: 'attendance',
+          p_points: totalPts,
+          p_max_points: 10,
+          p_activity_name: `Attendance: ${totalPts >= 10 ? 'On Time' : (totalPts > 0 ? 'Late' : 'Absent')}`,
+          p_logged_by: currentUser?.id,
+          p_logged_date: dateStr
+        });
+      }
 
       const { data } = await supabase
         .from('daily_attendance_logs')

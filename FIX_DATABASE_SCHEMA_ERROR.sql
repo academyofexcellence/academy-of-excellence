@@ -53,10 +53,15 @@ DROP POLICY IF EXISTS "Enable read courses for all users" ON public.courses;
 CREATE POLICY "Enable read courses for all users" ON public.courses FOR SELECT TO public USING (true);
 
 DROP POLICY IF EXISTS "Enable read scores for all users" ON public.scores;
-CREATE POLICY "Enable read scores for all users" ON public.scores FOR SELECT TO public USING (true);
+DROP POLICY IF EXISTS "Enable all access for scores" ON public.scores;
+CREATE POLICY "Enable all access for scores" ON public.scores FOR ALL TO public USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Enable read daily_attendance_logs for all users" ON public.daily_attendance_logs;
-CREATE POLICY "Enable read daily_attendance_logs for all users" ON public.daily_attendance_logs FOR SELECT TO public USING (true);
+DROP POLICY IF EXISTS "Enable all access for daily_attendance_logs" ON public.daily_attendance_logs;
+CREATE POLICY "Enable all access for daily_attendance_logs" ON public.daily_attendance_logs FOR ALL TO public USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Enable all access for daily_task_logs" ON public.daily_task_logs;
+CREATE POLICY "Enable all access for daily_task_logs" ON public.daily_task_logs FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- 5. SECURITY DEFINER helper to update task status bypassing all RLS restrictions
 CREATE OR REPLACE FUNCTION public.update_task_status(target_task_id UUID, new_status TEXT)
@@ -169,5 +174,56 @@ BEGIN
     WHERE p.id = auth.uid();
     
     RETURN res;
+END;
+$$;
+
+-- 10. Security Definer RPC helper to upsert student score bypassing RLS restrictions
+CREATE OR REPLACE FUNCTION public.log_student_score(
+    p_student_id UUID,
+    p_interval_id UUID,
+    p_score_type TEXT,
+    p_points NUMERIC,
+    p_max_points NUMERIC,
+    p_activity_name TEXT,
+    p_logged_by UUID,
+    p_logged_date DATE
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    INSERT INTO public.scores (
+        student_id, interval_id, score_type, points, max_points, activity_name, logged_by, logged_date
+    ) VALUES (
+        p_student_id, p_interval_id, p_score_type, p_points, p_max_points, p_activity_name, p_logged_by, p_logged_date
+    )
+    ON CONFLICT (student_id, logged_date, score_type, activity_name)
+    DO UPDATE SET
+        points = EXCLUDED.points,
+        max_points = EXCLUDED.max_points,
+        logged_by = EXCLUDED.logged_by;
+        
+    RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+-- 11. Security Definer RPC helper to delete student score bypassing RLS restrictions
+CREATE OR REPLACE FUNCTION public.delete_student_score(
+    p_student_id UUID,
+    p_score_type TEXT,
+    p_logged_date DATE
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    DELETE FROM public.scores
+    WHERE student_id = p_student_id
+      AND score_type = p_score_type
+      AND logged_date = p_logged_date;
+      
+    RETURN jsonb_build_object('success', true);
 END;
 $$;

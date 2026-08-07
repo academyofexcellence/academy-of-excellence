@@ -4,6 +4,13 @@ import { Course, StudentProfile, DailyAttendanceLog } from '../../lib/types';
 import { Calendar, QrCode, Printer, RefreshCw, CheckCircle2, Clock, AlertTriangle, UserCheck, ShieldCheck, Search, Filter, Edit3, Save, X, PlusCircle, FlaskConical, Play, Sparkles } from 'lucide-react';
 import QRCode from 'qrcode';
 
+const ensureValidUuid = (idVal: string | null | undefined): string => {
+  const fallbackUuid = 'c1111111-1111-1111-1111-111111111111';
+  if (!idVal || typeof idVal !== 'string') return fallbackUuid;
+  const match = idVal.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  return match ? match[0] : fallbackUuid;
+};
+
 interface AttendanceHubProps {
   coursesList: Course[];
   studentList: StudentProfile[];
@@ -259,16 +266,29 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
           .maybeSingle();
         intervalId = activeInterval?.id;
       }
-
-      await supabase.from('scores').upsert({
+      const validIntervalId = ensureValidUuid(intervalId);
+      const { error: scoreErr } = await supabase.from('scores').upsert({
         student_id: studentId,
-        interval_id: intervalId,
+        interval_id: validIntervalId,
         score_type: 'attendance',
         points: points,
         max_points: 10,
         activity_name: `Daily QR Attendance (${selectedDate})`,
         logged_date: selectedDate
       }, { onConflict: 'student_id,interval_id,score_type,logged_date' });
+
+      if (scoreErr) {
+        await supabase.rpc('log_student_score', {
+          p_student_id: studentId,
+          p_interval_id: validIntervalId,
+          p_score_type: 'attendance',
+          p_points: points,
+          p_max_points: 10,
+          p_activity_name: `Daily QR Attendance (${selectedDate})`,
+          p_logged_by: null,
+          p_logged_date: selectedDate
+        });
+      }
     } catch (err) {
       console.error('Error syncing score:', err);
     }

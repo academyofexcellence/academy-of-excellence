@@ -1550,10 +1550,11 @@ const AdminDashboard = () => {
           student?.course_id || activeInterval.course_id,
           student?.batch_number || activeInterval.batch_number
         );
+        const validIntervalId = ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id);
         const { error } = await supabase.from('scores').upsert([
           {
             student_id: studentId,
-            interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
+            interval_id: validIntervalId,
             score_type: scoreType,
             points: pointsMap[scoreType],
             max_points: pointsMap[scoreType],
@@ -1562,7 +1563,21 @@ const AdminDashboard = () => {
             logged_date: targetDate
           }
         ], { onConflict: 'student_id,logged_date,score_type,activity_name' });
-        if (error) throw error;
+
+        if (error) {
+          console.warn('Direct scores upsert failed, invoking log_student_score RPC fallback:', error);
+          const { error: rpcErr } = await supabase.rpc('log_student_score', {
+            p_student_id: studentId,
+            p_interval_id: validIntervalId,
+            p_score_type: scoreType,
+            p_points: pointsMap[scoreType],
+            p_max_points: pointsMap[scoreType],
+            p_activity_name: activityNameMap[scoreType],
+            p_logged_by: currentUser.id,
+            p_logged_date: targetDate
+          });
+          if (rpcErr) throw error;
+        }
 
         const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
         await logActivity('student_score_logged', `Logged +${pointsMap[scoreType]} points for ${studName} (${activityNameMap[scoreType]}) on ${targetDate}`);
@@ -1573,7 +1588,16 @@ const AdminDashboard = () => {
           .eq('student_id', studentId)
           .eq('score_type', scoreType)
           .eq('logged_date', targetDate);
-        if (error) throw error;
+
+        if (error) {
+          console.warn('Direct scores delete failed, invoking delete_student_score RPC fallback:', error);
+          const { error: rpcErr } = await supabase.rpc('delete_student_score', {
+            p_student_id: studentId,
+            p_score_type: scoreType,
+            p_logged_date: targetDate
+          });
+          if (rpcErr) throw error;
+        }
 
         const studName = studentList.find(s => s.id === studentId)?.name || 'Student';
         await logActivity('student_score_deleted', `Removed ${activityNameMap[scoreType]} points for ${studName} on ${targetDate}`);
@@ -1706,12 +1730,13 @@ const AdminDashboard = () => {
           student?.course_id || activeInterval.course_id,
           student?.batch_number || activeInterval.batch_number
         );
+        const validIntervalId = ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id);
         const { data, error } = await supabase
           .from('scores')
           .insert([
             {
               student_id: studentId,
-              interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
+              interval_id: validIntervalId,
               score_type: scoreType,
               points: pointsMap[scoreType as 'daily_vocab'],
               max_points: pointsMap[scoreType as 'daily_vocab'],
@@ -1721,8 +1746,20 @@ const AdminDashboard = () => {
             }
           ])
           .select();
-        if (error) throw error;
-        if (data && data.length > 0) {
+        if (error) {
+          console.warn('Direct scores insert failed in matrix view, invoking log_student_score RPC fallback:', error);
+          const { error: rpcErr } = await supabase.rpc('log_student_score', {
+            p_student_id: studentId,
+            p_interval_id: validIntervalId,
+            p_score_type: scoreType,
+            p_points: pointsMap[scoreType as 'daily_vocab'],
+            p_max_points: pointsMap[scoreType as 'daily_vocab'],
+            p_activity_name: activityNameMap[scoreType],
+            p_logged_by: currentUser.id,
+            p_logged_date: dateStr
+          });
+          if (rpcErr) throw error;
+        } else if (data && data.length > 0) {
           setBatchScores(prev => [...prev, data[0]]);
         }
 
@@ -1869,10 +1906,11 @@ const AdminDashboard = () => {
             student?.course_id || activeInterval.course_id,
             student?.batch_number || activeInterval.batch_number
           );
+          const validIntervalId = ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id);
           const { error: insertError } = await supabase.from('scores').insert([
             {
               student_id: studentId,
-              interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
+              interval_id: validIntervalId,
               score_type: 'penalty',
               points: -2,
               max_points: 0,
@@ -1881,7 +1919,20 @@ const AdminDashboard = () => {
               logged_date: targetDate
             }
           ]);
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.warn('Direct penalty insert failed, invoking log_student_score RPC fallback:', insertError);
+            const { error: rpcErr } = await supabase.rpc('log_student_score', {
+              p_student_id: studentId,
+              p_interval_id: validIntervalId,
+              p_score_type: 'penalty',
+              p_points: -2,
+              p_max_points: 0,
+              p_activity_name: 'Malayalam Speaking Policy Violation',
+              p_logged_by: currentUser.id,
+              p_logged_date: targetDate
+            });
+            if (rpcErr) throw insertError;
+          }
           await logActivity('malayalam_penalty_create', `Deducted -2 points from ${studName} for speaking Malayalam on ${targetDate}`);
           setMessage(`⚠️ Malayalam penalty logged: -2 XP applied to ${studName}.`);
         }
@@ -2047,12 +2098,13 @@ const AdminDashboard = () => {
             student?.course_id || activeInterval.course_id,
             student?.batch_number || activeInterval.batch_number
           );
+          const validIntervalId = ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id);
           const { error: insertError } = await supabase
             .from('scores')
             .insert([
               {
                 student_id: studentId,
-                interval_id: ensureValidUuid(targetInterval ? targetInterval.id : activeInterval.id),
+                interval_id: validIntervalId,
                 points: pointsValue,
                 max_points: 10,
                 score_type: 'custom',
@@ -2061,7 +2113,20 @@ const AdminDashboard = () => {
                 logged_date: targetDate
               }
             ]);
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.warn('Direct One Minute Talk insert failed, invoking log_student_score RPC fallback:', insertError);
+            const { error: rpcErr } = await supabase.rpc('log_student_score', {
+              p_student_id: studentId,
+              p_interval_id: validIntervalId,
+              p_score_type: 'custom',
+              p_points: pointsValue,
+              p_max_points: 10,
+              p_activity_name: 'One Minute Talk',
+              p_logged_by: currentUser.id,
+              p_logged_date: targetDate
+            });
+            if (rpcErr) throw insertError;
+          }
           await logActivity('one_minute_talk_log', `Logged One Minute Talk score of ${pointsValue}/10 for ${studName} on ${targetDate}`);
           setMessage(`🎙️ One Minute Talk score logged: ${pointsValue}/10 for ${studName}.`);
         }
