@@ -76,8 +76,13 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
 
   // Edit Paid Fee Modal (Accountant Correction)
   const [editingPaidStudent, setEditingPaidStudent] = useState<StudentProfile | null>(null);
-  const [newTotalPaidInput, setNewTotalPaidInput] = useState<number | string>(0);
+  const [newTotalPaidInput, setNewTotalPaidInput] = useState<number | ''>('');
   const [editPaidReason, setEditPaidReason] = useState<string>('');
+  // Resource Optimization Pagination State
+  const [feePage, setFeePage] = useState<number>(1);
+  const [feePageSize, setFeePageSize] = useState<number>(15);
+  const [ledgerPage, setLedgerPage] = useState<number>(1);
+  const [ledgerPageSize, setLedgerPageSize] = useState<number>(20);
 
   // Auto-select Professional Diploma in Translation and Office Administration & Highest Live Batch Number
   useEffect(() => {
@@ -721,9 +726,42 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
       window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(reminderMsg)}`, '_blank');
     } else {
       navigator.clipboard.writeText(reminderMsg);
-      alert(`Reminder text copied to clipboard for ${student.name}!`);
     }
   };
+
+  // Resource Optimization Pagination Calculations
+  useEffect(() => {
+    setFeePage(1);
+  }, [selectedCourseId, selectedBatchNumber]);
+
+  const feeTotalPages = Math.ceil(activeStudents.length / feePageSize);
+  const feeStartIndex = (feePage - 1) * feePageSize;
+  const paginatedFeeStudents = activeStudents.slice(feeStartIndex, feeStartIndex + feePageSize);
+
+  const unifiedLedgerItems = [
+    ...transactions.map(tx => ({
+      id: `tx-${tx.id}`,
+      type: 'income',
+      refNo: tx.receipt_no,
+      description: `${tx.student_name} (${tx.installment_label})`,
+      mode: tx.payment_mode === 'gpay_bank' ? '💳 GPay/Bank' : '💵 Office Cash',
+      amount: Number(tx.amount_paid),
+      date: new Date(tx.payment_date)
+    })),
+    ...expenses.map(exp => ({
+      id: `exp-${exp.id}`,
+      type: 'expense',
+      refNo: `EXP-${exp.id.slice(0, 6)}`,
+      description: `${exp.title} (${exp.category})`,
+      mode: exp.payment_mode === 'gpay_bank' ? '💳 GPay/Bank' : '💵 Office Cash',
+      amount: Number(exp.amount),
+      date: new Date(exp.expense_date)
+    }))
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const ledgerTotalPages = Math.ceil(unifiedLedgerItems.length / ledgerPageSize);
+  const ledgerStartIndex = (ledgerPage - 1) * ledgerPageSize;
+  const paginatedLedgerItems = unifiedLedgerItems.slice(ledgerStartIndex, ledgerStartIndex + ledgerPageSize);
 
   return (
     <div style={{ padding: '1rem 0' }}>
@@ -1067,7 +1105,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                   </tr>
                 </thead>
                 <tbody>
-                  {activeStudents.map(student => {
+                  {paginatedFeeStudents.map(student => {
                     const prof = feeProfiles.find(p => p.student_id === student.id);
                     const stdFee = Number(prof?.standard_fee) || Number(batchStandardFee) || 25000;
                     const discount = Number(prof?.discount_amount) || 0;
@@ -1179,6 +1217,45 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               </table>
             </div>
           )}
+
+        {/* Resource Optimization Pagination Controls for Student Fee Roster */}
+        {activeStudents.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 0 0 0', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '0.75rem', fontSize: '0.85rem', color: '#64748b' }}>
+            <div>
+              Showing <strong>{feeStartIndex + 1}</strong> to <strong>{Math.min(feeStartIndex + feePageSize, activeStudents.length)}</strong> of <strong>{activeStudents.length}</strong> students
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <select
+                value={feePageSize}
+                onChange={(e) => { setFeePageSize(Number(e.target.value)); setFeePage(1); }}
+                style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: 'white' }}
+              >
+                <option value={15}>15 per page</option>
+                <option value={30}>30 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+              </select>
+
+              <button
+                disabled={feePage <= 1}
+                onClick={() => setFeePage(p => Math.max(1, p - 1))}
+                style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: feePage <= 1 ? '#f1f5f9' : 'white', cursor: feePage <= 1 ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+              >
+                Previous
+              </button>
+
+              <span>Page <strong>{feePage}</strong> of <strong>{feeTotalPages || 1}</strong></span>
+
+              <button
+                disabled={feePage >= feeTotalPages}
+                onClick={() => setFeePage(p => Math.min(feeTotalPages, p + 1))}
+                style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: feePage >= feeTotalPages ? '#f1f5f9' : 'white', cursor: feePage >= feeTotalPages ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
 
         </div>
       )}
@@ -1337,36 +1414,65 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                 </tr>
               </thead>
               <tbody>
-                {/* Income Rows */}
-                {transactions.map(tx => (
-                  <tr key={`tx-${tx.id}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                {paginatedLedgerItems.map(item => (
+                  <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '0.85rem 1rem' }}>
-                      <span style={{ background: 'rgba(34, 197, 94, 0.1)', color: '#15803d', padding: '0.2rem 0.55rem', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem' }}>+ Fee Income</span>
+                      {item.type === 'income' ? (
+                        <span style={{ background: 'rgba(34, 197, 94, 0.1)', color: '#15803d', padding: '0.2rem 0.55rem', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem' }}>+ Fee Income</span>
+                      ) : (
+                        <span style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#b91c1c', padding: '0.2rem 0.55rem', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem' }}>- Expense</span>
+                      )}
                     </td>
-                    <td style={{ padding: '0.85rem 1rem', fontWeight: 700 }}>{tx.receipt_no}</td>
-                    <td style={{ padding: '0.85rem 1rem' }}>{tx.student_name} ({tx.installment_label})</td>
-                    <td style={{ padding: '0.85rem 1rem' }}>{tx.payment_mode === 'gpay_bank' ? '💳 GPay/Bank' : '💵 Office Cash'}</td>
-                    <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: '#16a34a' }}>+₹{Number(tx.amount_paid).toLocaleString()}</td>
-                    <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>{new Date(tx.payment_date).toLocaleString()}</td>
-                  </tr>
-                ))}
-
-                {/* Expense Rows */}
-                {expenses.map(exp => (
-                  <tr key={`exp-${exp.id}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '0.85rem 1rem' }}>
-                      <span style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#b91c1c', padding: '0.2rem 0.55rem', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem' }}>- Expense</span>
+                    <td style={{ padding: '0.85rem 1rem', fontWeight: 700 }}>{item.refNo}</td>
+                    <td style={{ padding: '0.85rem 1rem' }}>{item.description}</td>
+                    <td style={{ padding: '0.85rem 1rem' }}>{item.mode}</td>
+                    <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: item.type === 'income' ? '#16a34a' : '#dc2626' }}>
+                      {item.type === 'income' ? '+' : '-'}₹{item.amount.toLocaleString()}
                     </td>
-                    <td style={{ padding: '0.85rem 1rem', fontWeight: 700 }}>EXP-{exp.id.slice(0, 6)}</td>
-                    <td style={{ padding: '0.85rem 1rem' }}>{exp.title} ({exp.category})</td>
-                    <td style={{ padding: '0.85rem 1rem' }}>{exp.payment_mode === 'gpay_bank' ? '💳 GPay/Bank' : '💵 Office Cash'}</td>
-                    <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: '#dc2626' }}>-₹{Number(exp.amount).toLocaleString()}</td>
-                    <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>{new Date(exp.expense_date).toLocaleString()}</td>
+                    <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>{item.date.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {/* Resource Optimization Pagination Controls for Audit Ledger */}
+          {unifiedLedgerItems.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 0 0 0', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '0.75rem', fontSize: '0.85rem', color: '#64748b' }}>
+              <div>
+                Showing <strong>{ledgerStartIndex + 1}</strong> to <strong>{Math.min(ledgerStartIndex + ledgerPageSize, unifiedLedgerItems.length)}</strong> of <strong>{unifiedLedgerItems.length}</strong> ledger entries
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <select
+                  value={ledgerPageSize}
+                  onChange={(e) => { setLedgerPageSize(Number(e.target.value)); setLedgerPage(1); }}
+                  style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: 'white' }}
+                >
+                  <option value={20}>20 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
+                </select>
+
+                <button
+                  disabled={ledgerPage <= 1}
+                  onClick={() => setLedgerPage(p => Math.max(1, p - 1))}
+                  style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: ledgerPage <= 1 ? '#f1f5f9' : 'white', cursor: ledgerPage <= 1 ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+                >
+                  Previous
+                </button>
+
+                <span>Page <strong>{ledgerPage}</strong> of <strong>{ledgerTotalPages || 1}</strong></span>
+
+                <button
+                  disabled={ledgerPage >= ledgerTotalPages}
+                  onClick={() => setLedgerPage(p => Math.min(ledgerTotalPages, p + 1))}
+                  style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: ledgerPage >= ledgerTotalPages ? '#f1f5f9' : 'white', cursor: ledgerPage >= ledgerTotalPages ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
 
         </div>
       )}

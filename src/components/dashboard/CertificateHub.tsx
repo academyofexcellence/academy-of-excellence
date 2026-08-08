@@ -26,6 +26,10 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
   const [message, setMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Resource Optimization Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
   // Diploma Preview Modal State
   const [activePreviewCert, setActivePreviewCert] = useState<CertificateRecord | null>(null);
   const [previewQrUrl, setPreviewQrUrl] = useState<string>('');
@@ -366,11 +370,19 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
     document.body.removeChild(link);
   };
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const filteredCertificates = certificates.filter(c => 
     c.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.certificate_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.course_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filteredCertificates.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedCertificates = filteredCertificates.slice(startIndex, startIndex + pageSize);
 
   return (
     <div style={{ padding: '1rem 0' }}>
@@ -657,7 +669,7 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
                 </tr>
               </thead>
               <tbody>
-                {filteredCertificates.map(cert => {
+                {paginatedCertificates.map(cert => {
                   const isTypingCert = cert.certificate_code.startsWith('CAT') || cert.certificate_type === 'CAT';
                   return (
                     <tr key={cert.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -772,6 +784,45 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Resource Optimization Pagination Controls */}
+        {filteredCertificates.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 0 0 0', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '0.75rem', fontSize: '0.85rem', color: '#64748b' }}>
+            <div>
+              Showing <strong>{startIndex + 1}</strong> to <strong>{Math.min(startIndex + pageSize, filteredCertificates.length)}</strong> of <strong>{filteredCertificates.length}</strong> certificates
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', background: 'white' }}
+              >
+                <option value={15}>15 per page</option>
+                <option value={30}>30 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+              </select>
+
+              <button
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: currentPage <= 1 ? '#f1f5f9' : 'white', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+              >
+                Previous
+              </button>
+
+              <span>Page <strong>{currentPage}</strong> of <strong>{totalPages || 1}</strong></span>
+
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid #cbd5e1', background: currentPage >= totalPages ? '#f1f5f9' : 'white', cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
 

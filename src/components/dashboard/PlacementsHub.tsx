@@ -52,7 +52,10 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
   const [placementFilterBatch, setPlacementFilterBatch] = useState('');
   const [placementFilterStatus, setPlacementFilterStatus] = useState('');
   const [placementFilterLocation, setPlacementFilterLocation] = useState('');
-  const [placementFilterGradOnly, setPlacementFilterGradOnly] = useState<'graduated' | 'all' | 'active'>('graduated');
+  const [placementFilterGradOnly, setPlacementFilterGradOnly] = useState('all');
+  // Resource Optimization Pagination State for Alumni Register
+  const [alumniPage, setAlumniPage] = useState(1);
+  const [alumniPageSize, setAlumniPageSize] = useState(15);
 
   // Job Board state
   const [showAddJobForm, setShowAddJobForm] = useState(false);
@@ -98,6 +101,14 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
 
     return matchesSearch && matchesCourse && matchesBatch && matchesStatus && matchesLocPref && matchesGrad;
   });
+
+  React.useEffect(() => {
+    setAlumniPage(1);
+  }, [placementSearch, placementFilterCourse, placementFilterBatch, placementFilterStatus, placementFilterLocation, placementFilterGradOnly]);
+
+  const alumniTotalPages = Math.ceil(filteredAlumni.length / alumniPageSize);
+  const alumniStartIndex = (alumniPage - 1) * alumniPageSize;
+  const paginatedAlumni = filteredAlumni.slice(alumniStartIndex, alumniStartIndex + alumniPageSize);
 
   // Job filtering logic
   const filteredJobs = jobPosts.filter(job => {
@@ -338,7 +349,7 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredAlumni.map(alumnus => {
+                      {paginatedAlumni.map(alumnus => {
                         const statusLabel = 
                           alumnus.career?.employment_status === 'employed' ? 'Employed' : 
                           alumnus.career?.employment_status === 'employed_looking' ? 'Employed (Looking)' : 
@@ -361,63 +372,29 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
                           alumnus.career?.preferred_location === 'abroad' ? 'Abroad' : 'Anywhere';
 
                         return (
-                          <tr key={alumnus.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                          <tr key={alumnus.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                             <td style={{ padding: '0.8rem', verticalAlign: 'top' }}>
-                              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--text-main)' }}>{alumnus.name}</div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{alumnus.email}</div>
-                              <div style={{ fontSize: '0.75rem', fontWeight: 650, color: 'var(--primary-dark)', marginTop: '0.2rem' }}>{alumnus.courses?.name}</div>
-                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Batch {alumnus.batch_number} • Roll {alumnus.roll_number || 'N/A'}</div>
-                              {alumnus.status !== 'alumni' && (
-                                <span style={{ display: 'inline-block', fontSize: '0.65rem', background: 'rgba(245,158,11,0.15)', color: '#d97706', padding: '0.05rem 0.3rem', borderRadius: '4px', marginTop: '0.2rem', fontWeight: 700 }}>
-                                  Active (Not Graduated)
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: '0.8rem', verticalAlign: 'top', color: '#475569', lineHeight: '1.4' }}>
-                              {alumnus.house_name && <div><strong>House:</strong> {alumnus.house_name}</div>}
-                              {alumnus.street && <div><strong>Street:</strong> {alumnus.street}</div>}
-                              {alumnus.locality && <div><strong>Locality/PO:</strong> {alumnus.locality}</div>}
-                              {alumnus.district && <div><strong>District:</strong> {alumnus.district}</div>}
-                              {alumnus.state && <div><strong>State:</strong> {alumnus.state} {alumnus.pincode ? ` - ${alumnus.pincode}` : ''}</div>}
-                              {alumnus.hometown && <div style={{ fontSize: '0.7rem', fontStyle: 'italic', marginTop: '0.15rem', color: 'var(--text-muted)' }}>Hometown: {alumnus.hometown}</div>}
-                              {!alumnus.house_name && !alumnus.street && !alumnus.district && <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No address logged.</span>}
-                            </td>
-                            <td style={{ padding: '0.8rem', verticalAlign: 'top' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                                {alumnus.mobile_number && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: 650 }}>
-                                    <span>📞</span>
-                                    <a href={`tel:${alumnus.mobile_number}`} style={{ color: 'inherit', textDecoration: 'none' }}>{alumnus.mobile_number}</a>
-                                  </div>
-                                )}
-                                {alumnus.whatsapp_number && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                    <span>💬</span>
-                                    <a 
-                                      href={`https://wa.me/${alumnus.whatsapp_number.replace(/[^0-9]/g, '').length === 10 ? '91' : ''}${alumnus.whatsapp_number.replace(/[^0-9]/g, '')}`} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer" 
-                                      style={{ color: '#16a34a', textDecoration: 'none', fontWeight: 700 }}
-                                    >
-                                      WhatsApp
-                                    </a>
-                                  </div>
-                                )}
-                                {alumnus.career?.linkedin_url && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                    <span>🔗</span>
-                                    <a 
-                                      href={alumnus.career.linkedin_url.startsWith('http') ? alumnus.career.linkedin_url : `https://${alumnus.career.linkedin_url}`} 
-                                      target="_blank" 
-                                      rel="noopener noreferrer" 
-                                      style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
-                                    >
-                                      LinkedIn
-                                    </a>
-                                  </div>
-                                )}
-                                {!alumnus.mobile_number && !alumnus.whatsapp_number && <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No contacts.</span>}
+                              <div style={{ fontWeight: 800, color: 'var(--primary-dark)', fontSize: '0.85rem' }}>{alumnus.name}</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>{alumnus.email}</div>
+                              <div style={{ marginTop: '0.4rem', display: 'inline-block', padding: '0.15rem 0.4rem', borderRadius: '4px', background: statusBg, color: statusColor, fontSize: '0.7rem', fontWeight: 700 }}>
+                                {statusLabel}
                               </div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
+                                Batch {alumnus.batch_number} • Roll #{alumnus.roll_number || 'N/A'}
+                              </div>
+                            </td>
+                            <td style={{ padding: '0.8rem', verticalAlign: 'top', lineHeight: '1.3' }}>
+                              <div style={{ fontWeight: 650 }}>{alumnus.house_name ? `${alumnus.house_name}, ` : ''}{alumnus.street || ''}</div>
+                              <div>{alumnus.locality ? `${alumnus.locality}, ` : ''}{alumnus.hometown || ''}</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{alumnus.district ? `${alumnus.district}, ` : ''}{alumnus.state || 'Kerala'}</div>
+                            </td>
+                            <td style={{ padding: '0.8rem', verticalAlign: 'top', lineHeight: '1.3' }}>
+                              <div>📞 Mobile: <a href={`tel:${alumnus.mobile_number}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 650 }}>{alumnus.mobile_number || 'N/A'}</a></div>
+                              <div>💬 WhatsApp: <a href={`https://wa.me/${alumnus.whatsapp_number}`} target="_blank" rel="noreferrer" style={{ color: '#16a34a', textDecoration: 'none', fontWeight: 650 }}>{alumnus.whatsapp_number || 'N/A'}</a></div>
+                              {alumnus.career?.linkedin_url && (
+                                <div style={{ marginTop: '0.3rem' }}>🔗 <a href={alumnus.career.linkedin_url.startsWith('http') ? alumnus.career.linkedin_url : `https://${alumnus.career.linkedin_url}`} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>LinkedIn</a></div>
+                              )}
+                              {!alumnus.mobile_number && !alumnus.whatsapp_number && <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No contacts.</span>}
                             </td>
                             <td style={{ padding: '0.8rem', verticalAlign: 'top' }}>
                               <span style={{ display: 'inline-block', fontSize: '0.7rem', fontWeight: 800, padding: '0.1rem 0.4rem', borderRadius: '4px', background: statusBg, color: statusColor, textTransform: 'uppercase', marginBottom: '0.35rem' }}>
@@ -427,6 +404,7 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
                                 <div style={{ fontSize: '0.75rem', lineHeight: '1.3' }}>
                                   <div><strong>Role:</strong> {alumnus.career.current_job_title || 'N/A'}</div>
                                   <div><strong>Employer:</strong> {alumnus.career.current_company || 'N/A'}</div>
+                                  {alumnus.career.current_salary && <div><strong>Salary:</strong> {alumnus.career.current_salary}</div>}
                                 </div>
                               )}
                               {alumnus.career?.marital_status === 'married' && (
@@ -476,6 +454,45 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Resource Optimization Pagination Controls for Alumni */}
+              {filteredAlumni.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 0 0 0', borderTop: '1px solid rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '0.75rem', fontSize: '0.8rem', color: '#64748b' }}>
+                  <div>
+                    Showing <strong>{alumniStartIndex + 1}</strong> to <strong>{Math.min(alumniStartIndex + alumniPageSize, filteredAlumni.length)}</strong> of <strong>{filteredAlumni.length}</strong> alumni records
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <select
+                      value={alumniPageSize}
+                      onChange={(e) => { setAlumniPageSize(Number(e.target.value)); setAlumniPage(1); }}
+                      style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.12)', fontSize: '0.8rem', background: 'white' }}
+                    >
+                      <option value={15}>15 per page</option>
+                      <option value={30}>30 per page</option>
+                      <option value={50}>50 per page</option>
+                      <option value={100}>100 per page</option>
+                    </select>
+
+                    <button
+                      disabled={alumniPage <= 1}
+                      onClick={() => setAlumniPage(p => Math.max(1, p - 1))}
+                      style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.12)', background: alumniPage <= 1 ? '#f1f5f9' : 'white', cursor: alumniPage <= 1 ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+                    >
+                      Previous
+                    </button>
+
+                    <span>Page <strong>{alumniPage}</strong> of <strong>{alumniTotalPages || 1}</strong></span>
+
+                    <button
+                      disabled={alumniPage >= alumniTotalPages}
+                      onClick={() => setAlumniPage(p => Math.min(alumniTotalPages, p + 1))}
+                      style={{ padding: '0.35rem 0.75rem', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.12)', background: alumniPage >= alumniTotalPages ? '#f1f5f9' : 'white', cursor: alumniPage >= alumniTotalPages ? 'not-allowed' : 'pointer', fontWeight: 600 }}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               )}
             </>
