@@ -381,6 +381,7 @@ const AdminDashboard = () => {
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [todayScores, setTodayScores] = useState<any[]>([]);
+  const [todayAttendanceLogs, setTodayAttendanceLogs] = useState<any[]>([]);
 
   // Data States (Students & Leaderboards)
   const [courses, setCourses] = useState<Course[]>([]);
@@ -743,6 +744,12 @@ const AdminDashboard = () => {
         .select('*')
         .eq('logged_date', todayStr);
       if (todaySc) setTodayScores(todaySc);
+
+      const { data: todayAtt } = await supabase
+        .from('daily_attendance_logs')
+        .select('*')
+        .eq('date', todayStr);
+      if (todayAtt) setTodayAttendanceLogs(todayAtt);
     } catch (e) {
       console.warn('Error loading daily logs/scores:', e);
     }
@@ -4959,6 +4966,7 @@ const AdminDashboard = () => {
             isLeadership={isLeadership}
             studentList={studentList}
             todayScores={todayScores}
+            todayAttendanceLogs={todayAttendanceLogs}
             taskList={taskList}
             dailyLogs={dailyLogs}
             intervalsList={intervalsList}

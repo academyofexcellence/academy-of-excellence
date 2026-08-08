@@ -6,6 +6,7 @@ interface AnalyticsHubProps {
   isLeadership: boolean;
   studentList: StudentProfile[];
   todayScores: any[];
+  todayAttendanceLogs?: any[];
   taskList: Task[];
   dailyLogs: DailyLog[];
   intervalsList: ScoringInterval[];
@@ -17,6 +18,7 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({
   isLeadership,
   studentList,
   todayScores,
+  todayAttendanceLogs = [],
   taskList,
   dailyLogs,
   intervalsList,
@@ -33,16 +35,50 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({
     );
   }
 
-  const activeStudents = studentList.filter(s => s.status === 'active');
-  const activeStudentsCount = activeStudents.length;
+  const activeStudents = studentList.filter(s => s.status !== 'inactive' && s.status !== 'pending' && s.status !== 'alumni');
+  const activeStudentsCount = activeStudents.length || studentList.length;
 
-  // Attendance stats for today
-  const attPresent = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: On Time')).length;
-  const attLate = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: Late')).length;
-  const attHalfDay = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: Half Day')).length;
-  const attAbsent = todayScores.filter(s => s.score_type === 'attendance' && s.activity_name.includes('Attendance: Absent')).length;
-  const attMarked = attPresent + attLate + attHalfDay + attAbsent;
-  const attendancePercent = attMarked > 0 ? Math.round(((attPresent + attLate + attHalfDay) / attMarked) * 100) : 0;
+  // Live attendance stats for today combining daily_attendance_logs & scores table
+  const markedStudentIds = new Set<string>();
+  const presentStudentIds = new Set<string>();
+
+  // 1. Process daily_attendance_logs for today
+  (todayAttendanceLogs || []).forEach(log => {
+    if (!log.student_id) return;
+    markedStudentIds.add(log.student_id);
+    const isPresent = !!log.check_in_time || 
+                      (log.points_awarded && log.points_awarded > 0) ||
+                      ['present', 'present_full', 'present_half', 'approved', 'on_time', 'late', 'login'].includes(log.status) ||
+                      ['on_time', 'late', 'login', 'present'].includes(log.check_in_status);
+    if (isPresent) {
+      presentStudentIds.add(log.student_id);
+    }
+  });
+
+  // 2. Process scores table entries for today
+  todayScores.filter(s => s.score_type === 'attendance').forEach(score => {
+    if (!score.student_id) return;
+    markedStudentIds.add(score.student_id);
+    const actLower = (score.activity_name || '').toLowerCase();
+    const isAbsent = actLower.includes('absent');
+    const isPresent = !isAbsent && (
+      score.points > 0 ||
+      actLower.includes('on time') ||
+      actLower.includes('login') ||
+      actLower.includes('late') ||
+      actLower.includes('present') ||
+      actLower.includes('daily qr') ||
+      actLower.includes('attendance')
+    );
+    if (isPresent) {
+      presentStudentIds.add(score.student_id);
+    }
+  });
+
+  const attPresent = presentStudentIds.size;
+  const attMarked = Math.max(markedStudentIds.size, attPresent);
+  const totalDenominator = attMarked > 0 ? attMarked : (activeStudentsCount || 1);
+  const attendancePercent = totalDenominator > 0 ? Math.min(100, Math.round((attPresent / totalDenominator) * 100)) : 0;
 
   // Student activities check-ins today
   const vocabCount = todayScores.filter(s => s.score_type === 'daily_vocab').length;
@@ -152,7 +188,7 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({
                 {attendancePercent}%
               </p>
               <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {attPresent + attLate + attHalfDay} Present / {attMarked} Marked
+                {attPresent} Present / {totalDenominator} Marked
               </span>
             </div>
           </div>
