@@ -9,8 +9,17 @@ interface AccountingHubProps {
 }
 
 export default function AccountingHub({ coursesList, studentList }: AccountingHubProps) {
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(coursesList[0]?.id || '');
-  const [selectedBatchNumber, setSelectedBatchNumber] = useState<number | string>(26);
+  const getPreferredCourseId = (courses: Course[]) => {
+    if (!courses || courses.length === 0) return '';
+    const pref = courses.find(c => {
+      const name = c.name.toLowerCase();
+      return name.includes('office administration') || (name.includes('professional diploma') && name.includes('translation'));
+    }) || courses.find(c => c.name.toLowerCase().includes('translation')) || courses[0];
+    return pref ? pref.id : '';
+  };
+
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(() => getPreferredCourseId(coursesList));
+  const [selectedBatchNumber, setSelectedBatchNumber] = useState<number | string>(27);
   const [activeTab, setActiveTab] = useState<'overview' | 'student_fees' | 'expenses' | 'ledger'>('overview');
 
   // Data states
@@ -62,23 +71,19 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const [newTotalPaidInput, setNewTotalPaidInput] = useState<number | string>(0);
   const [editPaidReason, setEditPaidReason] = useState<string>('');
 
-  // Auto-select Professional Diploma in Translation & Highest Live Batch Number
+  // Auto-select Professional Diploma in Translation and Office Administration & Highest Live Batch Number
   useEffect(() => {
     if (coursesList && coursesList.length > 0) {
-      const prefCourse = coursesList.find(c => 
-        c.name.toLowerCase().includes('professional diploma in translation') || 
-        c.name.toLowerCase().includes('translation')
-      ) || coursesList[0];
-
-      if (!selectedCourseId || !coursesList.some(c => c.id === selectedCourseId)) {
-        setSelectedCourseId(prefCourse.id);
+      const targetCourseId = getPreferredCourseId(coursesList);
+      if (!selectedCourseId || !coursesList.some(c => c.id === selectedCourseId) || selectedCourseId !== targetCourseId) {
+        setSelectedCourseId(targetCourseId);
       }
 
       // Detect highest live batch number
-      const targetCourseId = selectedCourseId || prefCourse.id;
+      const activeCourseId = selectedCourseId || targetCourseId;
       let highestBatch = 0;
       studentList.forEach(s => {
-        if (s.course_id === targetCourseId || !targetCourseId) {
+        if (s.course_id === activeCourseId || !activeCourseId) {
           const b = Number(String(s.batch_number).replace(/[^0-9]/g, '')) || 0;
           if (b > highestBatch) highestBatch = b;
         }

@@ -826,11 +826,11 @@ const AdminDashboard = () => {
       if (intervalsData && intervalsData.length > 0) setIntervalsList(intervalsData);
 
       if (courseData && courseData.length > 0) {
-        // Auto-detect Professional Diploma in Translation course
-        const prefCourse = courseData.find(c => 
-          c.name.toLowerCase().includes('professional diploma in translation') || 
-          c.name.toLowerCase().includes('translation')
-        ) || courseData[0];
+        // Auto-detect Professional Diploma in Translation and Office Administration course
+        const prefCourse = courseData.find(c => {
+          const name = c.name.toLowerCase();
+          return name.includes('office administration') || (name.includes('professional diploma') && name.includes('translation'));
+        }) || courseData.find(c => c.name.toLowerCase().includes('translation')) || courseData[0];
 
         // Auto-detect highest live batch number
         let highestBatch = 0;
