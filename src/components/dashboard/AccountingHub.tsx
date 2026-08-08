@@ -57,6 +57,46 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   // Printable Receipt Modal
   const [activeReceipt, setActiveReceipt] = useState<{ tx: FeePaymentTransaction; student: StudentProfile | null } | null>(null);
 
+  // Edit Paid Fee Modal (Accountant Correction)
+  const [editingPaidStudent, setEditingPaidStudent] = useState<StudentProfile | null>(null);
+  const [newTotalPaidInput, setNewTotalPaidInput] = useState<number | string>(0);
+  const [editPaidReason, setEditPaidReason] = useState<string>('');
+
+  // Auto-select Professional Diploma in Translation & Highest Live Batch Number
+  useEffect(() => {
+    if (coursesList && coursesList.length > 0) {
+      const prefCourse = coursesList.find(c => 
+        c.name.toLowerCase().includes('professional diploma in translation') || 
+        c.name.toLowerCase().includes('translation')
+      ) || coursesList[0];
+
+      if (!selectedCourseId || !coursesList.some(c => c.id === selectedCourseId)) {
+        setSelectedCourseId(prefCourse.id);
+      }
+
+      // Detect highest live batch number
+      const targetCourseId = selectedCourseId || prefCourse.id;
+      let highestBatch = 0;
+      studentList.forEach(s => {
+        if (s.course_id === targetCourseId || !targetCourseId) {
+          const b = Number(String(s.batch_number).replace(/[^0-9]/g, '')) || 0;
+          if (b > highestBatch) highestBatch = b;
+        }
+      });
+      if (highestBatch === 0 && studentList.length > 0) {
+        studentList.forEach(s => {
+          const b = Number(String(s.batch_number).replace(/[^0-9]/g, '')) || 0;
+          if (b > highestBatch) highestBatch = b;
+        });
+      }
+
+      const defaultBatch = highestBatch > 0 ? highestBatch : 27;
+      if (!selectedBatchNumber || selectedBatchNumber === 26) {
+        setSelectedBatchNumber(defaultBatch);
+      }
+    }
+  }, [coursesList, studentList]);
+
   const selectedCourse = coursesList.find(c => c.id === selectedCourseId);
   const activeStudents = studentList.filter(
     s => s.course_id === selectedCourseId && Number(s.batch_number) === Number(selectedBatchNumber)
@@ -216,6 +256,53 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
     } catch (err: any) {
       console.error('Error saving discount:', err);
       alert(`Failed to save discount: ${err.message}`);
+    } finally {
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  // --- HANDLER TO EDIT TOTAL PAID FEE (ACCOUNTANT CORRECTION) ---
+  const handleSaveEditPaidFee = async () => {
+    if (!editingPaidStudent) return;
+    try {
+      const newPaid = Math.max(0, Number(newTotalPaidInput) || 0);
+      const existingProfile = feeProfiles.find(p => p.student_id === editingPaidStudent.id);
+      const stdFee = Number(existingProfile?.standard_fee) || Number(batchStandardFee) || 25000;
+      const discount = Number(existingProfile?.discount_amount) || 0;
+      const agreedFee = Number(existingProfile?.total_agreed_fee) || Math.max(0, stdFee - discount);
+      const newBalance = Math.max(0, agreedFee - newPaid);
+
+      let newStatus: 'unpaid' | 'partially_paid' | 'fully_paid' = 'unpaid';
+      if (newPaid >= agreedFee && agreedFee > 0) newStatus = 'fully_paid';
+      else if (newPaid > 0) newStatus = 'partially_paid';
+
+      const payload = {
+        student_id: editingPaidStudent.id,
+        standard_fee: stdFee,
+        discount_amount: discount,
+        discount_reason: existingProfile?.discount_reason || null,
+        total_agreed_fee: agreedFee,
+        total_paid: newPaid,
+        balance_due: newBalance,
+        status: newStatus
+      };
+
+      const { error } = await supabase.from('student_fee_profiles').upsert(payload, { onConflict: 'student_id' });
+      if (error) throw error;
+
+      // Log correction activity
+      await supabase.from('activity_logs').insert({
+        activity_type: 'fee_paid_edited',
+        description: `Accountant updated total paid fee for ${editingPaidStudent.name} to ₹${newPaid.toLocaleString()} (Reason: ${editPaidReason || 'Accountant adjustment'})`,
+        performed_by: 'Staff Office'
+      });
+
+      setMessage(`✅ Updated Total Paid for ${editingPaidStudent.name} to ₹${newPaid.toLocaleString()}!`);
+      setEditingPaidStudent(null);
+      await fetchAllFinancialData();
+    } catch (err: any) {
+      console.error('Error updating paid fee:', err);
+      alert(`Failed to update paid fee: ${err.message}`);
     } finally {
       setTimeout(() => setMessage(''), 4000);
     }
@@ -821,6 +908,19 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                               <Tag size={14} /> Set Net Fee
                             </button>
 
+                            {/* Edit Paid Fee / Accountant Correction */}
+                            <button
+                              onClick={() => {
+                                setEditingPaidStudent(student);
+                                setNewTotalPaidInput(paid);
+                                setEditPaidReason('');
+                              }}
+                              title="Edit Total Paid Amount (Accountant Correction)"
+                              style={{ padding: '0.4rem 0.65rem', borderRadius: '6px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', fontWeight: 800, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                            >
+                              <Edit3 size={14} /> Edit Paid
+                            </button>
+
                             {/* Send Reminder */}
                             {balance > 0 && (
                               <button
@@ -1276,6 +1376,81 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
               <button onClick={() => setDiscountingStudent(null)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleSaveDiscount} style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 800, cursor: 'pointer' }}>Save Net Fee</button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- EDIT PAID FEE MODAL (ACCOUNTANT CORRECTION) --- */}
+      {editingPaidStudent && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', width: '100%', maxWidth: '460px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+              <div>
+                <h4 style={{ margin: 0, fontWeight: 800, color: '#16a34a', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Edit3 size={20} /> Edit Paid Fee (Accountant Correction)
+                </h4>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                  Correct total paid fee for {editingPaidStudent.name}
+                </p>
+              </div>
+              <button onClick={() => setEditingPaidStudent(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1rem', background: '#f8fafc', padding: '0.85rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '0.8rem', color: '#475569', display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                <span>Student Name:</span>
+                <strong>{editingPaidStudent.name}</strong>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Net Agreed Fee:</span>
+                <strong style={{ color: '#0f172a' }}>
+                  ₹{(Number(feeProfiles.find(p => p.student_id === editingPaidStudent.id)?.total_agreed_fee) || 25000).toLocaleString()}
+                </strong>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>
+                Total Paid Amount (₹) *
+              </label>
+              <input
+                type="number"
+                value={newTotalPaidInput}
+                onChange={(e) => setNewTotalPaidInput(e.target.value === '' ? '' : Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
+                placeholder="e.g. 10000"
+                style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '2px solid #16a34a', fontSize: '1.1rem', fontWeight: 800, color: '#16a34a', background: '#f0fdf4' }}
+              />
+              <span style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem', display: 'block' }}>
+                Enter corrected total amount collected so far from this student.
+              </span>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>
+                Correction Reason / Note
+              </label>
+              <input
+                type="text"
+                value={editPaidReason}
+                onChange={(e) => setEditPaidReason(e.target.value)}
+                placeholder="e.g. Corrected entry error by accountant"
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditingPaidStudent(null)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontWeight: 600 }}>
+                Cancel
+              </button>
+              <button onClick={handleSaveEditPaidFee} style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
+                Save Paid Fee Correction
+              </button>
             </div>
 
           </div>

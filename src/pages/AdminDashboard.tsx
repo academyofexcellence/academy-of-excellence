@@ -791,14 +791,6 @@ const AdminDashboard = () => {
         }
       }
 
-      if (courseData) {
-        setCourses(courseData);
-        if (courseData.length > 0 && !filterCourse) {
-          setFilterCourse(courseData[0].id);
-          setNewIntervalCourse(courseData[0].id);
-        }
-      }
-
       // 5b. Fetch Students
       try {
         const { data: stdData } = await supabase.from('student_profiles').select(`
@@ -809,7 +801,6 @@ const AdminDashboard = () => {
       } catch (e) {
         console.warn('Direct student_profiles fetch failed:', e);
       }
-      if (studentData) setStudentList(studentData);
 
       // 5c. Fetch Scoring Intervals
       try {
@@ -830,8 +821,47 @@ const AdminDashboard = () => {
         }
       }
 
-      if (intervalsData) {
-        setIntervalsList(intervalsData);
+      if (courseData && courseData.length > 0) setCourses(courseData);
+      if (studentData && studentData.length > 0) setStudentList(studentData);
+      if (intervalsData && intervalsData.length > 0) setIntervalsList(intervalsData);
+
+      if (courseData && courseData.length > 0) {
+        // Auto-detect Professional Diploma in Translation course
+        const prefCourse = courseData.find(c => 
+          c.name.toLowerCase().includes('professional diploma in translation') || 
+          c.name.toLowerCase().includes('translation')
+        ) || courseData[0];
+
+        // Auto-detect highest live batch number
+        let highestBatch = 0;
+        if (intervalsData && intervalsData.length > 0) {
+          intervalsData.forEach(i => {
+            if (i.course_id === prefCourse.id || !i.course_id) {
+              const b = parseBatchNumber(i.batch_number);
+              if (b > highestBatch) highestBatch = b;
+            }
+          });
+        }
+        if (studentData && studentData.length > 0) {
+          studentData.forEach(s => {
+            if (s.course_id === prefCourse.id) {
+              const b = parseBatchNumber(s.batch_number);
+              if (b > highestBatch) highestBatch = b;
+            }
+          });
+        }
+        if (highestBatch === 0 && intervalsData && intervalsData.length > 0) {
+          intervalsData.forEach(i => {
+            const b = parseBatchNumber(i.batch_number);
+            if (b > highestBatch) highestBatch = b;
+          });
+        }
+
+        const targetBatch = highestBatch > 0 ? String(highestBatch) : '27';
+
+        if (!filterCourse) setFilterCourse(prefCourse.id);
+        if (!filterBatch) setFilterBatch(targetBatch);
+        setNewIntervalCourse(prefCourse.id);
       }
     } catch (e) {
       console.warn('Error loading courses/students/intervals:', e);
