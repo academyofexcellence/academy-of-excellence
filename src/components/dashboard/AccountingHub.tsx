@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Course, StudentProfile, StudentFeeProfile, FeePaymentTransaction, AcademyExpense } from '../../lib/types';
-import { DollarSign, CreditCard, Wallet, TrendingUp, TrendingDown, RefreshCw, PlusCircle, Search, Printer, Send, Edit3, CheckCircle2, AlertCircle, FileText, X, ArrowUpRight, ArrowDownRight, Calendar, ShieldCheck, Tag, Settings } from 'lucide-react';
+import { DollarSign, CreditCard, Wallet, TrendingUp, TrendingDown, RefreshCw, PlusCircle, Search, Printer, Send, Edit3, Trash2, CheckCircle2, AlertCircle, FileText, X, ArrowUpRight, ArrowDownRight, Calendar, ShieldCheck, Tag, Settings } from 'lucide-react';
 
 interface AccountingHubProps {
   coursesList: Course[];
@@ -54,6 +54,14 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
   const [expenseAmount, setExpenseAmount] = useState<number | string>('');
   const [expenseMode, setExpenseMode] = useState<'office_cash' | 'gpay_bank'>('office_cash');
   const [expenseNotes, setExpenseNotes] = useState<string>('');
+
+  // Edit Expense Outflow Modal
+  const [editingExpense, setEditingExpense] = useState<AcademyExpense | null>(null);
+  const [editExpenseTitle, setEditExpenseTitle] = useState<string>('');
+  const [editExpenseCategory, setEditExpenseCategory] = useState<'rent' | 'utilities' | 'salaries' | 'supplies' | 'marketing' | 'maintenance' | 'other'>('supplies');
+  const [editExpenseAmount, setEditExpenseAmount] = useState<number | string>('');
+  const [editExpenseMode, setEditExpenseMode] = useState<'office_cash' | 'gpay_bank'>('office_cash');
+  const [editExpenseNotes, setEditExpenseNotes] = useState<string>('');
 
   // Add Other Income Modal (Non-Fee Inflow)
   const [showAddIncome, setShowAddIncome] = useState<boolean>(false);
@@ -407,6 +415,63 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
     } catch (err: any) {
       console.error('Error saving expense:', err);
       alert(`Failed to record expense: ${err.message}`);
+    } finally {
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  // --- UPDATE ACADEMY EXPENSE OUTFLOW ---
+  const handleUpdateExpense = async () => {
+    if (!editingExpense) return;
+    const numericExpense = Number(editExpenseAmount) || 0;
+    if (!editExpenseTitle.trim() || numericExpense <= 0) {
+      alert('Please enter a valid expense title and amount.');
+      return;
+    }
+
+    try {
+      const payload = {
+        title: editExpenseTitle,
+        category: editExpenseCategory,
+        amount: numericExpense,
+        payment_mode: editExpenseMode,
+        notes: editExpenseNotes || null,
+      };
+
+      const { error } = await supabase
+        .from('academy_expenses')
+        .update(payload)
+        .eq('id', editingExpense.id);
+
+      if (error) throw error;
+
+      setMessage(`✅ Updated expense: "${editExpenseTitle}" (₹${numericExpense.toLocaleString()})`);
+      setEditingExpense(null);
+      await fetchAllFinancialData();
+    } catch (err: any) {
+      console.error('Error updating expense:', err);
+      alert(`Failed to update expense: ${err.message}`);
+    } finally {
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  // --- DELETE ACADEMY EXPENSE OUTFLOW ---
+  const handleDeleteExpense = async (expenseId: string, title: string) => {
+    if (!confirm(`Are you sure you want to delete expense "${title}"?`)) return;
+    try {
+      const { error } = await supabase
+        .from('academy_expenses')
+        .delete()
+        .eq('id', expenseId);
+
+      if (error) throw error;
+
+      setMessage(`✅ Deleted expense entry: "${title}"`);
+      await fetchAllFinancialData();
+    } catch (err: any) {
+      console.error('Error deleting expense:', err);
+      alert(`Failed to delete expense: ${err.message}`);
     } finally {
       setTimeout(() => setMessage(''), 4000);
     }
@@ -989,6 +1054,7 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                     <th style={{ padding: '0.75rem 1rem' }}>Paid From Account</th>
                     <th style={{ padding: '0.75rem 1rem' }}>Date</th>
                     <th style={{ padding: '0.75rem 1rem' }}>Logged By</th>
+                    <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1016,6 +1082,31 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                       </td>
                       <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>
                         {exp.logged_by}
+                      </td>
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => {
+                              setEditingExpense(exp);
+                              setEditExpenseTitle(exp.title);
+                              setEditExpenseCategory(exp.category);
+                              setEditExpenseAmount(exp.amount);
+                              setEditExpenseMode(exp.payment_mode);
+                              setEditExpenseNotes(exp.notes || '');
+                            }}
+                            title="Edit Expense Entry"
+                            style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#2563eb', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                          >
+                            <Edit3 size={14} /> Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteExpense(exp.id, exp.title)}
+                            title="Delete Expense Entry"
+                            style={{ padding: '0.35rem 0.65rem', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontWeight: 700, cursor: 'pointer', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                          >
+                            <Trash2 size={14} /> Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1455,6 +1546,101 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               </button>
               <button onClick={handleSaveEditPaidFee} style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#16a34a', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
                 Save Paid Fee Correction
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- EDIT EXPENSE OUTFLOW MODAL --- */}
+      {editingExpense && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '16px', width: '100%', maxWidth: '450px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+              <div>
+                <h4 style={{ margin: 0, fontWeight: 800, color: '#dc2626', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Edit3 size={20} /> Edit Expense Entry
+                </h4>
+                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                  Correct entry error for logged outflow
+                </p>
+              </div>
+              <button onClick={() => setEditingExpense(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Expense Title *</label>
+              <input
+                type="text"
+                placeholder="e.g. Office Electricity Bill / Tea / Paper"
+                value={editExpenseTitle}
+                onChange={(e) => setEditExpenseTitle(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Category</label>
+                <select
+                  value={editExpenseCategory}
+                  onChange={(e) => setEditExpenseCategory(e.target.value as any)}
+                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                >
+                  <option value="supplies">Office Supplies / Tea</option>
+                  <option value="rent">Building Rent</option>
+                  <option value="utilities">Electricity / Internet</option>
+                  <option value="salaries">Staff Salaries / Bonus</option>
+                  <option value="marketing">Ads & Marketing</option>
+                  <option value="maintenance">Maintenance & Repairs</option>
+                  <option value="other">Other Expense</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Amount Outflow (₹) *</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 480"
+                  value={editExpenseAmount}
+                  onChange={(e) => setEditExpenseAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '2px solid #dc2626', fontSize: '1rem', fontWeight: 800, color: '#dc2626' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Paid Out From *</label>
+              <select
+                value={editExpenseMode}
+                onChange={(e) => setEditExpenseMode(e.target.value as any)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700 }}
+              >
+                <option value="office_cash">💵 Office Cash (Drawer Safe)</option>
+                <option value="gpay_bank">💳 GPay / Academy Bank</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.3rem' }}>Notes / Description</label>
+              <input
+                type="text"
+                placeholder="Optional explanation for entry correction"
+                value={editExpenseNotes}
+                onChange={(e) => setEditExpenseNotes(e.target.value)}
+                style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditingExpense(null)} style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button onClick={handleUpdateExpense} style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', border: 'none', background: '#dc2626', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
+                Save Expense Correction
               </button>
             </div>
 
