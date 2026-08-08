@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Course, StudentProfile, StudentFeeProfile, FeePaymentTransaction, AcademyExpense } from '../../lib/types';
-import { DollarSign, CreditCard, Wallet, TrendingUp, TrendingDown, RefreshCw, PlusCircle, Search, Printer, Send, Edit3, Trash2, CheckCircle2, AlertCircle, FileText, X, ArrowUpRight, ArrowDownRight, Calendar, ShieldCheck, Tag, Settings } from 'lucide-react';
+import { DollarSign, CreditCard, Wallet, TrendingUp, TrendingDown, RefreshCw, PlusCircle, Search, Printer, Send, Edit3, Trash2, CheckCircle2, AlertCircle, FileText, X, ArrowUpRight, ArrowDownRight, Calendar, ShieldCheck, Tag, Settings, FileSpreadsheet } from 'lucide-react';
 
 interface AccountingHubProps {
   coursesList: Course[];
@@ -477,6 +477,165 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
     }
   };
 
+  // --- EXPORT STUDENT FEE ROSTER TO EXCEL / CSV ---
+  const handleExportFeeRosterCSV = () => {
+    const targetStudents = activeStudents.length > 0 ? activeStudents : studentList;
+    if (targetStudents.length === 0) {
+      alert('No student fee records to export.');
+      return;
+    }
+
+    const headers = [
+      'Roll Number',
+      'Student Name',
+      'Course Name',
+      'Batch Number',
+      'Standard Fee (INR)',
+      'Discount / Concession (INR)',
+      'Net Agreed Fee (INR)',
+      'Total Amount Paid (INR)',
+      'Balance Due (INR)',
+      'Fee Payment Status',
+      'Discount Reason / Remarks',
+      'Student Email',
+      'Student Phone'
+    ];
+
+    const rows = targetStudents.map(student => {
+      const profile = feeProfiles.find(p => p.student_id === student.id);
+      const agreedFee = profile ? Number(profile.total_agreed_fee) : 25000;
+      const stdFee = profile?.standard_fee ? Number(profile.standard_fee) : 25000;
+      const concession = profile?.discount_amount ? Number(profile.discount_amount) : 0;
+      const totalPaid = profile ? Number(profile.total_paid) : 0;
+      const balance = Math.max(0, agreedFee - totalPaid);
+      const status = totalPaid >= agreedFee ? 'FULLY PAID' : (totalPaid > 0 ? 'PARTIALLY PAID' : 'UNPAID');
+
+      return [
+        student.roll_number || 'N/A',
+        student.name,
+        selectedCourse?.name || 'Professional Diploma in Translation and Office Administration',
+        selectedBatchNumber,
+        stdFee,
+        concession,
+        agreedFee,
+        totalPaid,
+        balance,
+        status,
+        profile?.discount_reason || '',
+        student.email || '',
+        (student as any).phone || ''
+      ];
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `academy_student_fee_roster_batch_${selectedBatchNumber}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // --- EXPORT EXPENSE TRACKER TO EXCEL / CSV ---
+  const handleExportExpensesCSV = () => {
+    if (expenses.length === 0) {
+      alert('No expense records to export.');
+      return;
+    }
+
+    const headers = [
+      'Expense Title',
+      'Category',
+      'Amount Outflow (INR)',
+      'Payment Account Mode',
+      'Expense Date',
+      'Logged By Staff',
+      'Notes / Description'
+    ];
+
+    const rows = expenses.map(exp => [
+      exp.title,
+      exp.category,
+      Number(exp.amount),
+      exp.payment_mode === 'office_cash' ? 'Office Cash (Drawer Safe)' : 'GPay / Bank Account',
+      new Date(exp.expense_date).toLocaleDateString(),
+      exp.logged_by,
+      exp.notes || ''
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `academy_expense_tracker_outflows_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // --- EXPORT AUDIT LEDGER TO EXCEL / CSV ---
+  const handleExportLedgerCSV = () => {
+    const headers = [
+      'Entry Type',
+      'Receipt / Reference No',
+      'Description / Entity',
+      'Category / Installment',
+      'Inflow Amount (+INR)',
+      'Outflow Amount (-INR)',
+      'Payment Mode / Account',
+      'Transaction Date'
+    ];
+
+    const rows: any[][] = [];
+
+    // Add Inflow Transactions
+    transactions.forEach(tx => {
+      rows.push([
+        'INFLOW (Fee Collection)',
+        tx.receipt_no,
+        tx.student_name,
+        tx.installment_label,
+        Number(tx.amount_paid),
+        0,
+        tx.payment_mode === 'gpay_bank' ? 'GPay / Bank' : 'Office Cash',
+        new Date(tx.payment_date).toLocaleString()
+      ]);
+    });
+
+    // Add Expense Outflows
+    expenses.forEach(exp => {
+      rows.push([
+        'OUTFLOW (Academy Expense)',
+        `EXP-${exp.id.slice(0, 8)}`,
+        exp.title,
+        exp.category,
+        0,
+        Number(exp.amount),
+        exp.payment_mode === 'office_cash' ? 'Office Cash' : 'GPay / Bank',
+        new Date(exp.expense_date).toLocaleString()
+      ]);
+    });
+
+    // Sort chronologically
+    rows.sort((a, b) => new Date(b[7]).getTime() - new Date(a[7]).getTime());
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `academy_financial_audit_ledger_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // --- LOG OTHER ACADEMY INCOME (NON-FEE INFLOW) ---
   const handleSaveOtherIncome = async () => {
     const numericAmount = Number(incomeAmount) || 0;
@@ -877,6 +1036,14 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
                 </button>
               </div>
 
+              <button
+                onClick={handleExportFeeRosterCSV}
+                style={{ padding: '0.5rem 0.9rem', borderRadius: '8px', background: '#16a34a', color: 'white', border: 'none', fontWeight: 800, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                title="Export Student Fee Roster to Excel CSV"
+              >
+                <FileSpreadsheet size={16} /> Export Fee Roster to Excel
+              </button>
+
             </div>
           </div>
 
@@ -1030,13 +1197,21 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               </p>
             </div>
 
-            <button
-              onClick={() => setShowAddExpense(true)}
-              className="btn btn-primary"
-              style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', background: '#dc2626', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-            >
-              <PlusCircle size={16} /> Record Expense
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={handleExportExpensesCSV}
+                style={{ padding: '0.55rem 1.1rem', borderRadius: '8px', background: '#16a34a', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
+              >
+                <FileSpreadsheet size={16} /> Export Expenses to Excel
+              </button>
+              <button
+                onClick={() => setShowAddExpense(true)}
+                className="btn btn-primary"
+                style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', background: '#dc2626', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <PlusCircle size={16} /> Record Expense
+              </button>
+            </div>
           </div>
 
           {expenses.length === 0 ? (
@@ -1132,13 +1307,21 @@ export default function AccountingHub({ coursesList, studentList }: AccountingHu
               </p>
             </div>
 
-            <button
-              onClick={() => window.print()}
-              className="btn btn-primary"
-              style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', background: '#b45309', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-            >
-              <Printer size={16} /> Print Financial Statement
-            </button>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={handleExportLedgerCSV}
+                style={{ padding: '0.55rem 1.1rem', borderRadius: '8px', background: '#16a34a', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
+              >
+                <FileSpreadsheet size={16} /> Export Ledger to Excel
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="btn btn-primary"
+                style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', background: '#b45309', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Printer size={16} /> Print Financial Statement
+              </button>
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>

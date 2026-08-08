@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Course, StudentProfile, CertificateRecord } from '../../lib/types';
-import { Award, Download, Printer, RefreshCw, Search, ShieldCheck, Trash2, CheckCircle2, AlertCircle, Eye, ExternalLink, QrCode, Keyboard, CheckSquare, Square, Calendar, Edit3, X } from 'lucide-react';
+import { Award, Download, Printer, RefreshCw, Search, ShieldCheck, Trash2, CheckCircle2, AlertCircle, Eye, ExternalLink, QrCode, Keyboard, CheckSquare, Square, Calendar, Edit3, X, FileSpreadsheet } from 'lucide-react';
 import QRCode from 'qrcode';
 
 interface CertificateHubProps {
@@ -317,6 +317,55 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
     }
   };
 
+  // Export Certificate Registry Data to CSV / Excel for Safe Keeping
+  const handleExportCertificatesCSV = () => {
+    if (certificates.length === 0) {
+      alert('No certificate records available to export.');
+      return;
+    }
+
+    const headers = [
+      'Certificate Serial Code',
+      'Certificate Type',
+      'Student Name',
+      'Student ID',
+      'Roll Number',
+      'Course Name',
+      'Batch Number',
+      'Issue Date',
+      'Status',
+      'Grade / Description',
+      'Verification Link',
+      'Created Timestamp'
+    ];
+
+    const rows = certificates.map(c => [
+      c.certificate_code,
+      c.certificate_type || (c.certificate_code.startsWith('CAT') ? 'CAT' : 'DPT'),
+      c.student_name,
+      c.student_id,
+      c.roll_number || 'N/A',
+      c.course_name,
+      c.batch_number,
+      c.issue_date,
+      c.status === 'revoked' ? 'REVOKED' : 'VALID / VERIFIED',
+      c.grade_description || 'Passed with Distinction',
+      `https://academyofexcellence.co.in/verify?code=${c.certificate_code}`,
+      c.created_at ? new Date(c.created_at).toLocaleString() : ''
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `academy_certificate_registry_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const filteredCertificates = certificates.filter(c => 
     c.student_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.certificate_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -566,15 +615,24 @@ export default function CertificateHub({ coursesList, studentList }: Certificate
             <ShieldCheck size={20} className="text-primary" /> Issued Certificate Registry ({certificates.length})
           </h3>
 
-          <div style={{ position: 'relative', width: '260px' }}>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by student, code, or CAT/DPT..."
-              style={{ width: '100%', padding: '0.5rem 0.75rem 0.5rem 2.25rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
-            />
-            <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleExportCertificatesCSV}
+              style={{ padding: '0.5rem 0.9rem', borderRadius: '8px', background: '#16a34a', color: 'white', border: 'none', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              <FileSpreadsheet size={16} /> Export Certificates to Excel
+            </button>
+
+            <div style={{ position: 'relative', width: '260px' }}>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by student, code, or CAT/DPT..."
+                style={{ width: '100%', padding: '0.5rem 0.75rem 0.5rem 2.25rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+              />
+              <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            </div>
           </div>
         </div>
 
