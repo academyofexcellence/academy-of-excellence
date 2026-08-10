@@ -243,3 +243,55 @@ BEGIN
     RETURN jsonb_build_object('success', true);
 END;
 $$;
+
+-- 12. Security Definer RPC helper to reset user password
+CREATE OR REPLACE FUNCTION public.reset_auth_user_password(
+    user_id UUID DEFAULT NULL,
+    new_password TEXT DEFAULT NULL,
+    target_email TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    target_id UUID := user_id;
+BEGIN
+    IF target_id IS NULL AND target_email IS NOT NULL THEN
+        SELECT id INTO target_id FROM auth.users WHERE lower(email) = lower(trim(target_email));
+    END IF;
+
+    IF target_id IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Target user account not found in Auth schema.');
+    END IF;
+
+    IF new_password IS NULL OR length(trim(new_password)) < 4 THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Password must be at least 4 characters long.');
+    END IF;
+
+    UPDATE auth.users
+    SET encrypted_password = crypt(trim(new_password), gen_salt('bf')),
+        updated_at = now()
+    WHERE id = target_id;
+
+    RETURN jsonb_build_object('success', true, 'message', 'Password updated successfully.');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.reset_auth_user_password(UUID, TEXT, TEXT) TO anon, authenticated, service_role, postgres;
+
+-- 13. Security Definer RPC helper to delete user auth account safely
+CREATE OR REPLACE FUNCTION public.delete_auth_user(user_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    DELETE FROM auth.users WHERE id = user_id;
+    DELETE FROM public.student_profiles WHERE id = user_id;
+    DELETE FROM public.staff_profiles WHERE id = user_id;
+    RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.delete_auth_user(UUID) TO anon, authenticated, service_role, postgres;

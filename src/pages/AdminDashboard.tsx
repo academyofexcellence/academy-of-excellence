@@ -3995,24 +3995,35 @@ const AdminDashboard = () => {
 
   // Reset password of student/staff via RPC (Leadership only)
   const handleResetPassword = async (userId: string, newPw: string, email?: string) => {
-    if (!newPw) {
-      setMessage('❌ Please enter a new password.');
+    if (!newPw || newPw.trim().length < 4) {
+      setMessage('❌ Please enter a valid new password (minimum 4 characters).');
       setTimeout(() => setMessage(''), 4000);
       return;
     }
     try {
-      const { error } = await supabase.rpc('reset_auth_user_password', {
+      const { data, error } = await supabase.rpc('reset_auth_user_password', {
         user_id: userId,
-        new_password: newPw,
+        new_password: newPw.trim(),
         target_email: email || null
       });
-      if (error) throw error;
+
+      if (error) {
+        if (error.message?.includes('Could not find the function') || error.message?.includes('schema cache')) {
+          alert("⚠️ The password reset function needs to be applied in Supabase SQL Editor.\n\nPlease copy and run the FIX_DATABASE_SCHEMA_ERROR.sql script in your Supabase Dashboard SQL Editor.");
+        }
+        throw error;
+      }
+
+      if (data && data.success === false) {
+        throw new Error(data.message || 'Password reset failed.');
+      }
+
       setMessage('✅ Password reset successfully.');
     } catch (err: any) {
-      console.error(err);
+      console.error('handleResetPassword error:', err);
       setMessage(`❌ Failed to reset password: ${err.message}`);
     }
-    setTimeout(() => setMessage(''), 4000);
+    setTimeout(() => setMessage(''), 5000);
   };
 
   // Delete student/staff auth account (cascades to public profile)
