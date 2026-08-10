@@ -245,6 +245,10 @@ END;
 $$;
 
 -- 12. Security Definer RPC helper to reset user password
+DROP FUNCTION IF EXISTS public.reset_auth_user_password(UUID, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.reset_auth_user_password(TEXT, TEXT, UUID);
+DROP FUNCTION IF EXISTS public.reset_auth_user_password;
+
 CREATE OR REPLACE FUNCTION public.reset_auth_user_password(
     user_id UUID DEFAULT NULL,
     new_password TEXT DEFAULT NULL,
@@ -281,6 +285,10 @@ $$;
 GRANT EXECUTE ON FUNCTION public.reset_auth_user_password(UUID, TEXT, TEXT) TO anon, authenticated, service_role, postgres;
 
 -- 13. Security Definer RPC helper to delete user auth account safely
+DROP FUNCTION IF EXISTS public.delete_auth_user(UUID);
+DROP FUNCTION IF EXISTS public.delete_auth_user(TEXT);
+DROP FUNCTION IF EXISTS public.delete_auth_user;
+
 CREATE OR REPLACE FUNCTION public.delete_auth_user(user_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
