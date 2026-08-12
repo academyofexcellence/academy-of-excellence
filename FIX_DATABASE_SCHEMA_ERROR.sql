@@ -322,7 +322,11 @@ BEGIN
         SELECT id, email, raw_user_meta_data 
         FROM auth.users 
         WHERE (raw_user_meta_data->>'is_student')::boolean = true
+           OR raw_user_meta_data->>'course_id' IS NOT NULL
     LOOP
+        -- Automatically cleanup student if accidentally created in staff_profiles
+        DELETE FROM public.staff_profiles WHERE id = u.id;
+
         IF NOT EXISTS (SELECT 1 FROM public.student_profiles WHERE id = u.id) THEN
             BEGIN
                 course_id_val := (u.raw_user_meta_data->>'course_id')::uuid;

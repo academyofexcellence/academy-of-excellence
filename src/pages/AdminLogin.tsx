@@ -245,29 +245,78 @@ const AdminLogin = () => {
         return;
       }
 
-      // Safeguard: Check metadata if is_student is explicitly false
+      // Check user metadata to differentiate between student vs staff auto-heal
       const meta = authData.user.user_metadata || {};
-      if (meta.is_student === false) {
-        navigate('/admin/dashboard');
-        return;
-      }
+      const isStudentMeta = meta.is_student === true || !!meta.course_id;
 
-      // If registered in Auth but missing from both profile tables, auto-heal into staff_profiles
-      try {
-        await supabase.from('staff_profiles').upsert({
-          id: authData.user.id,
-          email: authData.user.email || cleanEmail,
-          name: meta.name || fullName || 'Staff Member',
-          designation: meta.designation || 'Staff Member',
-          role: 'staff',
-          status: 'pending'
-        }, { onConflict: 'id' });
-      } catch (e) {
-        console.warn('Auto-heal upsert skipped:', e);
-      }
+      if (isStudentMeta) {
+        // Auto-heal student into student_profiles table and clean up from staff_profiles if mistakenly inserted
+        try {
+          await supabase.from('staff_profiles').delete().eq('id', authData.user.id);
+        } catch (e) {
+          console.warn('Cleanup staff_profiles skipped:', e);
+        }
 
-      await supabase.auth.signOut();
-      throw new Error('🎉 Staff profile has been linked! Your account is now pending approval in the Staff Directory by management.');
+        try {
+          let defaultCourseId = meta.course_id;
+          if (!defaultCourseId) {
+            const { data: cData } = await supabase.from('courses').select('id').order('name', { ascending: true }).limit(1);
+            if (cData && cData.length > 0) defaultCourseId = cData[0].id;
+          }
+
+          if (defaultCourseId) {
+            await supabase.from('student_profiles').upsert({
+              id: authData.user.id,
+              email: authData.user.email || cleanEmail,
+              name: meta.name || fullName || 'Student User',
+              course_id: defaultCourseId,
+              batch_number: parseInt(meta.batch_number || '27'),
+              status: 'pending',
+              roll_number: meta.roll_number || null,
+              is_alumni_signup: meta.is_alumni_signup || false,
+              mobile_number: meta.mobile_number || null,
+              whatsapp_number: meta.whatsapp_number || null,
+              hometown: meta.hometown || null,
+              house_name: meta.house_name || null,
+              street: meta.street || null,
+              locality: meta.locality || null,
+              district: meta.district || null,
+              state: meta.state || 'Kerala',
+              pincode: meta.pincode || null,
+              total_experience_years: meta.total_experience_years || null,
+              experience_details: meta.experience_details || null,
+              education_degree: meta.education_degree || null,
+              education_degree_college: meta.education_degree_college || null,
+              education_degree_year: meta.education_degree_year || null,
+              education_pg: meta.education_pg || null,
+              education_pg_college: meta.education_pg_college || null,
+              education_pg_year: meta.education_pg_year || null
+            }, { onConflict: 'id' });
+          }
+        } catch (e) {
+          console.warn('Student auto-heal upsert skipped:', e);
+        }
+
+        await supabase.auth.signOut();
+        throw new Error('🎉 Your student registration is pending approval in the Student Directory by staff.');
+      } else {
+        // Auto-heal staff into staff_profiles table
+        try {
+          await supabase.from('staff_profiles').upsert({
+            id: authData.user.id,
+            email: authData.user.email || cleanEmail,
+            name: meta.name || fullName || 'Staff Member',
+            designation: meta.designation || 'Staff Member',
+            role: 'staff',
+            status: 'pending'
+          }, { onConflict: 'id' });
+        } catch (e) {
+          console.warn('Staff auto-heal upsert skipped:', e);
+        }
+
+        await supabase.auth.signOut();
+        throw new Error('🎉 Staff profile has been linked! Your account is now pending approval in the Staff Directory by management.');
+      }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please try again.');
       setLoading(false);
