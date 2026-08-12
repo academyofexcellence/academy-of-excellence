@@ -791,8 +791,14 @@ const AdminDashboard = () => {
         }
       }
 
-      // 5b. Fetch Students
+      // 5b. Fetch Students & Auto-Sync Unlinked Registrations
       try {
+        try {
+          await supabase.rpc('sync_unlinked_student_registrations');
+        } catch (syncErr) {
+          console.warn('sync_unlinked_student_registrations RPC skipped:', syncErr);
+        }
+
         const { data: stdData } = await supabase.from('student_profiles').select(`
           *,
           courses:course_id (name)

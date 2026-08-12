@@ -376,17 +376,23 @@ const AdminLogin = () => {
     setError('');
     setSuccessMsg('');
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    const cleanName = fullName.trim();
+    const cleanRoll = rollNumber.trim() || null;
+    const parsedBatch = parseInt(batchNumber, 10);
+
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: cleanPassword,
         options: {
           data: {
             is_student: true,
-            name: fullName,
+            name: cleanName,
             course_id: selectedCourse,
-            batch_number: parseInt(batchNumber),
-            roll_number: rollNumber,
+            batch_number: parsedBatch,
+            roll_number: cleanRoll,
             is_alumni_signup: isAlumniSignup,
             // Contact & Address
             mobile_number: mobileNumber,
@@ -427,7 +433,104 @@ const AdminLogin = () => {
         },
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        if (signUpError.message?.toLowerCase().includes('already registered')) {
+          const { data: signInData } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password: cleanPassword
+          });
+
+          if (signInData?.user) {
+            await supabase.from('student_profiles').upsert({
+              id: signInData.user.id,
+              email: cleanEmail,
+              name: cleanName,
+              course_id: selectedCourse,
+              batch_number: parsedBatch,
+              roll_number: cleanRoll,
+              status: 'pending',
+              is_alumni_signup: isAlumniSignup,
+              mobile_number: mobileNumber,
+              whatsapp_number: whatsappNumber,
+              hometown: hometown,
+              house_name: houseName,
+              street: street,
+              locality: locality,
+              district: district,
+              state: stateStr || 'Kerala',
+              pincode: pincode,
+              total_experience_years: totalExperienceYears,
+              experience_details: experienceDetails,
+              education_degree: educationDegree || null,
+              education_degree_college: educationDegreeCollege || null,
+              education_degree_year: educationDegreeYear || null,
+              education_pg: educationPg || null,
+              education_pg_college: educationPgCollege || null,
+              education_pg_year: educationPgYear || null
+            }, { onConflict: 'id' });
+
+            await supabase.auth.signOut();
+            setSuccessMsg(
+              isAlumniSignup 
+                ? '🎉 Alumni registration updated! Your account is pending approval by the admin.' 
+                : '🎉 Student registration updated! Your account is pending approval by institute staff.'
+            );
+            resetForm();
+            return;
+          }
+        }
+        throw signUpError;
+      }
+
+      // Guaranteed direct insert safeguard into student_profiles table
+      if (authData?.user) {
+        await supabase.from('student_profiles').upsert({
+          id: authData.user.id,
+          email: cleanEmail,
+          name: cleanName,
+          course_id: selectedCourse,
+          batch_number: parsedBatch,
+          roll_number: cleanRoll,
+          status: 'pending',
+          is_alumni_signup: isAlumniSignup,
+          mobile_number: mobileNumber,
+          whatsapp_number: whatsappNumber,
+          hometown: hometown,
+          house_name: houseName,
+          street: street,
+          locality: locality,
+          district: district,
+          state: stateStr || 'Kerala',
+          pincode: pincode,
+          total_experience_years: totalExperienceYears,
+          experience_details: experienceDetails,
+          education_degree: educationDegree || null,
+          education_degree_college: educationDegreeCollege || null,
+          education_degree_year: educationDegreeYear || null,
+          education_pg: educationPg || null,
+          education_pg_college: educationPgCollege || null,
+          education_pg_year: educationPgYear || null
+        }, { onConflict: 'id' });
+
+        if (isAlumniSignup) {
+          await supabase.from('alumni_profiles').upsert({
+            student_id: authData.user.id,
+            employment_status: employmentStatus,
+            preferred_location: preferredLocation,
+            preferred_roles: preferredRoles || null,
+            current_job_title: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentJobTitle : null,
+            current_company: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentCompany : null,
+            current_work_location: (employmentStatus === 'employed' || employmentStatus === 'employed_looking') ? currentWorkLocation : null,
+            skills_learned: skillsLearned || null,
+            linkedin_url: linkedinUrl || null,
+            marital_status: maritalStatus,
+            spouse_name: maritalStatus === 'married' ? spouseName : null,
+            spouse_profession: maritalStatus === 'married' ? spouseProfession : null,
+            spouse_company: maritalStatus === 'married' ? spouseCompany : null,
+            spouse_work_location: maritalStatus === 'married' ? spouseWorkLocation : null
+          }, { onConflict: 'student_id' });
+        }
+      }
 
       setSuccessMsg(
         isAlumniSignup 

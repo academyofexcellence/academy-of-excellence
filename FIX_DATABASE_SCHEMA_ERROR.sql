@@ -303,3 +303,81 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.delete_auth_user(UUID) TO anon, authenticated, service_role, postgres;
+
+-- 14. Security Definer RPC helper to sync unlinked student registrations from auth.users into student_profiles
+DROP FUNCTION IF EXISTS public.sync_unlinked_student_registrations();
+
+CREATE OR REPLACE FUNCTION public.sync_unlinked_student_registrations()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    u RECORD;
+    synced_count INT := 0;
+    course_id_val UUID;
+    batch_num_val INT;
+BEGIN
+    FOR u IN 
+        SELECT id, email, raw_user_meta_data 
+        FROM auth.users 
+        WHERE (raw_user_meta_data->>'is_student')::boolean = true
+    LOOP
+        IF NOT EXISTS (SELECT 1 FROM public.student_profiles WHERE id = u.id) THEN
+            BEGIN
+                course_id_val := (u.raw_user_meta_data->>'course_id')::uuid;
+            EXCEPTION WHEN OTHERS THEN
+                course_id_val := NULL;
+            END;
+
+            IF course_id_val IS NULL THEN
+                SELECT id INTO course_id_val FROM public.courses ORDER BY name ASC LIMIT 1;
+            END IF;
+
+            batch_num_val := COALESCE((u.raw_user_meta_data->>'batch_number')::integer, 27);
+
+            IF course_id_val IS NOT NULL THEN
+                INSERT INTO public.student_profiles (
+                    id, email, name, course_id, batch_number, status, roll_number, is_alumni_signup,
+                    hometown, house_name, street, locality, district, state, pincode, mobile_number, whatsapp_number,
+                    total_experience_years, experience_details,
+                    education_degree, education_degree_college, education_degree_year,
+                    education_pg, education_pg_college, education_pg_year
+                ) VALUES (
+                    u.id,
+                    u.email,
+                    COALESCE(u.raw_user_meta_data->>'name', 'Student User'),
+                    course_id_val,
+                    batch_num_val,
+                    'pending',
+                    u.raw_user_meta_data->>'roll_number',
+                    COALESCE((u.raw_user_meta_data->>'is_alumni_signup')::boolean, false),
+                    u.raw_user_meta_data->>'hometown',
+                    u.raw_user_meta_data->>'house_name',
+                    u.raw_user_meta_data->>'street',
+                    u.raw_user_meta_data->>'locality',
+                    u.raw_user_meta_data->>'district',
+                    COALESCE(u.raw_user_meta_data->>'state', 'Kerala'),
+                    u.raw_user_meta_data->>'pincode',
+                    u.raw_user_meta_data->>'mobile_number',
+                    u.raw_user_meta_data->>'whatsapp_number',
+                    u.raw_user_meta_data->>'total_experience_years',
+                    u.raw_user_meta_data->>'experience_details',
+                    u.raw_user_meta_data->>'education_degree',
+                    u.raw_user_meta_data->>'education_degree_college',
+                    u.raw_user_meta_data->>'education_degree_year',
+                    u.raw_user_meta_data->>'education_pg',
+                    u.raw_user_meta_data->>'education_pg_college',
+                    u.raw_user_meta_data->>'education_pg_year'
+                ) ON CONFLICT (id) DO NOTHING;
+
+                synced_count := synced_count + 1;
+            END IF;
+        END IF;
+    END LOOP;
+
+    RETURN jsonb_build_object('success', true, 'synced_count', synced_count);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.sync_unlinked_student_registrations() TO anon, authenticated, service_role, postgres;
