@@ -979,6 +979,86 @@ html {
   }
 }
 
+/* Core Values & Vision Mission Styles */
+.vision-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(201, 156, 51, 0.2);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(253, 251, 247, 0.7) 100%);
+  border-radius: 20px;
+}
 
+.mission-card {
+  border: 1px solid rgba(201, 156, 51, 0.2);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(253, 251, 247, 0.7) 100%);
+  border-radius: 20px;
+}
 
+.mission-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: rgba(201, 156, 51, 0.04);
+  border: 1px solid rgba(201, 156, 51, 0.08);
+  transition: all 0.25s ease;
+}
 
+.mission-item:hover {
+  background: rgba(201, 156, 51, 0.1);
+  transform: translateX(4px);
+  border-color: rgba(201, 156, 51, 0.25);
+}
+
+.value-card {
+  position: relative;
+  border: 1px solid rgba(201, 156, 51, 0.15);
+  background: var(--glass-bg);
+  border-radius: 18px;
+  padding: 1.75rem;
+  transition: all 0.35s cubic-bezier(0.165, 0.84, 0.44, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  height: 100%;
+}
+
+.value-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(201, 156, 51, 0.45);
+  box-shadow: 0 16px 32px rgba(201, 156, 51, 0.12);
+}
+
+.value-card .value-icon {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(201, 156, 51, 0.12);
+  color: var(--primary-dark);
+  margin-bottom: 1.25rem;
+  transition: all 0.3s ease;
+}
+
+.value-card:hover .value-icon {
+  background: var(--primary);
+  color: white;
+  transform: scale(1.08) rotate(4deg);
+}
+
+.value-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.6rem;
+}
+
+.value-desc {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  line-height: 1.65;
+  margin: 0;
+}

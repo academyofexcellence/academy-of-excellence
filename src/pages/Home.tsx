@@ -15,7 +15,14 @@ import {
   Clock,
   Phone,
   Mail,
-  MapPin
+  MapPin,
+  Sparkles,
+  Compass,
+  Target,
+  ShieldCheck,
+  Heart,
+  Lightbulb,
+  TrendingUp
 } from 'lucide-react';
 
 interface Testimonial {
@@ -192,6 +199,57 @@ const Home = () => {
     }
   };
 
+  const coreValues = [
+    {
+      title: 'Excellence',
+      desc: 'We strive for the highest standards in teaching, learning, and professional service.',
+      icon: <Award size={26} />
+    },
+    {
+      title: 'Integrity',
+      desc: 'We uphold honesty, transparency, accountability, and ethical conduct in everything we do.',
+      icon: <ShieldCheck size={26} />
+    },
+    {
+      title: 'Knowledge',
+      desc: 'We promote continuous learning, intellectual curiosity, and evidence-based practice.',
+      icon: <BookOpen size={26} />
+    },
+    {
+      title: 'Values',
+      desc: 'We believe education should shape character alongside competence.',
+      icon: <Heart size={26} />
+    },
+    {
+      title: 'Innovation',
+      desc: 'We embrace technology, creativity, and modern educational approaches to prepare learners for the future.',
+      icon: <Lightbulb size={26} />
+    },
+    {
+      title: 'Empowerment',
+      desc: 'We equip individuals and families with the knowledge, skills, and confidence to achieve their aspirations.',
+      icon: <TrendingUp size={26} />
+    },
+    {
+      title: 'Collaboration',
+      desc: 'We foster partnerships among educators, families, institutions, and communities for shared growth.',
+      icon: <Users size={26} />
+    },
+    {
+      title: 'Lifelong Learning',
+      desc: 'We inspire learners to continuously develop academically, professionally, and personally throughout life.',
+      icon: <GraduationCap size={26} />
+    }
+  ];
+
+  const missionPoints = [
+    'To provide comprehensive, high-quality learning solutions in Arabic language, communication, leadership, and life skills for learners of all ages.',
+    'To offer integrated educational, career, and personal development services under one roof for individuals and families.',
+    'To bridge traditional values with contemporary knowledge through innovative, practical, and learner-centered education.',
+    'To cultivate character, confidence, creativity, and lifelong learning under the guidance of experienced educators and professionals.',
+    'To create a vibrant learning ecosystem that transforms knowledge into meaningful impact for society.'
+  ];
+
   return (
     <div className="bg-grid-pattern">
       {/* Hero Section */}
@@ -202,24 +260,28 @@ const Home = () => {
         <div className="container" style={{ position: 'relative', zIndex: 10 }}>
           <div className="grid grid-2" style={{ alignItems: 'center', gap: '3rem' }}>
             <div className="hero-content">
-              <span className="badge">
-                <Award size={16} className="text-primary" /> #1 Bilingual Training Academy
-              </span>
+              {/* Motto Tagline */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', padding: '0.5rem 1.2rem', background: 'rgba(201,156,51,0.12)', border: '1px solid rgba(201,156,51,0.3)', borderRadius: '50px', marginBottom: '1.2rem' }}>
+                <Sparkles size={16} className="text-primary" />
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.5px', color: 'var(--primary-dark)', textTransform: 'uppercase' }}>
+                  Guided by Experts, Driven by Values
+                </span>
+              </div>
               
               <h1 className="heading-xl">
-                Shape Your Future with <span className="text-gradient">Excellence</span>
+                Academy of <span className="text-gradient">Excellence</span>
               </h1>
               
-              <p className="subtitle mt-4 mb-4" style={{ margin: '1.5rem 0', fontSize: '1.25rem', lineHeight: '1.7', textAlign: 'left' }}>
-                Providing professional diploma courses for translation, language proficiency, and corporate administration. Build a strong competitive edge with hands-on bilingual training.
+              <p className="subtitle mt-4 mb-4" style={{ margin: '1.5rem 0', fontSize: '1.2rem', lineHeight: '1.7', textAlign: 'left' }}>
+                A globally recognized Centre of Excellence empowering individuals and families through holistic education in Arabic language, life skills, and personal development.
               </p>
               
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                 <button onClick={() => scrollToSection('programs')} className="btn btn-primary">
                   Explore Programs <ArrowRight size={18} />
                 </button>
-                <button onClick={() => scrollToSection('enquiry')} className="btn btn-outline">
-                  Contact Admissions
+                <button onClick={() => scrollToSection('about')} className="btn btn-outline">
+                  Our Vision & Values
                 </button>
               </div>
             </div>
@@ -294,7 +356,98 @@ const Home = () => {
         </div>
       </section>
 
-      {/* About & Why Choose Us Section */}
+      {/* Vision & Mission Section */}
+      <section id="about" className="section-padding" style={{ position: 'relative' }}>
+        <div className="container">
+          <div className="text-center mb-4">
+            <span className="badge">
+              <Compass size={16} className="text-primary" /> Identity & Purpose
+            </span>
+            <h2 className="heading-lg">Vision & <span className="text-gradient">Mission</span></h2>
+            <p className="subtitle">Nurturing knowledgeable, ethical, and future-ready communities through transformative education.</p>
+          </div>
+
+          <div className="grid grid-2" style={{ gap: '2.5rem', alignItems: 'stretch' }}>
+            {/* Vision Card */}
+            <div className="vision-card glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '2.5rem' }}>
+              <div>
+                <div style={{ display: 'inline-flex', background: 'rgba(201,156,51,0.12)', color: 'var(--primary-dark)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem' }}>
+                  <Compass size={32} />
+                </div>
+                <span className="badge" style={{ display: 'block', width: 'fit-content', marginBottom: '1rem' }}>Our Vision</span>
+                <h3 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '1.2rem', color: 'var(--text-main)' }}>
+                  Centre of Global <span className="text-gradient">Excellence</span>
+                </h3>
+                <p style={{ fontSize: '1.15rem', color: 'var(--text-main)', lineHeight: '1.8', fontWeight: 500 }}>
+                  "To become a globally recognized Centre of Excellence that empowers individuals and families through holistic education in Arabic language, life skills, and personal development, nurturing knowledgeable, ethical, and future-ready communities."
+                </p>
+              </div>
+
+              {/* Motto Feature Spotlight */}
+              <div style={{ marginTop: '2.5rem', padding: '1.25rem 1.5rem', background: 'linear-gradient(135deg, rgba(201,156,51,0.15) 0%, rgba(201,156,51,0.05) 100%)', borderRadius: '16px', border: '1px solid rgba(201,156,51,0.25)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.4rem' }}>
+                  <Sparkles size={20} className="text-primary" />
+                  <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 800, color: 'var(--primary-dark)' }}>Our Motto</span>
+                </div>
+                <h4 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+                  Guided by Experts, Driven by Values
+                </h4>
+              </div>
+            </div>
+
+            {/* Mission Card */}
+            <div className="mission-card glass-card" style={{ padding: '2.5rem' }}>
+              <div style={{ display: 'inline-flex', background: 'rgba(201,156,51,0.12)', color: 'var(--primary-dark)', padding: '1rem', borderRadius: '16px', marginBottom: '1.5rem' }}>
+                <Target size={32} />
+              </div>
+              <span className="badge" style={{ display: 'block', width: 'fit-content', marginBottom: '1rem' }}>Our Mission</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '1.5rem', color: 'var(--text-main)' }}>
+                Our Core <span className="text-gradient">Mission</span>
+              </h3>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {missionPoints.map((point, index) => (
+                  <div key={index} className="mission-item">
+                    <div style={{ background: 'var(--primary)', color: 'white', borderRadius: '50%', minWidth: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800, marginTop: '2px' }}>
+                      {index + 1}
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: '1.6', fontWeight: 500 }}>
+                      {point}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Core Values Section */}
+      <section id="values" className="section-padding" style={{ backgroundColor: 'rgba(255, 255, 255, 0.6)', backdropFilter: 'blur(10px)' }}>
+        <div className="container">
+          <div className="text-center mb-4">
+            <span className="badge">
+              <Heart size={16} className="text-primary" /> Guiding Principles
+            </span>
+            <h2 className="heading-lg">Our Core <span className="text-gradient">Values</span></h2>
+            <p className="subtitle">The foundational principles that guide every aspect of our teaching, learning, and community culture.</p>
+          </div>
+
+          <div className="grid grid-4" style={{ gap: '1.5rem', marginTop: '3rem' }}>
+            {coreValues.map((val, idx) => (
+              <div key={idx} className="value-card">
+                <div className="value-icon">
+                  {val.icon}
+                </div>
+                <h3 className="value-title">{val.title}</h3>
+                <p className="value-desc">{val.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Why Choose Us & Legacy Section */}
       <section className="section-padding">
         <div className="container">
           <div className="text-center mb-4">
@@ -378,11 +531,11 @@ const Home = () => {
                 </div>
                 <h3 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '1rem' }}>Translation & Office Admin</h3>
                 <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-                  A comprehensive professional diploma program designed to master corporate communications, translation skills, and administration workflows.
+                  A comprehensive professional diploma program designed to master spoken Arabic, corporate translation skills, and administration workflows.
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 2rem 0', display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'center', fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 500 }}>
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Bilingual Typing Mastery</li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Corporate Translation Methods</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Spoken Arabic & Translation</li>
                   <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> 2-Month Corporate Internship</li>
                 </ul>
               </div>
@@ -400,12 +553,12 @@ const Home = () => {
                 </div>
                 <h3 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '1rem' }}>Gulf Spoken Arabic</h3>
                 <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-                  Immersive conversational training to read, write, and converse fluently with native accents. Designed specifically for Gulf opportunities.
+                  Focused practical training to communicate confidently in colloquial Arabic—the everyday spoken dialect native Arabs use across the Gulf.
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 2rem 0', display: 'flex', flexDirection: 'column', gap: '0.6rem', alignItems: 'center', fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: 500 }}>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Spoken Dialect Nuances</li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Live Spoken Practice Sessions</li>
-                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Professional Interview Prep</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> 1-on-1 Talking with Mentor (5 Days/Week)</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Native Gulf Colloquial Arabic (Ammiya)</li>
+                  <li style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={16} className="text-primary" /> Comprehensive PDF Learning Resources</li>
                 </ul>
               </div>
               <button onClick={() => scrollToSection('enquiry')} className="btn btn-outline" style={{ width: '100%', justifyContent: 'center' }}>
@@ -693,15 +846,20 @@ const Home = () => {
         <div className="container">
           <div className="grid grid-3" style={{ textAlign: 'left', marginBottom: '3rem', gap: '3rem' }}>
             <div>
-              <h3 style={{ color: 'var(--primary)', fontWeight: 800, fontSize: '1.4rem', marginBottom: '1rem' }}>Academy of Excellence</h3>
+              <h3 style={{ color: 'var(--primary)', fontWeight: 800, fontSize: '1.4rem', marginBottom: '0.5rem' }}>Academy of Excellence</h3>
+              <p style={{ color: 'var(--primary-light)', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '1rem' }}>
+                Guided by Experts, Driven by Values
+              </p>
               <p style={{ opacity: 0.7, fontSize: '0.95rem', lineHeight: '1.7' }}>
-                Established in 2017 to empower students with translation expertise and standard billing tools, opening doors to careers in the Middle East and global businesses.
+                A globally recognized Centre of Excellence empowering individuals and families through holistic education in Arabic language, life skills, and personal development.
               </p>
             </div>
             <div>
               <h4 style={{ color: 'white', fontWeight: 700, marginBottom: '1.2rem' }}>Quick Links</h4>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <li><a onClick={() => scrollToSection('programs')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Programs & Certifications</a></li>
+                <li><a onClick={() => scrollToSection('about')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Vision & Mission</a></li>
+                <li><a onClick={() => scrollToSection('values')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Core Values</a></li>
+                <li><a onClick={() => scrollToSection('programs')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Programs & Courses</a></li>
                 <li><a onClick={() => scrollToSection('enquiry')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Admissions Helpline</a></li>
                 <li><a href="/gallery" style={{ color: 'white', opacity: 0.7, textDecoration: 'none', transition: '0.3s' }}>Life at Academy (Gallery)</a></li>
                 <li><a href="/admin" style={{ color: 'white', opacity: 0.7, textDecoration: 'none', transition: '0.3s' }}>Login</a></li>
@@ -710,15 +868,14 @@ const Home = () => {
             <div>
               <h4 style={{ color: 'white', fontWeight: 700, marginBottom: '1.2rem' }}>Accreditations</h4>
               <p style={{ opacity: 0.7, fontSize: '0.95rem', lineHeight: '1.7', marginBottom: '1rem' }}>
-                Affiliated with recognized administrative bodies. Providing standard certifications verified for professional employment clearance.
+                Affiliated with recognized global institutions and administrative bodies, providing verified standard certifications for corporate and professional career clearance.
               </p>
-
             </div>
           </div>
           
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '2rem', textAlign: 'center' }}>
             <p style={{ opacity: 0.5, fontSize: '0.85rem', margin: 0 }}>
-              &copy; {new Date().getFullYear()} Academy of Excellence. All rights reserved. Designed with premium aesthetics.
+              &copy; {new Date().getFullYear()} Academy of Excellence. All rights reserved. Guided by Experts, Driven by Values.
             </p>
           </div>
         </div>

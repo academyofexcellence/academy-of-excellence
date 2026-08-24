@@ -60,6 +60,8 @@ const Navigation = () => {
 
         <div className={`nav-links ${menuOpen ? 'active' : ''}`}>
           <Link to="/" onClick={() => setMenuOpen(false)}>Home</Link>
+          <a href="#about" onClick={(e) => handleNavScroll(e, 'about')}>About</a>
+          <a href="#values" onClick={(e) => handleNavScroll(e, 'values')}>Values</a>
           <a href="#programs" onClick={(e) => handleNavScroll(e, 'programs')}>Programs</a>
           <Link to="/gallery" onClick={() => setMenuOpen(false)}>Gallery</Link>
           <a href="#alumni" onClick={(e) => handleNavScroll(e, 'alumni')}>Alumni</a>
