@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Course, StudentProfile, DailyAttendanceLog } from '../../lib/types';
-import { Calendar, QrCode, Printer, RefreshCw, CheckCircle2, Clock, AlertTriangle, UserCheck, ShieldCheck, Search, Filter, Edit3, Save, X, PlusCircle, FlaskConical, Play, Sparkles } from 'lucide-react';
+import { Calendar, QrCode, Printer, RefreshCw, CheckCircle2, Clock, AlertTriangle, UserCheck, ShieldCheck, Search, Filter, Edit3, Save, X, PlusCircle, FlaskConical, Play, Sparkles, FileText, User } from 'lucide-react';
 import QRCode from 'qrcode';
+import { fetchStudentAttendanceAuditData, printStudentAttendanceReport, StudentAttendanceAuditData } from '../../lib/studentAttendanceReport';
 
 const ensureValidUuid = (idVal: string | null | undefined): string => {
   const fallbackUuid = 'c1111111-1111-1111-1111-111111111111';
@@ -56,6 +57,12 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
   const [editCheckOut, setEditCheckOut] = useState<string>('');
   const [editPoints, setEditPoints] = useState<number>(10);
   const [editNotes, setEditNotes] = useState<string>('');
+
+  // INDIVIDUAL STUDENT ATTENDANCE AUDIT STATE
+  const [auditStudentId, setAuditStudentId] = useState<string>('');
+  const [auditLoading, setAuditLoading] = useState<boolean>(false);
+  const [auditData, setAuditData] = useState<StudentAttendanceAuditData | null>(null);
+  const [auditSearchQuery, setAuditSearchQuery] = useState<string>('');
 
   // TEST SIMULATOR SANDBOX STATE
   const [testCheckInTime, setTestCheckInTime] = useState<string>('09:45');
@@ -441,6 +448,49 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
     if (printWin) {
       printWin.document.write(html);
       printWin.document.close();
+    }
+  };
+
+  // Generate & Print Student Attendance Audit Report
+  const handleGenerateAuditReport = async (studentIdToAudit?: string) => {
+    const targetId = studentIdToAudit || auditStudentId;
+    if (!targetId) {
+      alert('Please select a student to generate their course attendance audit report.');
+      return;
+    }
+    const targetStudent = studentList.find(s => s.id === targetId);
+    if (!targetStudent) {
+      alert('Student record not found in directory.');
+      return;
+    }
+
+    setAuditLoading(true);
+    try {
+      const audit = await fetchStudentAttendanceAuditData(targetStudent, selectedCourse);
+      setAuditData(audit);
+      printStudentAttendanceReport(audit);
+    } catch (err: any) {
+      console.error('Error generating student attendance audit:', err);
+      alert(`Failed to generate attendance report: ${err.message}`);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  // Preview Student Attendance Audit Report in UI
+  const handlePreviewAuditReport = async (studentIdToAudit: string) => {
+    setAuditStudentId(studentIdToAudit);
+    const targetStudent = studentList.find(s => s.id === studentIdToAudit);
+    if (!targetStudent) return;
+
+    setAuditLoading(true);
+    try {
+      const audit = await fetchStudentAttendanceAuditData(targetStudent, selectedCourse);
+      setAuditData(audit);
+    } catch (err: any) {
+      console.error('Error previewing student attendance audit:', err);
+    } finally {
+      setAuditLoading(false);
     }
   };
 
@@ -878,6 +928,13 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                               >
                                 Absent
                               </button>
+                              <button
+                                onClick={() => handleGenerateAuditReport(student.id)}
+                                title="Print Full Course Attendance & Late-Coming Audit Report"
+                                style={{ padding: '0.3rem 0.55rem', borderRadius: '6px', background: '#0f172a', color: '#fbbf24', fontWeight: 800, border: '1px solid rgba(251,191,36,0.3)', cursor: 'pointer', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                              >
+                                <Printer size={11} /> Audit
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1005,28 +1062,260 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
 
       {/* --- SUB-TAB 3: LOG HISTORY & PRINTABLE REPORT --- */}
       {subTab === 'history_logs' && (
-        <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
-                Attendance Log History & Audit
-              </h3>
-              <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
-                Showing logs for {selectedDate}
-              </p>
+          {/* Dedicated Individual Student Course Attendance & Late-Coming Audit Card */}
+          <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '16px', background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)', border: '1.5px solid rgba(201, 156, 51, 0.3)', boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.08)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#fef3c7', color: '#b45309', padding: '0.25rem 0.75rem', borderRadius: '50px', fontSize: '0.75rem', fontWeight: 800, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <Clock size={13} /> Complete Course Audit & Printable Report
+                </div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                  Student Attendance, Absentees & Late-Coming Audit
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
+                  Generate a complete official report for any student stating their entire course absentees, late arrivals with dates, exact check-in times, delay minutes, and parent/faculty signature blocks.
+                </p>
+              </div>
+
+              {auditData && (
+                <button
+                  onClick={() => printStudentAttendanceReport(auditData)}
+                  disabled={auditLoading}
+                  style={{
+                    padding: '0.65rem 1.4rem',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    color: '#fbbf24',
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    border: '1px solid rgba(251, 191, 36, 0.4)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.2)'
+                  }}
+                >
+                  <Printer size={16} /> Print {auditData.student.name}'s Report
+                </button>
+              )}
             </div>
 
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button
-                onClick={() => window.print()}
-                className="btn btn-primary"
-                style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', background: '#059669', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-              >
-                <Printer size={16} /> Print Attendance Register
-              </button>
+            {/* Student Search & Select Bar */}
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+              <div style={{ flex: 1, minWidth: '240px' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
+                  Select Student from Course Roster
+                </label>
+                <select
+                  value={auditStudentId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setAuditStudentId(id);
+                    if (id) handlePreviewAuditReport(id);
+                  }}
+                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', outline: 'none' }}
+                >
+                  <option value="">-- Choose Student to Audit --</option>
+                  {studentList
+                    .filter(s => (s.course_id === selectedCourseId || !selectedCourseId) && (Number(s.batch_number) === Number(selectedBatchNumber) || !selectedBatchNumber))
+                    .map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.roll_number ? `(Roll #${s.roll_number})` : ''} - Batch {s.batch_number}
+                      </option>
+                    ))}
+                  {/* Fallback to show all students if none matched above */}
+                  <option disabled>────────── All Academy Students ──────────</option>
+                  {studentList.map(s => (
+                    <option key={`all-${s.id}`} value={s.id}>
+                      {s.name} {s.roll_number ? `(Roll #${s.roll_number})` : ''} ({s.courses?.name || 'Course'} - Batch {s.batch_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end' }}>
+                <button
+                  onClick={() => auditStudentId && handlePreviewAuditReport(auditStudentId)}
+                  disabled={!auditStudentId || auditLoading}
+                  style={{
+                    padding: '0.6rem 1.1rem',
+                    borderRadius: '8px',
+                    background: '#f1f5f9',
+                    color: '#334155',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    border: '1px solid #cbd5e1',
+                    cursor: auditStudentId ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <RefreshCw size={15} className={auditLoading ? 'animate-spin' : ''} /> {auditLoading ? 'Loading...' : 'Refresh Audit'}
+                </button>
+
+                <button
+                  onClick={() => handleGenerateAuditReport()}
+                  disabled={!auditStudentId || auditLoading}
+                  style={{
+                    padding: '0.6rem 1.25rem',
+                    borderRadius: '8px',
+                    background: auditStudentId ? '#059669' : '#94a3b8',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.85rem',
+                    border: 'none',
+                    cursor: auditStudentId ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    boxShadow: auditStudentId ? '0 4px 10px rgba(5, 150, 105, 0.3)' : 'none'
+                  }}
+                >
+                  <Printer size={15} /> Print Full Course Report
+                </button>
+              </div>
             </div>
+
+            {/* Live Audit Preview when student is selected */}
+            {auditData && (
+              <div style={{ marginTop: '1rem' }}>
+                
+                {/* 5 KPI Metric Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                  <div style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Course Sessions</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', marginTop: '0.2rem' }}>{auditData.totalWorkingDays}</div>
+                    <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Working Days</span>
+                  </div>
+
+                  <div style={{ background: '#f0fdf4', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #bbf7d0', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase' }}>Days Present</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#15803d', marginTop: '0.2rem' }}>{auditData.presentDays}</div>
+                    <span style={{ fontSize: '0.65rem', color: '#166534', fontWeight: 600 }}>{auditData.onTimeCount} On-Time</span>
+                  </div>
+
+                  <div style={{ background: '#fffbeb', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #fde68a', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: 700, textTransform: 'uppercase' }}>Late Arrivals</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#b45309', marginTop: '0.2rem' }}>{auditData.lateCount}</div>
+                    <span style={{ fontSize: '0.65rem', color: '#b45309', fontWeight: 600 }}>Past 10:00 AM</span>
+                  </div>
+
+                  <div style={{ background: '#fef2f2', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #fecaca', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#b91c1c', fontWeight: 700, textTransform: 'uppercase' }}>Days Absent</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#dc2626', marginTop: '0.2rem' }}>{auditData.absentCount}</div>
+                    <span style={{ fontSize: '0.65rem', color: '#b91c1c', fontWeight: 600 }}>
+                      {auditData.totalWorkingDays > 0 ? Math.round((auditData.absentCount / auditData.totalWorkingDays) * 100) : 0}% Missed
+                    </span>
+                  </div>
+
+                  <div style={{ background: '#eff6ff', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #bfdbfe', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#1d4ed8', fontWeight: 700, textTransform: 'uppercase' }}>Attendance Rate</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#2563eb', marginTop: '0.2rem' }}>{auditData.attendanceRate}%</div>
+                    <span style={{ fontSize: '0.65rem', color: '#1d4ed8', fontWeight: 600 }}>Punctuality: {auditData.punctualityRate}%</span>
+                  </div>
+                </div>
+
+                {/* Grid of Late Coming & Absentees Previews */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+                  
+                  {/* Late Arrivals Box */}
+                  <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #fde68a', padding: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #fef3c7', paddingBottom: '0.5rem' }}>
+                      <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#b45309', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Clock size={16} /> Late Arrivals Breakdown ({auditData.lateArrivals.length})
+                      </h4>
+                      <span style={{ fontSize: '0.7rem', color: '#92400e', background: '#fef3c7', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                        Cutoff: 10:00 AM
+                      </span>
+                    </div>
+
+                    {auditData.lateArrivals.length === 0 ? (
+                      <p style={{ margin: 0, padding: '1rem 0', color: '#16a34a', fontSize: '0.8rem', textAlign: 'center', fontWeight: 600 }}>
+                        ✓ Zero late arrivals recorded! Student was punctual on all sessions.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '200px', overflowY: 'auto' }}>
+                        {auditData.lateArrivals.map((l, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.45rem 0.65rem', background: '#fffbeb', borderRadius: '6px', fontSize: '0.78rem' }}>
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>{l.date}</strong> ({l.dayOfWeek})
+                              <span style={{ color: '#64748b', fontSize: '0.7rem', display: 'block' }}>Departed: {l.checkOutTimeFormatted}</span>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ color: '#b45309', fontWeight: 800 }}>{l.checkInTimeFormatted}</span>
+                              {l.delayMinutes > 0 && (
+                                <span style={{ display: 'block', fontSize: '0.68rem', color: '#dc2626', fontWeight: 700 }}>+{l.delayMinutes}m delay</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Absences Box */}
+                  <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #fecaca', padding: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid #fee2e2', paddingBottom: '0.5rem' }}>
+                      <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <AlertTriangle size={16} /> Absentees Record ({auditData.absences.length})
+                      </h4>
+                      <span style={{ fontSize: '0.7rem', color: '#991b1b', background: '#fee2e2', padding: '0.15rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>
+                        {auditData.absentCount} Days Missed
+                      </span>
+                    </div>
+
+                    {auditData.absences.length === 0 ? (
+                      <p style={{ margin: 0, padding: '1rem 0', color: '#16a34a', fontSize: '0.8rem', textAlign: 'center', fontWeight: 600 }}>
+                        ✓ Perfect Attendance! Student did not miss any active class sessions.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '200px', overflowY: 'auto' }}>
+                        {auditData.absences.map((a, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.45rem 0.65rem', background: '#fef2f2', borderRadius: '6px', fontSize: '0.78rem' }}>
+                            <div>
+                              <strong style={{ color: '#0f172a' }}>{a.date}</strong> ({a.dayOfWeek})
+                              <span style={{ color: '#7f1d1d', fontSize: '0.7rem', display: 'block' }}>{a.notes}</span>
+                            </div>
+                            <span style={{ background: '#fee2e2', color: '#b91c1c', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 800 }}>
+                              {a.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Daily Logs Table Card */}
+          <div className="glass-card" style={{ padding: '1.75rem', borderRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: '#0f172a' }}>
+                  Daily Attendance Log History & Audit
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
+                  Showing logs for selected date: <strong>{selectedDate}</strong>
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  onClick={handlePrintAttendanceRegister}
+                  className="btn btn-primary"
+                  style={{ padding: '0.55rem 1.25rem', borderRadius: '8px', background: '#059669', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  <Printer size={16} /> Print Daily Register
+                </button>
+              </div>
+            </div>
 
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
@@ -1064,6 +1353,7 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
           </div>
 
         </div>
+      </div>
       )}
 
       {/* --- SUB-TAB 4: DEDICATED TEST QR SIMULATOR SANDBOX --- */}

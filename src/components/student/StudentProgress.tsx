@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { 
   Calendar, BookOpen, MessageSquare, Video, Globe, Award, Printer, AlertTriangle, FileText, Clock, Grid, Sparkles, Compass, Volume2, ShieldCheck, ExternalLink, QrCode
 } from 'lucide-react';
+import { fetchStudentAttendanceAuditData, printStudentAttendanceReport } from '../../lib/studentAttendanceReport';
 
 interface StudentProgressProps {
   currentStudent: StudentProfile;
@@ -96,6 +97,21 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
     }
   }, [currentStudent?.id]);
 
+  const [isPrintingAudit, setIsPrintingAudit] = useState(false);
+
+  const handlePrintAttendanceAudit = async () => {
+    try {
+      setIsPrintingAudit(true);
+      const audit = await fetchStudentAttendanceAuditData(currentStudent);
+      printStudentAttendanceReport(audit);
+    } catch (err: any) {
+      console.error('Error generating attendance audit:', err);
+      alert('Unable to generate attendance audit report: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setIsPrintingAudit(false);
+    }
+  };
+
   const hasAnyRemarks = remarks && (
     remarks.strengths?.trim() ||
     remarks.weaknesses?.trim() ||
@@ -176,23 +192,44 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
                     <Award size={18} className="text-primary" /> Graduation Academic Transcript
                   </h3>
                 </div>
-                <button
-                  onClick={() => handlePrintReport(currentStudent, recentLogs)}
-                  className="btn btn-outline"
-                  style={{ 
-                    padding: '0.35rem 0.75rem', 
-                    fontSize: '0.75rem', 
-                    fontWeight: 700, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '0.3rem', 
-                    borderColor: 'var(--primary)',
-                    color: 'var(--primary-dark)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Printer size={12} /> Print Report
-                </button>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handlePrintAttendanceAudit}
+                    disabled={isPrintingAudit}
+                    className="btn btn-outline"
+                    style={{ 
+                      padding: '0.35rem 0.75rem', 
+                      fontSize: '0.75rem', 
+                      fontWeight: 700, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.3rem', 
+                      borderColor: '#b45309',
+                      color: '#b45309',
+                      background: '#fffbeb',
+                      cursor: isPrintingAudit ? 'wait' : 'pointer'
+                    }}
+                  >
+                    <Clock size={12} /> {isPrintingAudit ? 'Preparing...' : 'Attendance & Late Audit'}
+                  </button>
+                  <button
+                    onClick={() => handlePrintReport(currentStudent, recentLogs)}
+                    className="btn btn-outline"
+                    style={{ 
+                      padding: '0.35rem 0.75rem', 
+                      fontSize: '0.75rem', 
+                      fontWeight: 700, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.3rem', 
+                      borderColor: 'var(--primary)',
+                      color: 'var(--primary-dark)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Printer size={12} /> Print Report
+                  </button>
+                </div>
               </div>
               
               {/* Grid of Metrics */}
@@ -210,7 +247,17 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
                 </div>
 
                 <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Final Attendance Rate</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Final Attendance Rate</span>
+                    <button
+                      onClick={handlePrintAttendanceAudit}
+                      disabled={isPrintingAudit}
+                      style={{ background: 'none', border: 'none', color: '#b45309', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                      title="Print Official Attendance & Late-Coming Audit"
+                    >
+                      <Printer size={11} /> Print Audit
+                    </button>
+                  </div>
                   <div style={{ margin: '0.4rem 0' }}>
                     <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--primary-dark)' }}>{attendanceRate}%</span>
                   </div>
@@ -482,29 +529,60 @@ export const StudentProgress: React.FC<StudentProgressProps> = ({
                   <Award size={18} className="text-primary" /> Performance Report
                 </h3>
               </div>
-              <button
-                onClick={() => handlePrintReport(currentStudent, recentLogs)}
-                className="btn btn-outline"
-                style={{ 
-                  padding: '0.35rem 0.75rem', 
-                  fontSize: '0.75rem', 
-                  fontWeight: 700, 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.3rem', 
-                  borderColor: 'var(--primary)',
-                  color: 'var(--primary-dark)',
-                  cursor: 'pointer'
-                }}
-              >
-                <Printer size={12} /> Print Report
-              </button>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <button
+                  onClick={handlePrintAttendanceAudit}
+                  disabled={isPrintingAudit}
+                  className="btn btn-outline"
+                  style={{ 
+                    padding: '0.35rem 0.75rem', 
+                    fontSize: '0.75rem', 
+                    fontWeight: 700, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.3rem', 
+                    borderColor: '#b45309',
+                    color: '#b45309',
+                    background: '#fffbeb',
+                    cursor: isPrintingAudit ? 'wait' : 'pointer'
+                  }}
+                >
+                  <Clock size={12} /> {isPrintingAudit ? 'Preparing...' : 'Attendance & Late Audit'}
+                </button>
+                <button
+                  onClick={() => handlePrintReport(currentStudent, recentLogs)}
+                  className="btn btn-outline"
+                  style={{ 
+                    padding: '0.35rem 0.75rem', 
+                    fontSize: '0.75rem', 
+                    fontWeight: 700, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.3rem', 
+                    borderColor: 'var(--primary)',
+                    color: 'var(--primary-dark)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Printer size={12} /> Print Report
+                </button>
+              </div>
             </div>
             
             {/* Grid of Metrics */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.2rem' }}>
               <div style={{ background: 'white', padding: '0.8rem', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Attendance Rate</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Attendance Rate</span>
+                  <button
+                    onClick={handlePrintAttendanceAudit}
+                    disabled={isPrintingAudit}
+                    style={{ background: 'none', border: 'none', color: '#b45309', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                    title="Print Official Attendance & Late-Coming Audit"
+                  >
+                    <Printer size={11} /> Print Audit
+                  </button>
+                </div>
                 <div style={{ margin: '0.4rem 0' }}>
                   <span style={{ fontSize: '1.6rem', fontWeight: 850, color: 'var(--primary-dark)' }}>{attendanceRate}%</span>
                 </div>
