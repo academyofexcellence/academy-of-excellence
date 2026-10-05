@@ -277,10 +277,13 @@ const Home = () => {
               </p>
               
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <button onClick={() => scrollToSection('programs')} className="btn btn-primary">
+                <button onClick={() => scrollToSection('programs')} className="btn btn-primary" style={{ boxShadow: '0 6px 20px rgba(201,156,51,0.35)' }}>
                   Explore Programs <ArrowRight size={18} />
                 </button>
-                <button onClick={() => scrollToSection('about')} className="btn btn-outline">
+                <a href="/admin" className="btn btn-outline" style={{ textDecoration: 'none', background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(8px)', borderColor: 'var(--primary)' }}>
+                  Academy Portal
+                </a>
+                <button onClick={() => scrollToSection('about')} className="btn btn-outline" style={{ background: 'transparent' }}>
                   Our Vision & Values
                 </button>
               </div>
@@ -862,7 +865,8 @@ const Home = () => {
                 <li><a onClick={() => scrollToSection('programs')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Programs & Courses</a></li>
                 <li><a onClick={() => scrollToSection('enquiry')} style={{ color: 'white', opacity: 0.7, textDecoration: 'none', cursor: 'pointer', transition: '0.3s' }}>Admissions Helpline</a></li>
                 <li><a href="/gallery" style={{ color: 'white', opacity: 0.7, textDecoration: 'none', transition: '0.3s' }}>Life at Academy (Gallery)</a></li>
-                <li><a href="/admin" style={{ color: 'white', opacity: 0.7, textDecoration: 'none', transition: '0.3s' }}>Login</a></li>
+                <li><a href="/verify" style={{ color: 'white', opacity: 0.7, textDecoration: 'none', transition: '0.3s' }}>Verify Certificate</a></li>
+                <li><a href="/admin" style={{ color: 'var(--primary-light)', fontWeight: 600, textDecoration: 'none', transition: '0.3s' }}>Academy Portal & Login</a></li>
               </ul>
             </div>
             <div>

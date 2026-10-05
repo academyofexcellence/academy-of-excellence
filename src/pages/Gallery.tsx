@@ -12,6 +12,7 @@ interface GalleryItem {
 const Gallery = () => {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const getYouTubeId = (url: string) => {
     try {
@@ -48,6 +49,9 @@ const Gallery = () => {
     fetchGallery();
   }, []);
 
+  const categories = ['all', ...Array.from(new Set(items.map(i => i.category || 'general')))];
+  const filteredItems = selectedCategory === 'all' ? items : items.filter(i => (i.category || 'general') === selectedCategory);
+
   return (
     <div style={{ paddingTop: '120px', paddingBottom: '60px', minHeight: '100vh' }}>
       <div className="container">
@@ -59,15 +63,42 @@ const Gallery = () => {
           <p className="subtitle mt-2">Learning beyond the classroom, our activity sessions spark creativity, teamwork, and confidence.</p>
         </div>
 
+        {/* Category Filter Chips */}
+        {categories.length > 2 && (
+          <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '2.5rem' }}>
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                style={{
+                  padding: '0.45rem 1.2rem',
+                  borderRadius: '50px',
+                  border: selectedCategory === cat ? 'none' : '1px solid rgba(201,156,51,0.25)',
+                  background: selectedCategory === cat ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
+                  color: selectedCategory === cat ? 'white' : 'var(--text-main)',
+                  fontWeight: 650,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                  transition: 'all 0.2s',
+                  boxShadow: selectedCategory === cat ? '0 4px 12px rgba(201,156,51,0.3)' : 'none'
+                }}
+              >
+                {cat === 'all' ? '🌟 All Media' : cat.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-5">Loading gallery...</div>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <div className="text-center py-5" style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>
-            No media items uploaded yet. Admin can upload images and link YouTube videos from the dashboard.
+            No media items found for this category.
           </div>
         ) : (
           <div className="grid grid-2" style={{ gap: '2rem' }}>
-            {items.map(item => {
+            {filteredItems.map(item => {
               const isVideo = item.image_url && (item.image_url.includes('youtube.com') || item.image_url.includes('youtu.be'));
               const videoId = isVideo ? getYouTubeId(item.image_url) : '';
               const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : '';

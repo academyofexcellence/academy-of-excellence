@@ -15,11 +15,15 @@ import {
   DollarSign, 
   Phone,
   MessageSquare,
-  Clock
+  Clock,
+  ClipboardList
 } from 'lucide-react';
 import { Course } from '../../lib/types';
+import { PlacementTracker } from './PlacementTracker';
+import { AlumniLounge } from '../alumni/AlumniLounge';
 
 interface PlacementsHubProps {
+  currentUserId?: string;
   alumniProfiles: any[];
   courses: Course[];
   loadingAlumni: boolean;
@@ -33,6 +37,7 @@ interface PlacementsHubProps {
 }
 
 export const PlacementsHub: React.FC<PlacementsHubProps> = ({
+  currentUserId,
   alumniProfiles,
   courses,
   loadingAlumni,
@@ -44,7 +49,7 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
   handleDeleteJob,
   handleCreateJobAdmin
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'jobboard'>('directory');
+  const [activeSubTab, setActiveSubTab] = useState<'jobboard' | 'tracker' | 'directory' | 'lounge'>('jobboard');
   
   // Directory state
   const [placementSearch, setPlacementSearch] = useState('');
@@ -207,23 +212,7 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
       </div>
 
       {/* Sub Tab Switcher */}
-      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid rgba(201, 156, 51, 0.15)', paddingBottom: '0.5rem' }}>
-        <button
-          onClick={() => setActiveSubTab('directory')}
-          style={{
-            padding: '0.5rem 1.2rem',
-            fontSize: '0.85rem',
-            fontWeight: 700,
-            background: activeSubTab === 'directory' ? 'var(--primary)' : 'transparent',
-            color: activeSubTab === 'directory' ? 'white' : 'var(--text-muted)',
-            border: activeSubTab === 'directory' ? 'none' : '1px solid rgba(201, 156, 51, 0.2)',
-            borderRadius: '50px',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-        >
-          🎓 Alumni Directory
-        </button>
+      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid rgba(201, 156, 51, 0.15)', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveSubTab('jobboard')}
           style={{
@@ -235,10 +224,70 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
             border: activeSubTab === 'jobboard' ? 'none' : '1px solid rgba(201, 156, 51, 0.2)',
             borderRadius: '50px',
             cursor: 'pointer',
-            transition: 'all 0.2s'
+            transition: 'all 0.2s',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem'
           }}
         >
-          💼 Job Board Management
+          <Briefcase size={15} /> Job Opportunities
+        </button>
+        <button
+          onClick={() => setActiveSubTab('tracker')}
+          style={{
+            padding: '0.5rem 1.2rem',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            background: activeSubTab === 'tracker' ? 'var(--primary)' : 'transparent',
+            color: activeSubTab === 'tracker' ? 'white' : 'var(--text-muted)',
+            border: activeSubTab === 'tracker' ? 'none' : '1px solid rgba(201, 156, 51, 0.2)',
+            borderRadius: '50px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem'
+          }}
+        >
+          <ClipboardList size={15} /> Placement & Application Tracker
+        </button>
+        <button
+          onClick={() => setActiveSubTab('directory')}
+          style={{
+            padding: '0.5rem 1.2rem',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            background: activeSubTab === 'directory' ? 'var(--primary)' : 'transparent',
+            color: activeSubTab === 'directory' ? 'white' : 'var(--text-muted)',
+            border: activeSubTab === 'directory' ? 'none' : '1px solid rgba(201, 156, 51, 0.2)',
+            borderRadius: '50px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem'
+          }}
+        >
+          <GraduationCap size={15} /> Alumni Directory
+        </button>
+        <button
+          onClick={() => setActiveSubTab('lounge')}
+          style={{
+            padding: '0.5rem 1.2rem',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            background: activeSubTab === 'lounge' ? 'var(--primary)' : 'transparent',
+            color: activeSubTab === 'lounge' ? 'white' : 'var(--text-muted)',
+            border: activeSubTab === 'lounge' ? 'none' : '1px solid rgba(201, 156, 51, 0.2)',
+            borderRadius: '50px',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem'
+          }}
+        >
+          <MessageSquare size={15} /> Alumni Lounge
         </button>
       </div>
 
@@ -842,6 +891,16 @@ export const PlacementsHub: React.FC<PlacementsHubProps> = ({
           )}
 
         </div>
+      )}
+
+      {/* PLACEMENT & APPLICATION TRACKER VIEW */}
+      {activeSubTab === 'tracker' && (
+        <PlacementTracker currentUserId={currentUserId || ''} />
+      )}
+
+      {/* ALUMNI COMMUNITY LOUNGE VIEW */}
+      {activeSubTab === 'lounge' && (
+        <AlumniLounge currentUserId={currentUserId || ''} isStaffOrAdmin={true} />
       )}
 
     </div>

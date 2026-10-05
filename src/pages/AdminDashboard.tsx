@@ -366,11 +366,10 @@ const AdminDashboard = () => {
   };
 
   // Tab navigation states
-  const [adminTab, setAdminTab] = useState<'menu' | 'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'alumnilounge' | 'management' | 'certificates' | 'attendance' | 'accounting'>(
+  const [adminTab, setAdminTab] = useState<'menu' | 'tasks' | 'dashboard' | 'classroom' | 'directory' | 'careers' | 'operations' | 'certificates' | 'attendance' | 'accounting'>(
     window.innerWidth < 768 ? 'menu' : 'dashboard'
   );
   const [websiteSubTab, setWebsiteSubTab] = useState<'gallery' | 'partners' | 'visitors'>('gallery');
-  const [managementSubTab, setManagementSubTab] = useState<'tracker' | 'minutes'>('tracker');
 
   // UI State Messages
   const [message, setMessage] = useState('');
@@ -4603,15 +4602,15 @@ const AdminDashboard = () => {
           </button>
 
           <button 
-            onClick={() => setAdminTab('management')}
+            onClick={() => setAdminTab('attendance')}
             style={{
               padding: '0.8rem 1.2rem', background: 'none', border: 'none',
-              borderBottom: adminTab === 'management' ? '3px solid var(--primary)' : '3px solid transparent',
-              color: adminTab === 'management' ? 'var(--primary-dark)' : 'var(--text-muted)',
+              borderBottom: adminTab === 'attendance' ? '3px solid var(--primary)' : '3px solid transparent',
+              color: adminTab === 'attendance' ? 'var(--primary-dark)' : 'var(--text-muted)',
               fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
             }}
           >
-            <ClipboardList size={16} /> Management Board
+            <Calendar size={16} /> Attendance
           </button>
 
           <button 
@@ -4638,18 +4637,6 @@ const AdminDashboard = () => {
           </button>
 
           <button 
-            onClick={() => setAdminTab('alumnilounge')}
-            style={{
-              padding: '0.8rem 1.2rem', background: 'none', border: 'none',
-              borderBottom: adminTab === 'alumnilounge' ? '3px solid var(--primary)' : '3px solid transparent',
-              color: adminTab === 'alumnilounge' ? 'var(--primary-dark)' : 'var(--text-muted)',
-              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
-            }}
-          >
-            <MessageSquare size={16} /> Alumni Lounge
-          </button>
-
-          <button 
             onClick={() => setAdminTab('certificates')}
             style={{
               padding: '0.8rem 1.2rem', background: 'none', border: 'none',
@@ -4659,18 +4646,6 @@ const AdminDashboard = () => {
             }}
           >
             <Award size={16} /> Certificates
-          </button>
-
-          <button 
-            onClick={() => setAdminTab('attendance')}
-            style={{
-              padding: '0.8rem 1.2rem', background: 'none', border: 'none',
-              borderBottom: adminTab === 'attendance' ? '3px solid var(--primary)' : '3px solid transparent',
-              color: adminTab === 'attendance' ? 'var(--primary-dark)' : 'var(--text-muted)',
-              fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem'
-            }}
-          >
-            <Calendar size={16} /> Attendance
           </button>
 
           <button 
@@ -4775,14 +4750,14 @@ const AdminDashboard = () => {
               </button>
 
               <button 
-                onClick={() => setAdminTab('management')}
+                onClick={() => setAdminTab('attendance')}
                 className="glass-card"
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
               >
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(107,114,128,0.1)', color: '#4b5563', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ClipboardList size={24} />
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(37,99,235,0.1)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Calendar size={24} />
                 </div>
-                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Management Board</strong>
+                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Attendance Hub</strong>
               </button>
 
               <button 
@@ -4802,17 +4777,6 @@ const AdminDashboard = () => {
               </button>
 
               <button 
-                onClick={() => setAdminTab('alumnilounge')}
-                className="glass-card"
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
-              >
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(16,185,129,0.1)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <MessageSquare size={24} />
-                </div>
-                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Alumni Lounge</strong>
-              </button>
-
-              <button 
                 onClick={() => setAdminTab('certificates')}
                 className="glass-card"
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
@@ -4821,17 +4785,6 @@ const AdminDashboard = () => {
                   <Award size={24} />
                 </div>
                 <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Certificates</strong>
-              </button>
-
-              <button 
-                onClick={() => setAdminTab('attendance')}
-                className="glass-card"
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.2rem', gap: '0.6rem', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer', background: 'white', minHeight: '120px' }}
-              >
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(37,99,235,0.1)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Calendar size={24} />
-                </div>
-                <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>Attendance</strong>
               </button>
 
               <button 
@@ -4897,11 +4850,9 @@ const AdminDashboard = () => {
               {adminTab === 'tasks' && '📋 Tasks Duty Board'}
               {adminTab === 'dashboard' && '📊 Analytics Hub'}
               {adminTab === 'classroom' && '🏫 Classroom Hub'}
-              {adminTab === 'management' && '📋 Management Board'}
-              {adminTab === 'careers' && '💼 Careers & Alumni'}
-              {adminTab === 'alumnilounge' && '💬 Alumni Lounge'}
-              {adminTab === 'certificates' && '📜 Certificates Hub'}
               {adminTab === 'attendance' && '📅 Attendance Hub'}
+              {adminTab === 'careers' && '💼 Careers & Alumni'}
+              {adminTab === 'certificates' && '📜 Certificates Hub'}
               {adminTab === 'accounting' && '💰 Finance & Accounting'}
               {adminTab === 'directory' && '👥 Directory Hub'}
               {adminTab === 'operations' && '⚙️ Operations Hub'}
@@ -5100,57 +5051,9 @@ const AdminDashboard = () => {
           />
         )}
 
-        {adminTab === 'management' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '2.5rem' }}>
-            <div style={{ display: 'flex', borderBottom: '1px solid rgba(201,156,51,0.2)', marginBottom: '0.5rem', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setManagementSubTab('tracker')}
-                style={{
-                  padding: '0.6rem 1.2rem',
-                  background: 'none',
-                  border: 'none',
-                  borderBottom: managementSubTab === 'tracker' ? '3px solid var(--primary)' : '3px solid transparent',
-                  color: managementSubTab === 'tracker' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem'
-                }}
-              >
-                <ClipboardList size={16} /> Task & Follow-up Tracker
-              </button>
-              <button
-                onClick={() => setManagementSubTab('minutes')}
-                style={{
-                  padding: '0.6rem 1.2rem',
-                  background: 'none',
-                  border: 'none',
-                  borderBottom: managementSubTab === 'minutes' ? '3px solid var(--primary)' : '3px solid transparent',
-                  color: managementSubTab === 'minutes' ? 'var(--primary-dark)' : 'var(--text-muted)',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.4rem'
-                }}
-              >
-                <MessageSquare size={16} /> Meeting Minutes
-              </button>
-            </div>
-
-            {managementSubTab === 'tracker' ? (
-              <PlacementTracker currentUserId={currentUser.id} />
-            ) : (
-              <MeetingMinutes />
-            )}
-          </div>
-        )}
-
         {adminTab === 'careers' && (
           <PlacementsHub 
+            currentUserId={currentUser?.id || ''}
             alumniProfiles={alumniProfiles}
             courses={courses}
             loadingAlumni={loadingAlumni}
@@ -5162,10 +5065,6 @@ const AdminDashboard = () => {
             handleDeleteJob={handleDeleteJob}
             handleCreateJobAdmin={handleCreateJobAdmin}
           />
-        )}
-
-        {adminTab === 'alumnilounge' && (
-          <AlumniLounge currentUserId={currentUser?.id || ''} isStaffOrAdmin={true} />
         )}
 
         {adminTab === 'certificates' && (
@@ -6389,28 +6288,28 @@ const AdminDashboard = () => {
               <span>Classroom</span>
             </button>
             <button 
-              onClick={() => setAdminTab('management')} 
-              className={`mobile-nav-item ${adminTab === 'management' ? 'active' : ''}`}
+              onClick={() => setAdminTab('attendance')} 
+              className={`mobile-nav-item ${adminTab === 'attendance' ? 'active' : ''}`}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: '0.2rem', color: adminTab === 'management' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                gap: '0.2rem', color: adminTab === 'attendance' ? 'var(--primary-dark)' : 'var(--text-muted)',
                 fontSize: '0.7rem', fontWeight: 700, background: 'transparent', border: 'none', cursor: 'pointer', flex: 1
               }}
             >
-              <ClipboardList size={20} />
-              <span>Board</span>
+              <Calendar size={20} />
+              <span>Attendance</span>
             </button>
             <button 
-              onClick={() => setAdminTab('alumnilounge')} 
-              className={`mobile-nav-item ${adminTab === 'alumnilounge' ? 'active' : ''}`}
+              onClick={() => setAdminTab('careers')} 
+              className={`mobile-nav-item ${adminTab === 'careers' ? 'active' : ''}`}
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                gap: '0.2rem', color: adminTab === 'alumnilounge' ? 'var(--primary-dark)' : 'var(--text-muted)',
+                gap: '0.2rem', color: adminTab === 'careers' ? 'var(--primary-dark)' : 'var(--text-muted)',
                 fontSize: '0.7rem', fontWeight: 700, background: 'transparent', border: 'none', cursor: 'pointer', flex: 1
               }}
             >
-              <MessageSquare size={20} />
-              <span>Lounge</span>
+              <Briefcase size={20} />
+              <span>Careers</span>
             </button>
           </div>
         )}

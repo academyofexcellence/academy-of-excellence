@@ -540,11 +540,24 @@ html {
     left: 0;
     width: 100%;
     background: rgba(253, 251, 247, 0.98);
-    backdrop-filter: blur(15px);
-    border-bottom: 1px solid rgba(201, 156, 51, 0.1);
-    padding: 2rem 1.2rem;
-    gap: 1.5rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 2px solid rgba(201, 156, 51, 0.25);
+    padding: 1.8rem 1.5rem 2.2rem 1.5rem;
+    gap: 1.2rem;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
+    animation: fadeInDown 0.25s ease-out;
+  }
+
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
   
   .hero {
