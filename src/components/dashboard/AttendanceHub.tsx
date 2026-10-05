@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Course, StudentProfile, DailyAttendanceLog } from '../../lib/types';
-import { Calendar, QrCode, Printer, RefreshCw, CheckCircle2, Clock, AlertTriangle, UserCheck, ShieldCheck, Search, Filter, Edit3, Save, X, PlusCircle, FlaskConical, Play, Sparkles, FileText, User } from 'lucide-react';
+import { Calendar, QrCode, Printer, RefreshCw, CheckCircle2, Clock, AlertTriangle, UserCheck, ShieldCheck, Search, Filter, Edit3, Save, X, PlusCircle, FlaskConical, Play, Sparkles, FileText, User, Trash2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { fetchStudentAttendanceAuditData, printStudentAttendanceReport, StudentAttendanceAuditData } from '../../lib/studentAttendanceReport';
 
@@ -51,12 +51,18 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
   const [qrType, setQrType] = useState<'check_in' | 'check_out'>('check_in');
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
-  // Manual Edit Modal state
+  // Manual Attendance & Time Edit Modal state
+  const [editingStudent, setEditingStudent] = useState<StudentProfile | null>(null);
   const [editingLog, setEditingLog] = useState<DailyAttendanceLog | null>(null);
+  const [editDate, setEditDate] = useState<string>('');
   const [editCheckIn, setEditCheckIn] = useState<string>('');
   const [editCheckOut, setEditCheckOut] = useState<string>('');
+  const [editCheckInStatus, setEditCheckInStatus] = useState<'on_time' | 'late' | 'pending'>('on_time');
+  const [editCheckOutStatus, setEditCheckOutStatus] = useState<'on_time' | 'early' | 'pending'>('on_time');
   const [editPoints, setEditPoints] = useState<number>(10);
+  const [editStatus, setEditStatus] = useState<'present_full' | 'present_half' | 'absent' | 'manual_override'>('present_full');
   const [editNotes, setEditNotes] = useState<string>('');
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
 
   // INDIVIDUAL STUDENT ATTENDANCE AUDIT STATE
   const [auditStudentId, setAuditStudentId] = useState<string>('');
@@ -204,6 +210,114 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
     else if (totalPts > 0) overallStatus = 'present_half';
 
     return { points: totalPts, status: overallStatus, check_in_status: checkInStatus, check_out_status: checkOutStatus };
+  };
+
+  // Helper to extract HH:mm in IST (Asia/Kolkata) from an ISO timestamp
+  const getHHMMFromIso = (isoString?: string): string => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  // Helper to create unambiguous ISO string anchored in IST (UTC+05:30)
+  const createIsoFromIST = (dateStr: string, timeStr?: string): string | null => {
+    if (!timeStr || !timeStr.trim()) return null;
+    try {
+      const trimmed = timeStr.trim();
+      if (!/^\d{1,2}:\d{2}$/.test(trimmed)) return null;
+      const formatted = trimmed.length === 4 ? `0${trimmed}` : trimmed;
+      const d = new Date(`${dateStr}T${formatted}:00+05:30`);
+      if (isNaN(d.getTime())) return null;
+      return d.toISOString();
+    } catch {
+      return null;
+    }
+  };
+
+  // Handler when staff modifies Check-In time in modal
+  const handleCheckInChange = (newInTime: string) => {
+    setEditCheckIn(newInTime);
+    if (newInTime) {
+      const hours = getHoursInIST(newInTime);
+      const inStat = hours <= 10.08 ? 'on_time' : 'late';
+      setEditCheckInStatus(inStat);
+      const res = evaluatePointsAndStatus(newInTime, editCheckOut);
+      setEditPoints(res.points);
+      setEditStatus(res.status);
+    } else {
+      setEditCheckInStatus('pending');
+      const res = evaluatePointsAndStatus(undefined, editCheckOut);
+      setEditPoints(res.points);
+      setEditStatus(res.status);
+    }
+  };
+
+  // Handler when staff modifies Check-Out time in modal
+  const handleCheckOutChange = (newOutTime: string) => {
+    setEditCheckOut(newOutTime);
+    if (newOutTime) {
+      const hours = getHoursInIST(newOutTime);
+      const outStat = hours >= 15.95 ? 'on_time' : 'early';
+      setEditCheckOutStatus(outStat);
+      const res = evaluatePointsAndStatus(editCheckIn, newOutTime);
+      setEditPoints(res.points);
+      setEditStatus(res.status);
+    } else {
+      setEditCheckOutStatus('pending');
+      const res = evaluatePointsAndStatus(editCheckIn, undefined);
+      setEditPoints(res.points);
+      setEditStatus(res.status);
+    }
+  };
+
+  // Open Edit Modal for a student
+  const handleOpenEditModal = (student: StudentProfile, existingLog?: DailyAttendanceLog) => {
+    setEditingStudent(student);
+    setEditingLog(existingLog || null);
+    setEditDate(existingLog?.date || selectedDate);
+
+    if (existingLog) {
+      const inTime = getHHMMFromIso(existingLog.check_in_time);
+      const outTime = getHHMMFromIso(existingLog.check_out_time);
+      setEditCheckIn(inTime);
+      setEditCheckOut(outTime);
+      setEditCheckInStatus(existingLog.check_in_status || (inTime ? (getHoursInIST(inTime) <= 10.08 ? 'on_time' : 'late') : 'pending'));
+      setEditCheckOutStatus(existingLog.check_out_status || (outTime ? (getHoursInIST(outTime) >= 15.95 ? 'on_time' : 'early') : 'pending'));
+      setEditPoints(existingLog.points_awarded ?? 10);
+      setEditStatus(existingLog.status || 'present_full');
+      setEditNotes(existingLog.notes || '');
+    } else {
+      // Default to 10:00 AM check-in, 16:00 check-out, on-time full day
+      setEditCheckIn('10:00');
+      setEditCheckOut('16:00');
+      setEditCheckInStatus('on_time');
+      setEditCheckOutStatus('on_time');
+      setEditPoints(10);
+      setEditStatus('present_full');
+      setEditNotes('Manual entry by staff');
+    }
+  };
+
+  // Open Edit Modal for a log from history table
+  const handleOpenEditForLog = (log: DailyAttendanceLog) => {
+    const student = studentList.find(s => s.id === log.student_id) || ({
+      id: log.student_id,
+      name: log.student_name,
+      course_id: log.course_id || selectedCourseId,
+      batch_number: log.batch_number || Number(selectedBatchNumber),
+      status: 'active'
+    } as StudentProfile);
+    handleOpenEditModal(student, log);
   };
 
   // Save / Update Attendance Record manually or via override
@@ -494,34 +608,78 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
     }
   };
 
-  // Save Edit Details
+  // Save manual attendance and time edits
   const handleSaveEdit = async () => {
-    if (!editingLog) return;
+    if (!editingStudent) return;
+    setIsSavingEdit(true);
     try {
-      const inIso = editCheckIn ? new Date(`${selectedDate}T${editCheckIn}:00`).toISOString() : undefined;
-      const outIso = editCheckOut ? new Date(`${selectedDate}T${editCheckOut}:00`).toISOString() : undefined;
+      const targetDate = editDate || selectedDate;
+      const inIso = createIsoFromIST(targetDate, editCheckIn);
+      const outIso = createIsoFromIST(targetDate, editCheckOut);
+
+      const recordToUpsert = {
+        student_id: editingStudent.id,
+        student_name: editingStudent.name,
+        course_id: editingStudent.course_id || selectedCourseId,
+        batch_number: editingStudent.batch_number || Number(selectedBatchNumber),
+        date: targetDate,
+        check_in_time: inIso,
+        check_out_time: outIso,
+        check_in_status: editCheckIn ? editCheckInStatus : 'pending',
+        check_out_status: editCheckOut ? editCheckOutStatus : 'pending',
+        points_awarded: editPoints,
+        status: editStatus,
+        method: 'manual_override',
+        notes: editNotes || 'Manual time adjustment by staff'
+      };
 
       const { error } = await supabase
         .from('daily_attendance_logs')
-        .update({
-          check_in_time: inIso,
-          check_out_time: outIso,
-          points_awarded: editPoints,
-          status: editPoints === 10 ? 'present_full' : (editPoints === 5 ? 'present_half' : 'absent'),
-          notes: editNotes || 'Updated by staff',
-          method: 'manual_override'
-        })
+        .upsert(recordToUpsert, { onConflict: 'student_id,date' });
+
+      if (error) throw error;
+
+      await syncScoreToLeaderboard(editingStudent.id, editPoints);
+      setMessage(`✅ Updated attendance times for ${editingStudent.name} (${targetDate})`);
+      setEditingStudent(null);
+      setEditingLog(null);
+      await fetchLogs();
+    } catch (err: any) {
+      console.error('Error saving attendance edit:', err);
+      alert(`Error saving attendance: ${err.message}`);
+    } finally {
+      setIsSavingEdit(false);
+      setTimeout(() => setMessage(''), 4000);
+    }
+  };
+
+  // Delete / Reset Attendance Log
+  const handleDeleteLog = async () => {
+    if (!editingLog) return;
+    if (!window.confirm(`Are you sure you want to remove the attendance log for ${editingLog.student_name} on ${editingLog.date}? Leaderboard XP will be reset to 0.`)) {
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      const { error } = await supabase
+        .from('daily_attendance_logs')
+        .delete()
         .eq('id', editingLog.id);
 
       if (error) throw error;
 
-      await syncScoreToLeaderboard(editingLog.student_id, editPoints);
-      setMessage(`✅ Updated attendance details for ${editingLog.student_name}`);
+      await syncScoreToLeaderboard(editingLog.student_id, 0);
+      setMessage(`🗑️ Removed attendance log for ${editingLog.student_name}`);
+      setEditingStudent(null);
       setEditingLog(null);
       await fetchLogs();
     } catch (err: any) {
-      console.error('Error updating log:', err);
-      alert(`Error updating log: ${err.message}`);
+      console.error('Error deleting attendance log:', err);
+      alert(`Error deleting attendance: ${err.message}`);
+    } finally {
+      setIsSavingEdit(false);
+      setTimeout(() => setMessage(''), 4000);
     }
   };
 
@@ -766,6 +924,33 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                   <Printer size={16} /> Print Register
                 </button>
 
+                <button
+                  onClick={() => {
+                    const firstStudent = activeStudents[0] || studentList[0];
+                    if (firstStudent) {
+                      const existing = attendanceLogs.find(l => l.student_id === firstStudent.id);
+                      handleOpenEditModal(firstStudent, existing);
+                    }
+                  }}
+                  style={{
+                    padding: '0.5rem 1.1rem',
+                    borderRadius: '50px',
+                    background: 'linear-gradient(135deg, #4f46e5 0%, #3730a3 100%)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)'
+                  }}
+                  title="Staff Time Control: Set custom check-in/out times, XP, or attendance for any student"
+                >
+                  <Edit3 size={15} /> Custom Time Entry
+                </button>
+
                 <select
                   value={selectedCourseId}
                   onChange={(e) => setSelectedCourseId(e.target.value)}
@@ -927,6 +1112,13 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                                 style={{ padding: '0.3rem 0.55rem', borderRadius: '6px', background: '#dc2626', color: 'white', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}
                               >
                                 Absent
+                              </button>
+                              <button
+                                onClick={() => handleOpenEditModal(student, log)}
+                                title="Staff Attendance Time Editor: Set custom In/Out times, XP & status"
+                                style={{ padding: '0.3rem 0.6rem', borderRadius: '6px', background: '#e0e7ff', color: '#3730a3', fontWeight: 800, border: '1px solid #c7d2fe', cursor: 'pointer', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                              >
+                                <Edit3 size={11} /> Edit Time
                               </button>
                               <button
                                 onClick={() => handleGenerateAuditReport(student.id)}
@@ -1328,12 +1520,13 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                   <th style={{ padding: '0.75rem 1rem' }}>Status</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Points</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Method</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>No logs found for this date.</td>
+                    <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>No logs found for this date.</td>
                   </tr>
                 ) : (
                   filteredLogs.map(l => (
@@ -1345,6 +1538,27 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
                       <td style={{ padding: '0.85rem 1rem', textTransform: 'capitalize' }}>{l.status}</td>
                       <td style={{ padding: '0.85rem 1rem', fontWeight: 900, color: l.points_awarded === 10 ? '#16a34a' : '#b45309' }}>+{l.points_awarded} XP</td>
                       <td style={{ padding: '0.85rem 1rem', color: '#64748b' }}>{l.method || 'qr_scan'}</td>
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
+                        <button
+                          onClick={() => handleOpenEditForLog(l)}
+                          title="Edit check-in/out times, XP, or status"
+                          style={{
+                            padding: '0.35rem 0.65rem',
+                            borderRadius: '6px',
+                            background: '#f8fafc',
+                            color: '#0f172a',
+                            fontWeight: 700,
+                            border: '1px solid #cbd5e1',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
+                          }}
+                        >
+                          <Edit3 size={12} /> Edit
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -1468,6 +1682,567 @@ export default function AttendanceHub({ coursesList, studentList }: AttendanceHu
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* --- STAFF MANUAL ATTENDANCE TIME EDIT MODAL --- */}
+      {editingStudent && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            overflowY: 'auto'
+          }}
+          onClick={() => !isSavingEdit && setEditingStudent(null)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '620px',
+              background: '#ffffff',
+              borderRadius: '20px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: '1px solid #e2e8f0',
+              overflow: 'hidden',
+              maxHeight: '92vh',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                color: 'white',
+                padding: '1.25rem 1.5rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '2px solid #c99c33'
+              }}
+            >
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', color: '#fbbf24', fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  <Edit3 size={13} /> Staff Attendance & Time Control
+                </div>
+                <h3 style={{ margin: '0.2rem 0 0 0', fontSize: '1.25rem', fontWeight: 900, color: 'white' }}>
+                  {editingStudent.name}
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                  {editingStudent.roll_number ? `Roll #${editingStudent.roll_number} • ` : ''}Batch {editingStudent.batch_number} • Date: {editDate || selectedDate}
+                </span>
+              </div>
+
+              <button
+                onClick={() => !isSavingEdit && setEditingStudent(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  color: 'white',
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              
+              {/* Student & Date Bar */}
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', background: '#f8fafc', padding: '0.85rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
+                    Student
+                  </label>
+                  <select
+                    value={editingStudent.id}
+                    onChange={(e) => {
+                      const found = activeStudents.find(s => s.id === e.target.value) || studentList.find(s => s.id === e.target.value);
+                      if (found) {
+                        const existing = attendanceLogs.find(l => l.student_id === found.id);
+                        handleOpenEditModal(found, existing);
+                      }
+                    }}
+                    style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}
+                  >
+                    {activeStudents.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.roll_number ? `(Roll #${s.roll_number})` : ''} - Batch {s.batch_number}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
+                    Attendance Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}
+                  />
+                </div>
+              </div>
+
+              {/* MORNING CHECK-IN CARD */}
+              <div style={{ background: '#f0fdf4', borderRadius: '14px', border: '1.5px solid #86efac', padding: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Clock size={15} /> Morning Check-In (IST)
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: '#15803d', background: '#dcfce7', padding: '0.15rem 0.5rem', borderRadius: '50px', fontWeight: 700 }}>
+                    Cutoff: 10:00 AM (10:05 AM Grace)
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <input
+                    type="time"
+                    value={editCheckIn}
+                    onChange={(e) => handleCheckInChange(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: '10px',
+                      border: '1.5px solid #86efac',
+                      fontSize: '1.1rem',
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      background: 'white'
+                    }}
+                  />
+
+                  {/* Preset quick buttons */}
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleCheckInChange('09:55')}
+                      style={{ padding: '0.45rem 0.65rem', borderRadius: '8px', background: '#dcfce7', color: '#166534', fontWeight: 700, border: '1px solid #bbf7d0', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      09:55 AM (On-Time)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCheckInChange('10:15')}
+                      style={{ padding: '0.45rem 0.65rem', borderRadius: '8px', background: '#fef3c7', color: '#92400e', fontWeight: 700, border: '1px solid #fde68a', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      10:15 AM (Late)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCheckInChange('')}
+                      style={{ padding: '0.45rem 0.65rem', borderRadius: '8px', background: '#f1f5f9', color: '#64748b', fontWeight: 700, border: '1px solid #cbd5e1', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* Check-In Status Override Chips */}
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 700 }}>Status:</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditCheckInStatus('on_time')}
+                    style={{
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '50px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      border: 'none',
+                      background: editCheckInStatus === 'on_time' ? '#16a34a' : '#e2e8f0',
+                      color: editCheckInStatus === 'on_time' ? 'white' : '#475569'
+                    }}
+                  >
+                    ✓ On Time (+5 XP)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditCheckInStatus('late')}
+                    style={{
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '50px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      border: 'none',
+                      background: editCheckInStatus === 'late' ? '#d97706' : '#e2e8f0',
+                      color: editCheckInStatus === 'late' ? 'white' : '#475569'
+                    }}
+                  >
+                    ⚠️ Late (+3 XP)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditCheckInStatus('pending')}
+                    style={{
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '50px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      border: 'none',
+                      background: editCheckInStatus === 'pending' ? '#64748b' : '#e2e8f0',
+                      color: editCheckInStatus === 'pending' ? 'white' : '#475569'
+                    }}
+                  >
+                    Not Logged In
+                  </button>
+                </div>
+              </div>
+
+              {/* EVENING CHECK-OUT CARD */}
+              <div style={{ background: '#eff6ff', borderRadius: '14px', border: '1.5px solid #93c5fd', padding: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Clock size={15} /> Evening Check-Out (IST)
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: '#1d4ed8', background: '#dbeafe', padding: '0.15rem 0.5rem', borderRadius: '50px', fontWeight: 700 }}>
+                    Cutoff: 04:00 PM (16:00 IST)
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <input
+                    type="time"
+                    value={editCheckOut}
+                    onChange={(e) => handleCheckOutChange(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: '10px',
+                      border: '1.5px solid #93c5fd',
+                      fontSize: '1.1rem',
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      background: 'white'
+                    }}
+                  />
+
+                  {/* Preset quick buttons */}
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleCheckOutChange('16:05')}
+                      style={{ padding: '0.45rem 0.65rem', borderRadius: '8px', background: '#dbeafe', color: '#1e40af', fontWeight: 700, border: '1px solid #bfdbfe', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      04:05 PM (Full Day)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCheckOutChange('15:30')}
+                      style={{ padding: '0.45rem 0.65rem', borderRadius: '8px', background: '#ffedd5', color: '#c2410c', fontWeight: 700, border: '1px solid #fed7aa', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      03:30 PM (Early)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCheckOutChange('')}
+                      style={{ padding: '0.45rem 0.65rem', borderRadius: '8px', background: '#f1f5f9', color: '#64748b', fontWeight: 700, border: '1px solid #cbd5e1', cursor: 'pointer', fontSize: '0.75rem' }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* Check-Out Status Override Chips */}
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 700 }}>Status:</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditCheckOutStatus('on_time')}
+                    style={{
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '50px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      border: 'none',
+                      background: editCheckOutStatus === 'on_time' ? '#2563eb' : '#e2e8f0',
+                      color: editCheckOutStatus === 'on_time' ? 'white' : '#475569'
+                    }}
+                  >
+                    ✓ Full Day (+5 XP)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditCheckOutStatus('early')}
+                    style={{
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '50px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      border: 'none',
+                      background: editCheckOutStatus === 'early' ? '#ea580c' : '#e2e8f0',
+                      color: editCheckOutStatus === 'early' ? 'white' : '#475569'
+                    }}
+                  >
+                    ⚠️ Early Departure (+3 XP)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditCheckOutStatus('pending')}
+                    style={{
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '50px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      border: 'none',
+                      background: editCheckOutStatus === 'pending' ? '#64748b' : '#e2e8f0',
+                      color: editCheckOutStatus === 'pending' ? 'white' : '#475569'
+                    }}
+                  >
+                    Not Logged Out
+                  </button>
+                </div>
+              </div>
+
+              {/* POINTS & ATTENDANCE STATUS CARD */}
+              <div style={{ background: '#fffbeb', borderRadius: '14px', border: '1.5px solid #fde68a', padding: '1.1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#92400e', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <Sparkles size={15} /> Award Attendance Points & Status
+                  </span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: 900, color: editPoints >= 10 ? '#16a34a' : (editPoints > 0 ? '#b45309' : '#dc2626') }}>
+                    +{editPoints} XP Leaderboard
+                  </span>
+                </div>
+
+                {/* Quick XP selector */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.4rem', marginBottom: '0.85rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setEditPoints(10); setEditStatus('present_full'); }}
+                    style={{
+                      padding: '0.5rem 0.4rem',
+                      borderRadius: '8px',
+                      border: editPoints === 10 ? '2px solid #16a34a' : '1px solid #cbd5e1',
+                      background: editPoints === 10 ? '#dcfce7' : 'white',
+                      color: editPoints === 10 ? '#15803d' : '#334155',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      fontSize: '0.78rem'
+                    }}
+                  >
+                    +10 XP (Full Day)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditPoints(5); setEditStatus('present_half'); }}
+                    style={{
+                      padding: '0.5rem 0.4rem',
+                      borderRadius: '8px',
+                      border: editPoints === 5 ? '2px solid #d97706' : '1px solid #cbd5e1',
+                      background: editPoints === 5 ? '#fef3c7' : 'white',
+                      color: editPoints === 5 ? '#b45309' : '#334155',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      fontSize: '0.78rem'
+                    }}
+                  >
+                    +5 XP (Half Day)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditPoints(3); setEditStatus('present_half'); }}
+                    style={{
+                      padding: '0.5rem 0.4rem',
+                      borderRadius: '8px',
+                      border: editPoints === 3 ? '2px solid #ea580c' : '1px solid #cbd5e1',
+                      background: editPoints === 3 ? '#ffedd5' : 'white',
+                      color: editPoints === 3 ? '#c2410c' : '#334155',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      fontSize: '0.78rem'
+                    }}
+                  >
+                    +3 XP (Late Only)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditPoints(0); setEditStatus('absent'); }}
+                    style={{
+                      padding: '0.5rem 0.4rem',
+                      borderRadius: '8px',
+                      border: editPoints === 0 ? '2px solid #dc2626' : '1px solid #cbd5e1',
+                      background: editPoints === 0 ? '#fee2e2' : 'white',
+                      color: editPoints === 0 ? '#b91c1c' : '#334155',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      fontSize: '0.78rem'
+                    }}
+                  >
+                    0 XP (Absent)
+                  </button>
+                </div>
+
+                {/* Overall Attendance Status Selector */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
+                      Overall Status
+                    </label>
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value as any)}
+                      style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}
+                    >
+                      <option value="present_full">Full Day Present (present_full)</option>
+                      <option value="present_half">Half Day Present (present_half)</option>
+                      <option value="absent">Absent (absent)</option>
+                      <option value="manual_override">Manual Staff Override</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', marginBottom: '0.25rem' }}>
+                      Custom XP (Points)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={editPoints}
+                      onChange={(e) => setEditPoints(Math.max(0, Math.min(10, Number(e.target.value))))}
+                      style={{ width: '100%', padding: '0.5rem 0.65rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* STAFF NOTES & REASON */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.35rem' }}>
+                  Staff Note / Audit Reason
+                </label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="e.g. Bus delay excused by faculty, medical emergency, manual entry..."
+                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem', fontWeight: 600, color: '#0f172a', marginBottom: '0.4rem' }}
+                />
+
+                {/* Quick note chips */}
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                  {['🚌 Bus / Traffic Delay', '🏥 Medical Leave', '👨‍🏫 Staff Manual Adjustment', '📱 Scanner Glitch', '🌧️ Weather Permission'].map((reason) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={() => setEditNotes(reason)}
+                      style={{ padding: '0.25rem 0.55rem', borderRadius: '50px', background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div
+              style={{
+                background: '#f8fafc',
+                borderTop: '1px solid #e2e8f0',
+                padding: '1rem 1.5rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.75rem'
+              }}
+            >
+              <div>
+                {editingLog && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteLog}
+                    disabled={isSavingEdit}
+                    style={{
+                      padding: '0.55rem 0.9rem',
+                      borderRadius: '8px',
+                      background: '#fee2e2',
+                      color: '#b91c1c',
+                      fontWeight: 800,
+                      border: '1px solid #fecaca',
+                      cursor: isSavingEdit ? 'not-allowed' : 'pointer',
+                      fontSize: '0.8rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                    title="Remove this attendance log completely for this student on this date"
+                  >
+                    <Trash2 size={14} /> Delete Log
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  disabled={isSavingEdit}
+                  style={{
+                    padding: '0.6rem 1.1rem',
+                    borderRadius: '8px',
+                    background: '#e2e8f0',
+                    color: '#475569',
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: isSavingEdit ? 'not-allowed' : 'pointer',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={isSavingEdit}
+                  style={{
+                    padding: '0.6rem 1.4rem',
+                    borderRadius: '8px',
+                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                    color: 'white',
+                    fontWeight: 800,
+                    border: 'none',
+                    cursor: isSavingEdit ? 'not-allowed' : 'pointer',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    boxShadow: '0 4px 12px rgba(5, 150, 105, 0.35)'
+                  }}
+                >
+                  <Save size={16} /> {isSavingEdit ? 'Saving...' : 'Save Attendance Time'}
+                </button>
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
